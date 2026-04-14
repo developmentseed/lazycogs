@@ -1,0 +1,1300 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://hrodmn.github.io/stac-cog-xarray/architecture/">
+      
+      
+        <link rel="prev" href="../demo/">
+      
+      
+        <link rel="next" href="../api/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Architecture - stac-cog-xarray</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#architecture-stac-cog-xarray" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="stac-cog-xarray" class="md-header__button md-logo" aria-label="stac-cog-xarray" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            stac-cog-xarray
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Architecture
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hrodmn/stac-cog-xarray" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hrodmn/stac-cog-xarray
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Introduction
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../demo/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  demo
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="./" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Architecture
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../api/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  API Reference
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="stac-cog-xarray" class="md-nav__button md-logo" aria-label="stac-cog-xarray" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    stac-cog-xarray
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hrodmn/stac-cog-xarray" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hrodmn/stac-cog-xarray
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Introduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#why-parquet-not-a-stac-api-url" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why parquet, not a STAC API URL
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#two-phase-execution-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two-phase execution model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#module-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Module overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-0-in-detail" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 0 in detail
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-1-in-detail" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1 in detail
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#grid-and-coordinate-convention" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Grid and coordinate convention
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#per-chunk-read-and-resample-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-chunk read and resample pipeline
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Per-chunk read and resample pipeline">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-overview-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Overview selection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-source-window-computation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Source window computation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-tile-read" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Tile read
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-nearest-neighbor-reprojection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Nearest-neighbor reprojection
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#concurrency-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Concurrency model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#chunking-strategy-and-throughput-tradeoffs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chunking strategy and throughput tradeoffs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Chunking strategy and throughput tradeoffs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-spatial-chunks-hurt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why spatial chunks hurt
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#where-dask-helps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where dask helps
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#recommended-defaults" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended defaults
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#temporal-grouping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Temporal grouping
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mosaic-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mosaic methods
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#store-caching-and-the-store-parameter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Store caching and the store parameter
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key dependencies
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Documentation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#why-parquet-not-a-stac-api-url" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why parquet, not a STAC API URL
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#two-phase-execution-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two-phase execution model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#module-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Module overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-0-in-detail" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 0 in detail
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-1-in-detail" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1 in detail
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#grid-and-coordinate-convention" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Grid and coordinate convention
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#per-chunk-read-and-resample-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-chunk read and resample pipeline
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Per-chunk read and resample pipeline">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-overview-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Overview selection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-source-window-computation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Source window computation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-tile-read" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Tile read
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-nearest-neighbor-reprojection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Nearest-neighbor reprojection
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#concurrency-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Concurrency model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#chunking-strategy-and-throughput-tradeoffs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chunking strategy and throughput tradeoffs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Chunking strategy and throughput tradeoffs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-spatial-chunks-hurt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why spatial chunks hurt
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#where-dask-helps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where dask helps
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#recommended-defaults" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended defaults
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#temporal-grouping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Temporal grouping
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mosaic-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mosaic methods
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#store-caching-and-the-store-parameter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Store caching and the store parameter
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key dependencies
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Documentation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="architecture-stac-cog-xarray">Architecture: stac-cog-xarray</h1>
+<p>stac-cog-xarray turns a geoparquet STAC item index into a lazy <code>(time, band, y, x)</code> xarray DataArray backed by Cloud-Optimized GeoTIFFs. It requires no GDAL. All raster I/O is done through <code>async-geotiff</code> (Rust-backed), spatial queries go through DuckDB via <code>rustac</code>, and reprojection is pure <code>pyproj</code> + numpy.</p>
+<h2 id="why-parquet-not-a-stac-api-url">Why parquet, not a STAC API URL</h2>
+<p><code>open()</code> accepts a path to a local geoparquet file, not a STAC API endpoint. This is intentional. When dask computes a large DataArray, it may execute hundreds of chunk tasks in parallel. If each task queried a remote STAC API directly, that would fire hundreds of concurrent HTTP requests at the API, which is both impolite and likely to trigger rate limiting or outright bans.</p>
+<p>Instead, the expected workflow is to run one <code>rustac.search_to("items.parquet", api_url, ...)</code> call upfront to download the matching items into a local geoparquet file, and then pass that file to <code>open()</code>. Per-chunk spatial filtering is then a fast local DuckDB query against that file, with no network traffic and no API involvement.</p>
+<h2 id="two-phase-execution-model">Two-phase execution model</h2>
+<p>Work is split sharply into two phases.</p>
+<p><strong>Phase 0 — open time</strong> runs at <code>open()</code> / <code>open_async()</code> call time. It does the minimum needed to build a fully-described lazy DataArray: one DuckDB query to discover bands, one DuckDB query to build the time axis, and a grid computation. No pixel I/O happens. No dask task graph is built. Each band becomes a <code>StacBackendArray</code> wrapped in an xarray <code>LazilyIndexedArray</code>.</p>
+<p><strong>Phase 1 — compute time</strong> runs inside a dask worker when a chunk is actually computed. <code>StacBackendArray.__getitem__</code> receives the exact <code>(time, y, x)</code> index for the chunk, derives the chunk's spatial footprint, queries DuckDB for only the COGs that overlap that footprint and time step, reads and reprojects them concurrently with <code>asyncio</code>, and mosaics the results.</p>
+<p>This split means that <code>open()</code> is nearly instant even for large queries, and the DuckDB spatial filter runs once per chunk rather than over the entire bbox at open time.</p>
+<h2 id="module-overview">Module overview</h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>src/stac_cog_xarray/
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  _core.py           Entry point. open() / open_async(), band discovery, time-step building.
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>  _backend.py        StacBackendArray (per-band) and MultiBandStacBackendArray (4-D wrapper) — xarray BackendArray implementations that bridge xarray indexing to chunk reads.
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>  _chunk_reader.py   Async mosaic logic: open COGs, select overviews, read windows, reproject, mosaic.
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>  _grid.py           Compute output affine transform and coordinate arrays from bbox + resolution.
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>  _reproject.py      Nearest-neighbor reprojection using pyproj Transformer + numpy fancy indexing.
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>  _store.py          Parse cloud HREFs into thread-local obstore Store instances; extract object paths when a store is provided externally.
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>  _temporal.py       Temporal grouping strategies (day, week, month, year, fixed-day-count).
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>  _mosaic_methods.py Pixel-selection strategies (First, Highest, Lowest, Mean, Median, Stdev, Count).
+</code></pre></div>
+<h2 id="phase-0-in-detail">Phase 0 in detail</h2>
+<p><code>open_async()</code> in <code>_core.py</code>:</p>
+<ol>
+<li>Validates that <code>href</code> is a <code>.parquet</code> or <code>.geoparquet</code> file.</li>
+<li>Parses <code>time_period</code> into a <code>_TemporalGrouper</code> (see <code>_temporal.py</code>).</li>
+<li>Converts <code>bbox</code> from the target CRS to EPSG:4326 using <code>pyproj.Transformer</code>.</li>
+<li>Calls <code>_discover_bands()</code>: queries the parquet file via <code>rustac.search_sync(..., use_duckdb=True, max_items=1)</code> to find asset keys. Assets with role <code>"data"</code> or media type <code>"image/tiff"</code> are returned first.</li>
+<li>Calls <code>_build_time_steps()</code>: queries the parquet for all matching items, extracts their datetimes, buckets them with the <code>_TemporalGrouper</code>, deduplicates, and returns sorted <code>(filter_strings, time_coords)</code> pairs. Only groups with at least one item produce a time step.</li>
+<li>Calls <code>compute_output_grid()</code> to get the output affine transform and x/y coordinate arrays.</li>
+<li>For each band, creates a <code>StacBackendArray</code> (a dataclass) holding all the parameters needed to materialise any chunk later.</li>
+<li>Wraps all per-band arrays in a single <code>MultiBandStacBackendArray</code> with shape <code>(band, time, y, x)</code>, then wraps that in one <code>xarray.core.indexing.LazilyIndexedArray</code>. This avoids <code>xr.concat</code> (used internally by <code>ds.to_array()</code>), which would eagerly load <code>LazilyIndexedArray</code>-backed objects.</li>
+<li>Constructs the <code>xr.DataArray</code> directly from the 4-D variable. If <code>chunks</code> is provided, calls <code>.chunk(chunks)</code> to convert to a dask-backed array; otherwise the <code>LazilyIndexedArray</code> remains in play so narrow slices (e.g. a single pixel) translate to minimal I/O.</li>
+</ol>
+<p><code>open()</code> is a thin synchronous wrapper that calls <code>asyncio.run(open_async(...))</code>.</p>
+<h2 id="phase-1-in-detail">Phase 1 in detail</h2>
+<p><code>MultiBandStacBackendArray.__getitem__</code> in <code>_backend.py</code> (the 4-D entry point):</p>
+<ol>
+<li>xarray calls <code>__getitem__</code> with an <code>ExplicitIndexer</code>. The call is forwarded through <code>indexing.explicit_indexing_adapter</code> to <code>_raw_getitem</code> with a basic <code>(int | slice, int | slice, int | slice, int | slice)</code> key for <code>(band, time, y, x)</code>.</li>
+<li>The band key is resolved to a list of integer band indices. If it was an integer the band dimension is squeezed in the output.</li>
+<li>For each selected band, <code>StacBackendArray._raw_getitem((time_key, y_key, x_key))</code> is called. If the per-band results are not band-squeezed they are stacked with <code>np.stack(..., axis=0)</code>.</li>
+</ol>
+<p><code>StacBackendArray._raw_getitem</code> in <code>_backend.py</code> (per-band):</p>
+<ol>
+<li>The time key is resolved to a list of integer positions. Integer keys squeeze the time dimension.</li>
+<li>Integer y or x keys are normalised to size-1 slices; the dimension is squeezed before returning.</li>
+<li>Logical y-indices (ascending, south-to-north) are converted to physical row indices (descending, north-to-south) to match the affine transform origin.</li>
+<li>The chunk's affine transform is derived: <code>chunk_affine = dst_affine * Affine.translation(x_start, y_start_physical)</code>.</li>
+<li>The chunk's EPSG:4326 bounding box is computed from the four corners of the chunk using <code>pyproj.Transformer</code>.</li>
+<li>For each time step:
+   a. <code>rustac.search_sync(parquet_path, bbox=chunk_bbox_4326, datetime=date, use_duckdb=True)</code> returns only items whose geometry intersects this specific chunk for this date. Empty results short-circuit to nodata immediately.
+   b. <code>_run_coroutine(async_mosaic_chunk(...))</code> materialises the chunk. This helper uses <code>asyncio.run</code> normally, but falls back to a <code>ThreadPoolExecutor</code> worker when called from inside a running event loop (e.g. a Jupyter kernel) to avoid the "asyncio.run() cannot be called from a running event loop" error.</li>
+<li>The result array is flipped vertically (<code>result[:, ::-1, :]</code>) to restore ascending y-order before squeezing and returning.</li>
+</ol>
+<p><code>async_mosaic_chunk</code> in <code>_chunk_reader.py</code>:</p>
+<ol>
+<li>Launches <code>_read_item_band()</code> concurrently for all items via <code>asyncio.gather</code>.</li>
+<li>For each item:
+   a. If a <code>store</code> was supplied by the caller, <code>path_from_href(href)</code> extracts just the object path within that store. Otherwise, <code>store_from_href(href)</code> returns a thread-local <code>obstore</code> store and an object path.
+   b. <code>await GeoTIFF.open(path, store=store)</code> opens the COG header.
+   c. <code>_select_overview()</code> picks the finest overview whose pixel size is at least as coarse as the target resolution.
+   d. <code>_native_window()</code> computes the pixel window in source space that covers the chunk bbox, clamped to the image extent.
+   e. <code>await reader.read(window=window)</code> fetches the tile data.
+   f. <code>reproject_array()</code> warps the read data to the destination chunk grid.</li>
+<li>Each reprojected array is fed to the <code>MosaicMethodBase</code> instance. If <code>mosaic_method.is_done</code> becomes true (e.g. <code>FirstMethod</code> with no nodata pixels remaining), the loop breaks early.</li>
+<li>Returns <code>mosaic_method.data</code> as a <code>(bands, chunk_height, chunk_width)</code> array.</li>
+</ol>
+<h2 id="grid-and-coordinate-convention">Grid and coordinate convention</h2>
+<p><code>compute_output_grid()</code> in <code>_grid.py</code> produces:</p>
+<ul>
+<li>An affine transform with origin at the top-left corner of the top-left pixel and a negative y-scale (standard north-up raster convention).</li>
+<li>x-coordinates and y-coordinates as 1-D arrays of pixel-centre values, with y ascending (south to north) to match xarray label-based slicing conventions.</li>
+</ul>
+<p>The ascending-y / top-down-affine duality is resolved in <code>_raw_getitem</code> by converting logical y-indices to physical row indices before computing <code>chunk_affine</code>, and flipping the result array before returning.</p>
+<h2 id="per-chunk-read-and-resample-pipeline">Per-chunk read and resample pipeline</h2>
+<p>Each call to <code>_read_item_band()</code> in <code>_chunk_reader.py</code> follows a four-step pipeline to turn a remote COG into a correctly-sized, correctly-projected numpy array for one destination chunk.</p>
+<h3 id="1-overview-selection">1. Overview selection</h3>
+<p>Before fetching any pixels, <code>_select_overview()</code> picks the right level of the COG's built-in pyramid. The target resolution is estimated in the source image's native CRS: if <code>dst_crs</code> differs from the COG's CRS, a 1-pixel offset at the chunk centre is transformed with pyproj to approximate the pixel size in source units. The overview list (ordered finest → coarsest) is then walked to find the first overview whose pixel size is at least as large as that target. Using a coarser-than-needed overview would lose detail; using a finer one reads more bytes than necessary. If no overview is coarse enough, or no overviews exist, full-resolution is used.</p>
+<p>This is the primary resampling control: the pyramid level is chosen to match the output resolution, so the reprojection step works on roughly the right amount of data.</p>
+<h3 id="2-source-window-computation">2. Source window computation</h3>
+<p>The destination chunk's bounding box (in <code>dst_crs</code>) is reprojected to the source CRS via pyproj. The inverse of the source affine transform maps those four corners to fractional pixel coordinates. <code>floor</code>/<code>ceil</code> and clamping to image bounds gives the <code>Window</code> that covers exactly the source pixels needed. Only that window is fetched from the COG, minimising I/O.</p>
+<p>If the chunk bbox falls entirely outside the source image after clamping, <code>_native_window()</code> returns <code>None</code> and the item is skipped.</p>
+<h3 id="3-tile-read">3. Tile read</h3>
+<p><code>await reader.read(window=window)</code> fetches the windowed pixel data from the selected overview level (or full-res). The result is a <code>(bands, window_h, window_w)</code> array in the source CRS/grid.</p>
+<h3 id="4-nearest-neighbor-reprojection">4. Nearest-neighbor reprojection</h3>
+<p><code>reproject_array()</code> in <code>_reproject.py</code> warps the source tile onto the destination chunk grid without GDAL:</p>
+<ol>
+<li>Build a meshgrid of destination pixel-centre coordinates.</li>
+<li>Transform all coordinates from <code>dst_crs</code> to <code>src_crs</code> in one vectorised <code>Transformer.transform()</code> call.</li>
+<li>Apply the inverse source affine transform to get fractional source pixel indices.</li>
+<li><code>np.floor</code> rounds to the nearest-neighbor sample; numpy fancy indexing populates the output array.</li>
+<li>Out-of-bounds pixels get the nodata fill value.</li>
+</ol>
+<p>Nearest-neighbor is the only supported resampling method.</p>
+<h2 id="concurrency-model">Concurrency model</h2>
+<p>There are three nested layers of concurrency in a chunk read.</p>
+<p><strong>Dask (chunk level).</strong> When a dask-backed DataArray is computed, dask dispatches each chunk task to a worker thread. Each worker thread calls <code>_run_coroutine()</code> in <code>_backend.py</code>, which calls <code>asyncio.run()</code> to create a fresh event loop for that chunk. Worker threads are independent — they share no state except the thread-local store cache in <code>_store.py</code>.</p>
+<p><strong>asyncio (item level).</strong> Inside a chunk's event loop, <code>async_mosaic_chunk</code> fires <code>_read_item_band()</code> for all overlapping items concurrently via <code>asyncio.gather</code>. COG header reads and tile fetches from <code>async-geotiff</code> are all awaitable, so the event loop multiplexes them without blocking.</p>
+<p><strong>Thread pool (CPU work per item).</strong> <code>reproject_array</code> is synchronous CPU-bound work — there is no way to await it. Calling it directly in the coroutine would block the event loop and stall all other pending tile reads in the same <code>asyncio.gather</code>. Instead, each completed tile read immediately submits its reprojection to the event loop's default <code>ThreadPoolExecutor</code> via <code>loop.run_in_executor(None, ...)</code>. The event loop is then free to process the next completed tile read while earlier reprojections run in parallel on other threads.</p>
+<p>This means I/O and CPU work overlap: reprojections for items whose tiles arrived first run while tiles for other items are still in flight.</p>
+<p><strong>Why threads, not a process pool.</strong> <code>pyproj.Transformer.transform()</code> and numpy's fancy-indexing both release the GIL during their heavy inner loops. Threads therefore give real CPU parallelism here — not just interleaving — without the overhead of process spawning and array pickling that a <code>ProcessPoolExecutor</code> would require.</p>
+<p><strong>Thread count under dask.</strong> <code>run_in_executor(None, ...)</code> uses the event loop's default executor, which Python sizes at <code>min(32, cpu_count + 4)</code>. Each dask worker thread calls <code>asyncio.run()</code> and gets a fresh event loop with its own executor. Under heavy parallelism the total thread count can reach <code>dask_workers × (cpu_count + 4)</code>. In practice these threads are short-lived and the OS scheduler handles it, but it is worth keeping in mind when tuning dask worker counts on memory-constrained machines.</p>
+<p><strong>Jupyter fallback.</strong> Jupyter kernels run a persistent event loop, which prevents re-entrant <code>asyncio.run()</code> calls. <code>_run_coroutine()</code> detects this with <code>asyncio.get_running_loop()</code> and falls back to spawning a single-worker <code>ThreadPoolExecutor</code>, submitting <code>asyncio.run(coro)</code> to that thread so it gets its own loop. The rest of the concurrency model is unchanged.</p>
+<h2 id="chunking-strategy-and-throughput-tradeoffs">Chunking strategy and throughput tradeoffs</h2>
+<p>The <code>chunks</code> argument to <code>open()</code> / <code>open_async()</code> controls whether the returned DataArray is backed by dask. Choosing the wrong chunking strategy — particularly adding spatial chunks — can significantly reduce throughput compared to leaving the array unchunked.</p>
+<h3 id="why-spatial-chunks-hurt">Why spatial chunks hurt</h3>
+<p>Without spatial chunks, xarray calls <code>MultiBandStacBackendArray.__getitem__</code> once per time step for the full spatial extent. That single call fires one <code>asyncio.gather</code> that reads every overlapping COG for that time step concurrently. This is the maximum possible I/O parallelism for a time step: all tile fetches are in flight simultaneously in a single event loop.</p>
+<p>With spatial chunks (e.g. <code>chunks={"x": 512, "y": 512}</code>), dask splits the extent into N tasks. Each task:</p>
+<ul>
+<li>Runs a separate <code>rustac.search_sync</code> DuckDB query to find overlapping items.</li>
+<li>Creates a fresh event loop and default <code>ThreadPoolExecutor</code>.</li>
+<li>Fires a smaller <code>asyncio.gather</code> over only the COGs that overlap its sub-region.</li>
+</ul>
+<p>The total number of COG reads is the same, but they are spread across N smaller gathers rather than one large one. Dask workers do provide some task-level parallelism, but the overhead of N DuckDB queries, N event loop creations, and N executor instantiations typically outweighs the benefit, especially for small chunk sizes. A COG that spans multiple spatial chunks is also opened once per overlapping chunk rather than once per time step.</p>
+<p>The async layer already handles spatial I/O concurrency. Dask spatial chunks add overhead without adding concurrency.</p>
+<h3 id="where-dask-helps">Where dask helps</h3>
+<p><strong>Time and band dimensions</strong> are where dask pays off. Different time steps and different bands are fully independent, and the async layer does nothing to parallelize across them. <code>chunks={"time": 1}</code> lets dask run multiple time steps in parallel across worker threads, each with its own full-spatial-extent gather. The same applies to band chunks.</p>
+<p><strong>Memory pressure</strong> is the other legitimate reason to add spatial chunks. If the full array does not fit in memory, spatial chunking limits how much is materialised at once even if it costs throughput.</p>
+<h3 id="recommended-defaults">Recommended defaults</h3>
+<table>
+<thead>
+<tr>
+<th>Goal</th>
+<th>Suggested <code>chunks</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Maximum throughput, array fits in memory</td>
+<td>omit <code>chunks</code> (or <code>chunks={}</code>)</td>
+</tr>
+<tr>
+<td>Parallelise across time, memory is not a constraint</td>
+<td><code>{"time": 1}</code></td>
+</tr>
+<tr>
+<td>Parallelise across time and band</td>
+<td><code>{"time": 1, "band": 1}</code></td>
+</tr>
+<tr>
+<td>Large array that does not fit in memory</td>
+<td><code>{"time": 1, "x": N, "y": N}</code> with N as large as memory allows</td>
+</tr>
+</tbody>
+</table>
+<p>When spatial chunks are necessary for memory reasons, making them as large as possible minimises per-chunk overhead and keeps the <code>asyncio.gather</code> fan-out wide.</p>
+<h2 id="temporal-grouping">Temporal grouping</h2>
+<p><code>_temporal.py</code> defines the <code>_TemporalGrouper</code> protocol and five concrete implementations:</p>
+<table>
+<thead>
+<tr>
+<th>Class</th>
+<th><code>time_period</code></th>
+<th>Bucket boundary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>_DayGrouper</code></td>
+<td><code>P1D</code></td>
+<td>Calendar day</td>
+</tr>
+<tr>
+<td><code>_WeekGrouper</code></td>
+<td><code>P1W</code></td>
+<td>ISO 8601 calendar week (Monday anchor)</td>
+</tr>
+<tr>
+<td><code>_MonthGrouper</code></td>
+<td><code>P1M</code></td>
+<td>Calendar month</td>
+</tr>
+<tr>
+<td><code>_YearGrouper</code></td>
+<td><code>P1Y</code></td>
+<td>Calendar year</td>
+</tr>
+<tr>
+<td><code>_FixedDayGrouper</code></td>
+<td><code>PnD</code> (n&gt;1) or <code>PnW</code> (n&gt;1)</td>
+<td>Fixed-length windows aligned to 2000-01-01</td>
+</tr>
+</tbody>
+</table>
+<p>Each grouper provides three methods: <code>group_key()</code> maps a datetime string to a sortable label, <code>datetime_filter()</code> converts a label to a <code>rustac</code>-compatible datetime range string, and <code>to_datetime64()</code> converts a label to a <code>numpy.datetime64[D]</code> coordinate value.</p>
+<h2 id="mosaic-methods">Mosaic methods</h2>
+<p><code>_mosaic_methods.py</code> contains pure-numpy pixel-selection strategies operating on <code>numpy.ma.MaskedArray</code>:</p>
+<ul>
+<li><code>FirstMethod</code>: Returns the first valid pixel seen. Short-circuits when all pixels are filled.</li>
+<li><code>HighestMethod</code> / <code>LowestMethod</code>: Tracks the running max / min across items.</li>
+<li><code>MeanMethod</code> / <code>MedianMethod</code> / <code>StdevMethod</code>: Accumulates all arrays and reduces at the end.</li>
+<li><code>CountMethod</code>: Counts valid (non-masked) observations per pixel.</li>
+</ul>
+<p>These are copied from <code>rio-tiler</code> (MIT licence, zero GDAL imports) to avoid pulling in rasterio as a transitive dependency.</p>
+<h2 id="store-caching-and-the-store-parameter">Store caching and the <code>store</code> parameter</h2>
+<p>By default, <code>store_from_href()</code> in <code>_store.py</code> maintains a thread-local <code>dict[str, Store]</code> keyed by root URL (<code>scheme://netloc</code>). Because dask tasks run in threads, this avoids repeated connection setup within a single task while remaining safe across concurrent tasks.</p>
+<p>When the caller supplies a pre-configured <code>ObjectStore</code> via the <code>store</code> parameter to <code>open()</code> / <code>open_async()</code>, automatic resolution is skipped entirely. The store is stored on <code>StacBackendArray</code> and forwarded through <code>async_mosaic_chunk</code> and <code>_read_item_band</code> to <code>GeoTIFF.open()</code>. Only the object path is extracted from each asset HREF via <code>path_from_href()</code>. This path is explicit — it supports custom credentials, non-default endpoints, and private buckets without relying on environment-variable detection.</p>
+<h2 id="key-dependencies">Key dependencies</h2>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>rustac</code></td>
+<td>STAC search against local geoparquet files via DuckDB</td>
+</tr>
+<tr>
+<td><code>async-geotiff</code></td>
+<td>Async COG header reads and windowed tile reads (Rust, no GDAL)</td>
+</tr>
+<tr>
+<td><code>obstore</code></td>
+<td>Cloud object store abstraction layer for async-geotiff</td>
+</tr>
+<tr>
+<td><code>pyproj</code></td>
+<td>CRS transforms: bbox reprojection, warp map generation</td>
+</tr>
+<tr>
+<td><code>xarray</code></td>
+<td>DataArray / Dataset assembly, <code>BackendArray</code> / <code>LazilyIndexedArray</code> protocol</td>
+</tr>
+<tr>
+<td><code>dask</code></td>
+<td>Parallel chunk execution</td>
+</tr>
+<tr>
+<td><code>affine</code></td>
+<td>Affine transform arithmetic</td>
+</tr>
+<tr>
+<td><code>numpy</code></td>
+<td>Array operations throughout</td>
+</tr>
+</tbody>
+</table>
+<h2 id="documentation">Documentation</h2>
+<p>The documentation site is built with <a href="https://squidfunk.github.io/mkdocs-material/">mkdocs-material</a> and deployed to GitHub Pages via GitHub Actions (<code>.github/workflows/docs.yml</code>). It includes:</p>
+<ul>
+<li><strong>Introduction</strong>: rendered from <code>README.md</code> (symlinked as <code>docs/index.md</code>)</li>
+<li><strong>Demo</strong>: the Jupyter notebook at <code>docs/demo.ipynb</code>, rendered by <code>mkdocs-jupyter</code></li>
+<li><strong>API Reference</strong>: auto-generated from docstrings by <code>mkdocstrings[python]</code></li>
+</ul>
+<p>To preview locally: <code>uv run mkdocs serve</code></p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
