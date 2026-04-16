@@ -40,6 +40,9 @@ docs = [
     "mkdocstrings[python]>=1.0.3",
 ]
 
+[tool.uv]
+default-extras = ["dask"]
+
 [tool.ruff]
 exclude = []
 
