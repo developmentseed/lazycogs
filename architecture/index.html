@@ -637,6 +637,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#temporal-compositing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Temporal compositing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#store-caching-and-the-store-parameter" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -941,6 +952,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#temporal-compositing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Temporal compositing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#store-caching-and-the-store-parameter" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1187,6 +1209,31 @@
 <li><code>CountMethod</code>: Counts valid (non-masked) observations per pixel.</li>
 </ul>
 <p>These are copied from <code>rio-tiler</code> (MIT licence, zero GDAL imports) to avoid pulling in rasterio as a transitive dependency.</p>
+<h2 id="temporal-compositing">Temporal compositing</h2>
+<p>Combining <code>time_period</code> with a mosaic method is the idiomatic way to produce
+temporal composites. Setting <code>time_period="P1W"</code> groups every STAC item within
+the same ISO calendar week into a single time step. When a chunk is read,
+<code>async_mosaic_chunk</code> feeds all items for that week to the mosaic method in
+order. With <code>FirstMethod</code> (the default), reading stops as soon as every output
+pixel has a valid (non-nodata) value — the remaining items in the week are
+never fetched.</p>
+<p>Note that mosaic methods operate on nodata masks only; they have no awareness
+of semantic content like clouds. Pixels that are not masked as nodata in the
+source COG will be treated as valid regardless of what they represent. If
+cloud masking is desired, it must be applied to the source data before
+stac-cog-xarray reads it (for example, by using scene-level cloud-mask bands
+to set nodata at the COG level).</p>
+<p>This approach is substantially more efficient than applying temporal reductions
+as post-processing steps on a daily array. Operations like <code>ffill(dim="time")</code>
+or <code>max(dim="time")</code> over a dask-backed DataArray force xarray to materialise
+every time step before reducing, because each step's result depends on the
+previous one (for <code>ffill</code>) or all steps at once (for <code>max</code>). A weekly composite
+opened with <code>time_period="P1W"</code> reads at most one week's worth of COGs per
+output time step, with early exit when the mosaic is complete.</p>
+<p>The general rule: push compositing logic into <code>time_period</code> and <code>mosaic_method</code>
+at <code>open()</code> time. Reach for post-hoc xarray reductions only for operations that
+cannot be expressed as a per-time-step mosaic (for example, a multi-week
+mean that requires all weeks to be present before reducing).</p>
 <h2 id="store-caching-and-the-store-parameter">Store caching and the <code>store</code> parameter</h2>
 <p>By default, <code>store_from_href()</code> in <code>_store.py</code> maintains a thread-local <code>dict[str, Store]</code> keyed by root URL (<code>scheme://netloc</code>). Because dask tasks run in threads, this avoids repeated connection setup within a single task while remaining safe across concurrent tasks.</p>
 <p>When the caller supplies a pre-configured <code>ObjectStore</code> via the <code>store</code> parameter to <code>open()</code> / <code>open_async()</code>, automatic resolution is skipped entirely. The store is stored on <code>StacBackendArray</code> and forwarded through <code>async_mosaic_chunk</code> and <code>_read_item_band</code> to <code>GeoTIFF.open()</code>. Only the object path is extracted from each asset HREF via <code>path_from_href()</code>. This path is explicit — it supports custom credentials, non-default endpoints, and private buckets without relying on environment-variable detection.</p>
