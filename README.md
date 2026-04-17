@@ -31,7 +31,7 @@ import rustac
 import lazycogs
 
 # Search a STAC API and write results to a local geoparquet file
-rustac.search_to(
+await rustac.search_to(
     "items.parquet",
     "https://earth-search.aws.element84.com/v1",
     collections=["sentinel-2-l2a"],
@@ -40,7 +40,7 @@ rustac.search_to(
 )
 
 # Open the parquet file as a lazy (time, band, y, x) DataArray
-da = lazycogs.open(
+da = await lazycogs.open_async(
     "items.parquet",
     bbox=(380000.0, 4928000.0, 420000.0, 4984000.0),
     crs="EPSG:32615",
@@ -53,7 +53,7 @@ da = lazycogs.open(
 # (non-nodata) value, skipping remaining items in the week once all pixels
 # are filled. This is more efficient than post-hoc ffill or reductions over
 # a daily array, which would materialise every time step before reducing.
-da_weekly = lazycogs.open(
+da_weekly = await lazycogs.open_async(
     "items.parquet",
     bbox=(380000.0, 4928000.0, 420000.0, 4984000.0),
     crs="EPSG:32615",
@@ -69,7 +69,7 @@ fire without touching any pixel data. The `da.lazycogs.explain()` method runs
 the same spatial queries as `.compute()` but stops before any I/O:
 
 ```python
-da = lazycogs.open(
+da = await lazycogs.open_async(
     "items.parquet",
     bbox=(380000.0, 4928000.0, 420000.0, 4984000.0),
     crs="EPSG:32615",
@@ -90,6 +90,11 @@ df.groupby("band")["n_cog_reads"].describe()
 
 # Fetch COG headers to see which overview level and pixel window would be read
 plan_full = da.lazycogs.explain(fetch_headers=True)
+print(plan_full.summary())  # shows overview level distribution and avg window size
+
+# Inspect per-item overview and window details
+df_full = plan_full.to_dataframe()
+df_full[["item_id", "band", "overview_level", "overview_resolution", "window_width", "window_height"]]
 ```
 
 The `ExplainPlan` returned shows how many items are matched per chunk, the
