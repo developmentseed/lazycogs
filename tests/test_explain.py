@@ -352,6 +352,53 @@ def test_explain_plan_summary_with_empty_chunks():
     assert "2" in s  # 2 empty chunks
 
 
+def test_explain_plan_summary_fetch_headers():
+    """summary() includes overview and window stats when fetch_headers=True."""
+    chunk_reads = [
+        ChunkRead(
+            band="red",
+            time_index=0,
+            date_filter="2023-01-01/2023-01-01",
+            time_coord=np.datetime64("2023-01-01", "D"),
+            chunk_row=0,
+            chunk_col=0,
+            chunk_affine=Affine(1.0, 0.0, 0.0, 0.0, -1.0, 10.0),
+            chunk_width=10,
+            chunk_height=10,
+            cog_reads=[
+                CogRead(
+                    item_id="item-0",
+                    asset_key="red",
+                    href="s3://bucket/item-0.tif",
+                    overview_level=1,
+                    overview_resolution=20.0,
+                    window_col_off=0,
+                    window_row_off=0,
+                    window_width=256,
+                    window_height=256,
+                )
+            ],
+        )
+    ]
+    plan = ExplainPlan(
+        href="/tmp/fake.parquet",
+        crs="EPSG:4326",
+        resolution=1.0,
+        bands=["red"],
+        time_coords=[np.datetime64("2023-01-01", "D")],
+        dst_width=10,
+        dst_height=10,
+        chunk_width=10,
+        chunk_height=10,
+        chunk_reads=chunk_reads,
+        fetch_headers=True,
+    )
+    s = plan.summary()
+    assert "ovr 1" in s
+    assert "256 x 256" in s
+    assert "fetch_headers=True" not in s  # no hint to enable it
+
+
 def test_explain_plan_to_dataframe():
     """to_dataframe() returns correct columns and row count."""
     pytest.importorskip("pandas")

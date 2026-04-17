@@ -191,13 +191,8 @@ class ExplainPlan:
         max_cog_reads = max((c.n_cog_reads for c in self.chunk_reads), default=0)
 
         bands_str = ", ".join(self.bands)
-        header_note = (
-            ""
-            if self.fetch_headers
-            else "\n(Pass fetch_headers=True to see overview levels and pixel windows.)"
-        )
 
-        return (
+        base = (
             f"=== ExplainPlan ===\n"
             f"Parquet:    {self.href}\n"
             f"CRS:        {self.crs}  |  "
@@ -215,7 +210,38 @@ class ExplainPlan:
             f"Chunks with 1 COG:     {one:>4} ({pct(one)})\n"
             f"Chunks with 2+ COGs:   {two_plus:>4} ({pct(two_plus)})\n"
             f"Max COGs per chunk:    {max_cog_reads}"
-            f"{header_note}"
+        )
+
+        if not self.fetch_headers:
+            return (
+                base
+                + "\n(Pass fetch_headers=True to see overview levels and pixel windows.)"
+            )
+
+        all_reads = [r for c in self.chunk_reads for r in c.cog_reads]
+        if not all_reads:
+            return base + "\nOverview levels: n/a (no matched COG reads)"
+
+        ov_counts: Counter[str] = Counter()
+        for r in all_reads:
+            label = "full" if r.overview_level is None else f"ovr {r.overview_level}"
+            ov_counts[label] += 1
+
+        ov_lines = "  ".join(f"{k}: {v}" for k, v in sorted(ov_counts.items()))
+        window_widths = [
+            r.window_width for r in all_reads if r.window_width is not None
+        ]
+        window_heights = [
+            r.window_height for r in all_reads if r.window_height is not None
+        ]
+        avg_w = sum(window_widths) / len(window_widths) if window_widths else 0
+        avg_h = sum(window_heights) / len(window_heights) if window_heights else 0
+
+        return (
+            base
+            + f"\nOverview levels:       {ov_lines}"
+            + f"\nAvg read window:       {avg_w:.0f} x {avg_h:.0f} px"
+            + "\n(Use .to_dataframe() for per-item overview and window details.)"
         )
 
     def to_dataframe(self):
