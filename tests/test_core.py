@@ -191,7 +191,7 @@ def test_open_time_period_kwarg_wires_through():
 
 def test_open_invalid_time_period_raises():
     """open() raises ValueError for an unrecognised time_period."""
-    with pytest.raises(ValueError, match="Unsupported ISO 8601 duration"):
+    with pytest.raises(ValueError, match="Unsupported time_period"):
         lazycogs.open(
             "items.parquet",
             bbox=(-93.5, 44.5, -93.0, 45.0),
