@@ -38,6 +38,30 @@ def _log_batch_failure(
     )
 
 
+def _target_res_and_transformer(
+    chunk_affine: Affine,
+    chunk_width: int,
+    chunk_height: int,
+    dst_crs: CRS,
+    src_crs: CRS,
+) -> tuple[float, object | None]:
+    """Return ``(target_res_native, transformer)`` for the dst→src reprojection.
+
+    *transformer* is ``None`` when source and destination share a CRS, in which
+    case *target_res_native* is just the destination pixel width. Otherwise the
+    pixel width is estimated at the chunk center by projecting two adjacent
+    pixel centers to the source CRS.
+    """
+    if dst_crs.equals(src_crs):
+        return abs(chunk_affine.a), None
+    t = _get_transformer(dst_crs, src_crs)
+    cx = chunk_affine.c + (chunk_width / 2) * chunk_affine.a
+    cy = chunk_affine.f + (chunk_height / 2) * chunk_affine.e
+    x0, _ = t.transform(cx, cy)
+    x1, _ = t.transform(cx + chunk_affine.a, cy)
+    return abs(x1 - x0), t
+
+
 def _array_to_masked(arr: np.ndarray, effective_nodata: float | None) -> ma.MaskedArray:
     """Wrap ``arr`` in a MaskedArray, masking pixels equal to ``effective_nodata``.
 
@@ -215,19 +239,10 @@ async def _read_item_band(
     # Prefer the caller-supplied nodata; fall back to the value in the COG header.
     effective_nodata = nodata if nodata is not None else geotiff.nodata
     src_crs = geotiff.crs
-    same_crs = dst_crs.equals(src_crs)
-
-    # Select appropriate overview for the target resolution.
-    target_res_native = abs(chunk_affine.a)
-    if not same_crs:
-        # One transformer per unique (dst_crs, src_crs) pair; reused below
-        # for the bbox calculation and inside compute_warp_map.
-        t = _get_transformer(dst_crs, src_crs)
-        cx = chunk_affine.c + (chunk_width / 2) * chunk_affine.a
-        cy = chunk_affine.f + (chunk_height / 2) * chunk_affine.e
-        x0, y0 = t.transform(cx, cy)
-        x1, y1 = t.transform(cx + chunk_affine.a, cy)
-        target_res_native = abs(x1 - x0)
+    # Transformer is reused below for the bbox calculation and inside compute_warp_map.
+    target_res_native, t = _target_res_and_transformer(
+        chunk_affine, chunk_width, chunk_height, dst_crs, src_crs
+    )
 
     reader: GeoTIFF | Overview
     overview = _select_overview(geotiff, target_res_native)
@@ -240,9 +255,7 @@ async def _read_item_band(
             path,
         )
     reader = overview if overview is not None else geotiff
-    bbox_native = _chunk_bbox_native(
-        chunk_affine, chunk_width, chunk_height, None if same_crs else t
-    )
+    bbox_native = _chunk_bbox_native(chunk_affine, chunk_width, chunk_height, t)
     window = _native_window(reader, bbox_native, reader.width, reader.height)
     if window is None:
         return None
@@ -527,24 +540,12 @@ async def _read_item_bands(
     for band, geotiff, _ in open_results:
         effective_nodata = nodata if nodata is not None else geotiff.nodata
         src_crs = geotiff.crs
-        same_crs = dst_crs.equals(src_crs)
-
-        target_res_native = abs(chunk_affine.a)
-        if not same_crs:
-            # One transformer per unique (dst_crs, src_crs) pair; reused below
-            # for the bbox calculation and inside compute_warp_map.
-            t = _get_transformer(dst_crs, src_crs)
-            cx = chunk_affine.c + (chunk_width / 2) * chunk_affine.a
-            cy = chunk_affine.f + (chunk_height / 2) * chunk_affine.e
-            x0, y0 = t.transform(cx, cy)
-            x1, y1 = t.transform(cx + chunk_affine.a, cy)
-            target_res_native = abs(x1 - x0)
-
+        target_res_native, t = _target_res_and_transformer(
+            chunk_affine, chunk_width, chunk_height, dst_crs, src_crs
+        )
         overview = _select_overview(geotiff, target_res_native)
         reader = overview if overview is not None else geotiff
-        bbox_native = _chunk_bbox_native(
-            chunk_affine, chunk_width, chunk_height, None if same_crs else t
-        )
+        bbox_native = _chunk_bbox_native(chunk_affine, chunk_width, chunk_height, t)
         window = _native_window(reader, bbox_native, reader.width, reader.height)
         if window is None:
             continue
