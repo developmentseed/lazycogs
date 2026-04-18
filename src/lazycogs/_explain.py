@@ -16,7 +16,7 @@ from pyproj import CRS, Transformer
 import rustac
 
 from lazycogs._backend import StacBackendArray, _run_coroutine
-from lazycogs._chunk_reader import _native_window, _select_overview
+from lazycogs._chunk_reader import _chunk_bbox_native, _native_window, _select_overview
 
 if TYPE_CHECKING:
     from obstore.store import ObjectStore
@@ -502,27 +502,14 @@ async def _inspect_item_async(
 
     overview = _select_overview(geotiff, target_res_native)
     reader = overview if overview is not None else geotiff
-
-    chunk_minx = chunk_affine.c
-    chunk_maxy = chunk_affine.f
-    chunk_maxx = chunk_minx + chunk_width * chunk_affine.a
-    chunk_miny = chunk_maxy + chunk_height * chunk_affine.e
-
-    if dst_crs.equals(geotiff.crs):
-        bbox_native: tuple[float, float, float, float] = (
-            chunk_minx,
-            chunk_miny,
-            chunk_maxx,
-            chunk_maxy,
-        )
-    else:
-        t_to_src = Transformer.from_crs(dst_crs, geotiff.crs, always_xy=True)
-        xs, ys = t_to_src.transform(
-            [chunk_minx, chunk_maxx, chunk_minx, chunk_maxx],
-            [chunk_maxy, chunk_maxy, chunk_miny, chunk_miny],
-        )
-        bbox_native = (min(xs), min(ys), max(xs), max(ys))
-
+    transformer = (
+        None
+        if dst_crs.equals(geotiff.crs)
+        else Transformer.from_crs(dst_crs, geotiff.crs, always_xy=True)
+    )
+    bbox_native = _chunk_bbox_native(
+        chunk_affine, chunk_width, chunk_height, transformer
+    )
     window = _native_window(reader, bbox_native, reader.width, reader.height)
 
     overview_level = geotiff.overviews.index(overview) if overview is not None else None

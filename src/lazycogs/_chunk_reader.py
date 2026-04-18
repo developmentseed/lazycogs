@@ -78,6 +78,31 @@ def _select_overview(geotiff: GeoTIFF, target_res: float) -> Overview | None:
     return selected
 
 
+def _chunk_bbox_native(
+    chunk_affine: Affine,
+    chunk_width: int,
+    chunk_height: int,
+    transformer: object | None,
+) -> tuple[float, float, float, float]:
+    """Return the chunk's ``(minx, miny, maxx, maxy)`` in the source CRS.
+
+    When ``transformer`` is ``None`` the chunk is assumed to already be in the
+    source CRS and the bbox is returned directly. Otherwise the four corners
+    are projected and the axis-aligned envelope is returned.
+    """
+    minx = chunk_affine.c
+    maxy = chunk_affine.f
+    maxx = minx + chunk_width * chunk_affine.a
+    miny = maxy + chunk_height * chunk_affine.e  # e is negative
+    if transformer is None:
+        return (minx, miny, maxx, maxy)
+    xs, ys = transformer.transform(
+        [minx, maxx, minx, maxx],
+        [maxy, maxy, miny, miny],
+    )
+    return (min(xs), min(ys), max(xs), max(ys))
+
+
 def _native_window(
     geotiff: GeoTIFF | Overview,
     bbox_native: tuple[float, float, float, float],
@@ -200,25 +225,10 @@ async def _read_item_band(
             path,
         )
     reader = overview if overview is not None else geotiff
-    src_width = reader.width
-    src_height = reader.height
-
-    # Transform chunk corners to source CRS for window calculation.
-    chunk_minx = chunk_affine.c
-    chunk_maxy = chunk_affine.f
-    chunk_maxx = chunk_minx + chunk_width * chunk_affine.a
-    chunk_miny = chunk_maxy + chunk_height * chunk_affine.e  # e is negative
-
-    if same_crs:
-        bbox_native = (chunk_minx, chunk_miny, chunk_maxx, chunk_maxy)
-    else:
-        xs, ys = t.transform(
-            [chunk_minx, chunk_maxx, chunk_minx, chunk_maxx],
-            [chunk_maxy, chunk_maxy, chunk_miny, chunk_miny],
-        )
-        bbox_native = (min(xs), min(ys), max(xs), max(ys))
-
-    window = _native_window(reader, bbox_native, src_width, src_height)
+    bbox_native = _chunk_bbox_native(
+        chunk_affine, chunk_width, chunk_height, None if same_crs else t
+    )
+    window = _native_window(reader, bbox_native, reader.width, reader.height)
     if window is None:
         return None
 
@@ -524,21 +534,9 @@ async def _read_item_bands(
 
         overview = _select_overview(geotiff, target_res_native)
         reader = overview if overview is not None else geotiff
-
-        chunk_minx = chunk_affine.c
-        chunk_maxy = chunk_affine.f
-        chunk_maxx = chunk_minx + chunk_width * chunk_affine.a
-        chunk_miny = chunk_maxy + chunk_height * chunk_affine.e
-
-        if same_crs:
-            bbox_native = (chunk_minx, chunk_miny, chunk_maxx, chunk_maxy)
-        else:
-            xs, ys = t.transform(
-                [chunk_minx, chunk_maxx, chunk_minx, chunk_maxx],
-                [chunk_maxy, chunk_maxy, chunk_miny, chunk_miny],
-            )
-            bbox_native = (min(xs), min(ys), max(xs), max(ys))
-
+        bbox_native = _chunk_bbox_native(
+            chunk_affine, chunk_width, chunk_height, None if same_crs else t
+        )
         window = _native_window(reader, bbox_native, reader.width, reader.height)
         if window is None:
             continue
