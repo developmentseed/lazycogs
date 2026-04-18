@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
@@ -27,7 +28,11 @@ def _cache() -> dict[str, ObjectStore]:
     return _local.stores
 
 
-def resolve(href: str, store: ObjectStore | None = None) -> tuple[ObjectStore, str]:
+def resolve(
+    href: str,
+    store: ObjectStore | None = None,
+    path_fn: Callable[[str], str] | None = None,
+) -> tuple[ObjectStore, str]:
     """Resolve an HREF into an ``(ObjectStore, path)`` pair.
 
     When ``store`` is supplied, it is returned unchanged and only the object
@@ -48,6 +53,12 @@ def resolve(href: str, store: ObjectStore | None = None) -> tuple[ObjectStore, s
             (``s3``, ``s3a``, ``gs``, Azure variants, ``http``, ``https``,
             ``file``, ``memory``).
         store: Optional pre-configured ``ObjectStore`` to use directly.
+        path_fn: Optional callable that takes the full HREF and returns the
+            object path to use with the store.  When provided, it replaces the
+            default ``urlparse``-based path extraction.  Only meaningful when
+            combined with a custom ``store`` — without one, the auto-resolved
+            store is constructed from the HREF root, and the default path
+            extraction is correct for standard cloud URLs.
 
     Returns:
         A ``(store, path)`` tuple where ``path`` is the object path within
@@ -57,7 +68,11 @@ def resolve(href: str, store: ObjectStore | None = None) -> tuple[ObjectStore, s
     """
     parsed = urlparse(href)
     scheme = parsed.scheme.lower()
-    path = parsed.path if scheme == "file" else parsed.path.lstrip("/")
+
+    if path_fn is not None:
+        path = path_fn(href)
+    else:
+        path = parsed.path if scheme == "file" else parsed.path.lstrip("/")
 
     if store is not None:
         return store, path

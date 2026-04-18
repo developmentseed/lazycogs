@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -13,7 +13,11 @@ import xarray as xr
 from pyproj import CRS, Transformer
 from xarray.core import indexing
 
-from lazycogs._backend import MultiBandStacBackendArray, StacBackendArray
+from lazycogs._backend import (
+    MultiBandStacBackendArray,
+    StacBackendArray,
+    _run_coroutine,
+)
 from lazycogs._grid import compute_output_grid
 from lazycogs._mosaic_methods import FirstMethod, MosaicMethodBase
 from lazycogs._temporal import _TemporalGrouper, grouper_from_period
@@ -149,6 +153,7 @@ def _build_dataarray(
     chunks: dict[str, int] | None,
     store: ObjectStore | None = None,
     max_concurrent_reads: int = 32,
+    path_from_href: Callable[[str], str] | None = None,
 ) -> xr.DataArray:
     """Assemble the lazy DataArray from pre-computed parameters.
 
@@ -180,6 +185,9 @@ def _build_dataarray(
         max_concurrent_reads: Maximum number of COG reads to run concurrently
             per chunk.  Passed to each
             :class:`~lazycogs._backend.StacBackendArray`.
+        path_from_href: Optional callable ``(href: str) -> str`` passed to
+            each :class:`~lazycogs._backend.StacBackendArray`.  See
+            :func:`open_async` for full documentation.
 
     Returns:
         Lazy ``xr.DataArray`` with dimensions ``(time, band, y, x)``.
@@ -208,6 +216,7 @@ def _build_dataarray(
             mosaic_method_cls=method_cls,
             store=store,
             max_concurrent_reads=max_concurrent_reads,
+            path_from_href=path_from_href,
         )
         for band in resolved_bands
     ]
@@ -263,6 +272,7 @@ async def open_async(  # noqa: A001
     time_period: str = "P1D",
     store: ObjectStore | None = None,
     max_concurrent_reads: int = 32,
+    path_from_href: Callable[[str], str] | None = None,
 ) -> xr.DataArray:
     """Open a mosaic of STAC items as a lazy ``(time, band, y, x)`` DataArray.
 
@@ -327,6 +337,26 @@ async def open_async(  # noqa: A001
             :class:`~lazycogs._mosaic_methods.FirstMethod`) will stop
             reading once every output pixel is filled, so lower values also
             reduce unnecessary I/O on dense datasets.  Defaults to 32.
+        path_from_href: Optional callable ``(href: str) -> str`` that extracts
+            the object path from an asset HREF.  When provided, it replaces the
+            default ``urlparse``-based extraction used in
+            :func:`~lazycogs._store.resolve`.  Most useful when combined with
+            a custom ``store`` whose root does not align with the URL path
+            structure of the asset HREFs.
+
+            Example — Azure Blob Storage store rooted at a container::
+
+                from obstore.store import AzureBlobStore
+                from urllib.parse import urlparse
+
+                store = AzureBlobStore(container="my-container", ...)
+
+                def strip_container(href: str) -> str:
+                    # href: https://account.blob.core.windows.net/my-container/path/file.tif
+                    # store is rooted at the container, so the path is just path/file.tif
+                    return urlparse(href).path.lstrip("/").removeprefix("my-container/")
+
+                da = lazycogs.open("items.parquet", ..., store=store, path_from_href=strip_container)
 
     Returns:
         Lazy ``xr.DataArray`` with dimensions ``(time, band, y, x)``.
@@ -424,6 +454,7 @@ async def open_async(  # noqa: A001
         chunks=chunks,
         store=store,
         max_concurrent_reads=max_concurrent_reads,
+        path_from_href=path_from_href,
     )
 
 
@@ -445,12 +476,16 @@ def open(  # noqa: A001
     time_period: str = "P1D",
     store: ObjectStore | None = None,
     max_concurrent_reads: int = 32,
+    path_from_href: Callable[[str], str] | None = None,
 ) -> xr.DataArray:
     """Open a mosaic of STAC items as a lazy ``(time, band, y, x)`` DataArray.
 
-    Synchronous entry point.  Calls :func:`open_async` via ``asyncio.run()``.
-    Raises ``RuntimeError`` if called from a context with a running event loop
-    (e.g. a Jupyter notebook cell).  Use ``await open_async(...)`` there.
+    Synchronous entry point.  Works in both regular Python scripts and Jupyter
+    notebooks.  When called from inside a running event loop (e.g. a Jupyter
+    kernel), the coroutine is dispatched to a background thread with its own
+    event loop so the caller does not need ``await``.  Use :func:`open_async`
+    directly if you are already in an async context and want to skip the thread
+    overhead.
 
     ``href`` must be a path to a geoparquet file (``.parquet`` or
     ``.geoparquet``).  To search a STAC API first, use
@@ -495,6 +530,8 @@ def open(  # noqa: A001
         max_concurrent_reads: Maximum number of COG reads to run concurrently
             per chunk.  See :func:`open_async` for full documentation.
             Defaults to 32.
+        path_from_href: Optional callable ``(href: str) -> str``.  See
+            :func:`open_async` for full documentation.
 
     Returns:
         Lazy ``xr.DataArray`` with dimensions ``(time, band, y, x)``.
@@ -505,7 +542,7 @@ def open(  # noqa: A001
             recognised ISO 8601 duration.
 
     """
-    return asyncio.run(
+    return _run_coroutine(
         open_async(
             href,
             datetime=datetime,
@@ -523,5 +560,6 @@ def open(  # noqa: A001
             time_period=time_period,
             store=store,
             max_concurrent_reads=max_concurrent_reads,
+            path_from_href=path_from_href,
         )
     )
