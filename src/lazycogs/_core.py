@@ -13,11 +13,7 @@ import xarray as xr
 from pyproj import CRS, Transformer
 from xarray.core import indexing
 
-from lazycogs._backend import (
-    MultiBandStacBackendArray,
-    StacBackendArray,
-    _TimeCoordArray,
-)
+from lazycogs._backend import MultiBandStacBackendArray, StacBackendArray
 from lazycogs._grid import compute_output_grid
 from lazycogs._mosaic_methods import FirstMethod, MosaicMethodBase
 from lazycogs._temporal import _TemporalGrouper, grouper_from_period
@@ -244,9 +240,8 @@ def _build_dataarray(
     )
     # Store explain metadata so that da.lazycogs.explain() can reconstruct
     # which DuckDB queries to run without re-specifying all open() parameters.
-    # Wrap time_coord so the xarray HTML repr shows a compact min/max summary.
     da.attrs["_stac_backends"] = band_arrays
-    da.attrs["_stac_time_coords"] = _TimeCoordArray(time_coord)
+    da.attrs["_stac_time_coords"] = time_coord
     return da
 
 

@@ -66,37 +66,6 @@ def _run_coroutine(coro: Any) -> Any:
         return asyncio.run(_with_bounded_executor(coro))
 
 
-class _TimeCoordArray:
-    """Thin wrapper around a datetime64 array with a compact repr.
-
-    Stored in ``DataArray.attrs["_stac_time_coords"]`` so the xarray HTML
-    repr shows a concise ``min … max (n dates)`` summary instead of the full
-    array.
-
-    Args:
-        values: 1-D ``numpy.datetime64[D]`` array of time coordinates.
-
-    """
-
-    def __init__(self, values: np.ndarray) -> None:
-        self._values = np.asarray(values, dtype="datetime64[D]")
-
-    def __repr__(self) -> str:
-        """Return a compact min/max summary."""
-        n = len(self._values)
-        if n == 0:
-            return "TimeCoords([])"
-        if n == 1:
-            return f"TimeCoords([{self._values[0]}])"
-        return f"TimeCoords([{self._values[0]} \u2026 {self._values[-1]}], n={n})"
-
-    def __array__(self, dtype: np.dtype | None = None) -> np.ndarray:
-        """Support ``np.array()`` and ``np.asarray()`` conversions."""
-        if dtype is not None:
-            return self._values.astype(dtype)
-        return self._values
-
-
 @dataclass
 class StacBackendArray(BackendArray):
     """Lazy array for a single band of a STAC collection.
