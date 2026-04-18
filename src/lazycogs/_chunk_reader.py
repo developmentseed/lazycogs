@@ -21,12 +21,60 @@ from lazycogs._reproject import (
     compute_warp_map,
     reproject_array,
 )
-from lazycogs._store import path_from_href, store_from_href
+from lazycogs._store import resolve as _resolve_store
 
 if TYPE_CHECKING:
     from obstore.store import ObjectStore
 
 logger = logging.getLogger(__name__)
+
+
+def _log_batch_failure(
+    label: str, key: object, item_id: str, err: BaseException
+) -> None:
+    """Log a warning for an item that failed inside an asyncio.gather batch."""
+    logger.warning(
+        "Failed to read %s %r from item %s: %s", label, key, item_id, err, exc_info=err
+    )
+
+
+def _target_res_and_transformer(
+    chunk_affine: Affine,
+    chunk_width: int,
+    chunk_height: int,
+    dst_crs: CRS,
+    src_crs: CRS,
+) -> tuple[float, object | None]:
+    """Return ``(target_res_native, transformer)`` for the dst→src reprojection.
+
+    *transformer* is ``None`` when source and destination share a CRS, in which
+    case *target_res_native* is just the destination pixel width. Otherwise the
+    pixel width is estimated at the chunk center by projecting two adjacent
+    pixel centers to the source CRS.
+    """
+    if dst_crs.equals(src_crs):
+        return abs(chunk_affine.a), None
+    t = _get_transformer(dst_crs, src_crs)
+    cx = chunk_affine.c + (chunk_width / 2) * chunk_affine.a
+    cy = chunk_affine.f + (chunk_height / 2) * chunk_affine.e
+    x0, _ = t.transform(cx, cy)
+    x1, _ = t.transform(cx + chunk_affine.a, cy)
+    return abs(x1 - x0), t
+
+
+def _array_to_masked(arr: np.ndarray, effective_nodata: float | None) -> ma.MaskedArray:
+    """Wrap ``arr`` in a MaskedArray, masking pixels equal to ``effective_nodata``.
+
+    A pixel is masked only when *all* bands equal ``effective_nodata`` (so a
+    valid pixel in any band keeps the position unmasked). When
+    ``effective_nodata`` is ``None``, nothing is masked.
+    """
+    if effective_nodata is None:
+        mask = np.zeros(arr.shape, dtype=bool)
+    else:
+        per_pixel = np.all(arr == effective_nodata, axis=0, keepdims=True)
+        mask = np.broadcast_to(per_pixel, arr.shape).copy()
+    return ma.MaskedArray(arr, mask=mask)
 
 
 def _select_overview(geotiff: GeoTIFF, target_res: float) -> Overview | None:
@@ -67,6 +115,31 @@ def _select_overview(geotiff: GeoTIFF, target_res: float) -> Overview | None:
     # overview (e.g. 15 m target, 10 m native, 20 m finest overview).
     # Fall back to full resolution rather than upsampling from the overview.
     return selected
+
+
+def _chunk_bbox_native(
+    chunk_affine: Affine,
+    chunk_width: int,
+    chunk_height: int,
+    transformer: object | None,
+) -> tuple[float, float, float, float]:
+    """Return the chunk's ``(minx, miny, maxx, maxy)`` in the source CRS.
+
+    When ``transformer`` is ``None`` the chunk is assumed to already be in the
+    source CRS and the bbox is returned directly. Otherwise the four corners
+    are projected and the axis-aligned envelope is returned.
+    """
+    minx = chunk_affine.c
+    maxy = chunk_affine.f
+    maxx = minx + chunk_width * chunk_affine.a
+    miny = maxy + chunk_height * chunk_affine.e  # e is negative
+    if transformer is None:
+        return (minx, miny, maxx, maxy)
+    xs, ys = transformer.transform(
+        [minx, maxx, minx, maxx],
+        [maxy, maxy, miny, miny],
+    )
+    return (min(xs), min(ys), max(xs), max(ys))
 
 
 def _native_window(
@@ -115,6 +188,52 @@ def _native_window(
     )
 
 
+async def _open_and_window(
+    item: dict,
+    band: str,
+    chunk_affine: Affine,
+    dst_crs: CRS,
+    chunk_width: int,
+    chunk_height: int,
+    store: ObjectStore | None = None,
+) -> tuple[GeoTIFF, GeoTIFF | Overview, Window | None, str] | None:
+    """Open a COG asset and compute the pixel window covering the chunk.
+
+    Returns ``(geotiff, reader, window, path)`` where *reader* is an overview
+    when one matches the target resolution and *window* is ``None`` if the
+    chunk does not overlap the source image. Returns ``None`` when the item
+    has no matching asset.
+    """
+    asset = item.get("assets", {}).get(band)
+    if asset is None:
+        logger.debug("Item %s has no asset %r; skipping.", item.get("id"), band)
+        return None
+
+    href = asset["href"]
+    store, path = _resolve_store(href, store)
+
+    t0 = time.perf_counter()
+    geotiff = await GeoTIFF.open(path, store=store)
+    logger.debug("GeoTIFF.open %s took %.3fs", path, time.perf_counter() - t0)
+
+    target_res_native, t = _target_res_and_transformer(
+        chunk_affine, chunk_width, chunk_height, dst_crs, geotiff.crs
+    )
+    overview = _select_overview(geotiff, target_res_native)
+    if overview is not None:
+        logger.debug(
+            "Selected overview level %d (res=%.2f) for target_res=%.2f on %s",
+            geotiff.overviews.index(overview),
+            abs(overview.transform.a),
+            target_res_native,
+            path,
+        )
+    reader: GeoTIFF | Overview = overview if overview is not None else geotiff
+    bbox_native = _chunk_bbox_native(chunk_affine, chunk_width, chunk_height, t)
+    window = _native_window(reader, bbox_native, reader.width, reader.height)
+    return geotiff, reader, window, path
+
+
 async def _read_item_band(
     item: dict,
     band: str,
@@ -127,91 +246,22 @@ async def _read_item_band(
 ) -> tuple[np.ndarray, float | None] | None:
     """Read and reproject one band from one STAC item.
 
-    Args:
-        item: STAC item dict containing an ``assets`` key.
-        band: Asset key identifying the band to read.
-        chunk_affine: Affine transform of the destination chunk.
-        dst_crs: CRS of the destination chunk.
-        chunk_width: Width of the destination chunk in pixels.
-        chunk_height: Height of the destination chunk in pixels.
-        nodata: No-data fill value.  When ``None``, the value stored in the
-            COG header (``GeoTIFF.nodata``) is used if present.
-        store: Optional pre-configured obstore ``ObjectStore`` instance.
-            When provided, it is used directly and the path is extracted from
-            the asset HREF (path component only).  When ``None``, the store
-            is resolved and cached via :func:`~lazycogs._store.store_from_href`.
-
-    Returns:
-        A tuple of ``(array, effective_nodata)`` where *array* has shape
-        ``(bands, chunk_height, chunk_width)`` and *effective_nodata* is the
-        nodata value that was applied (may be ``None``).  Returns ``None`` if
-        the item's footprint does not overlap the chunk.
-
+    Returns a tuple of ``(array, effective_nodata)`` where *array* has shape
+    ``(bands, chunk_height, chunk_width)`` and *effective_nodata* is the
+    nodata value that was applied (may be ``None``).  Returns ``None`` if the
+    item has no matching asset or its footprint does not overlap the chunk.
     """
-    asset = item.get("assets", {}).get(band)
-    if asset is None:
-        logger.debug("Item %s has no asset %r; skipping.", item.get("id"), band)
+    opened = await _open_and_window(
+        item, band, chunk_affine, dst_crs, chunk_width, chunk_height, store=store
+    )
+    if opened is None:
         return None
-
-    href = asset["href"]
-    if store is not None:
-        path = path_from_href(href)
-    else:
-        store, path = store_from_href(href)
-
-    t0 = time.perf_counter()
-    geotiff = await GeoTIFF.open(path, store=store)
-    logger.debug("GeoTIFF.open %s took %.3fs", path, time.perf_counter() - t0)
+    geotiff, reader, window, path = opened
+    if window is None:
+        return None
 
     # Prefer the caller-supplied nodata; fall back to the value in the COG header.
     effective_nodata = nodata if nodata is not None else geotiff.nodata
-    src_crs = geotiff.crs
-    same_crs = dst_crs.equals(src_crs)
-
-    # Select appropriate overview for the target resolution.
-    target_res_native = abs(chunk_affine.a)
-    if not same_crs:
-        # One transformer per unique (dst_crs, src_crs) pair; reused below
-        # for the bbox calculation and inside compute_warp_map.
-        t = _get_transformer(dst_crs, src_crs)
-        cx = chunk_affine.c + (chunk_width / 2) * chunk_affine.a
-        cy = chunk_affine.f + (chunk_height / 2) * chunk_affine.e
-        x0, y0 = t.transform(cx, cy)
-        x1, y1 = t.transform(cx + chunk_affine.a, cy)
-        target_res_native = abs(x1 - x0)
-
-    reader: GeoTIFF | Overview
-    overview = _select_overview(geotiff, target_res_native)
-    if overview is not None:
-        logger.debug(
-            "Selected overview level %d (res=%.2f) for target_res=%.2f on %s",
-            geotiff.overviews.index(overview),
-            abs(overview.transform.a),
-            target_res_native,
-            path,
-        )
-    reader = overview if overview is not None else geotiff
-    src_width = reader.width
-    src_height = reader.height
-
-    # Transform chunk corners to source CRS for window calculation.
-    chunk_minx = chunk_affine.c
-    chunk_maxy = chunk_affine.f
-    chunk_maxx = chunk_minx + chunk_width * chunk_affine.a
-    chunk_miny = chunk_maxy + chunk_height * chunk_affine.e  # e is negative
-
-    if same_crs:
-        bbox_native = (chunk_minx, chunk_miny, chunk_maxx, chunk_maxy)
-    else:
-        xs, ys = t.transform(
-            [chunk_minx, chunk_maxx, chunk_minx, chunk_maxx],
-            [chunk_maxy, chunk_maxy, chunk_miny, chunk_miny],
-        )
-        bbox_native = (min(xs), min(ys), max(xs), max(ys))
-
-    window = _native_window(reader, bbox_native, src_width, src_height)
-    if window is None:
-        return None
 
     t0 = time.perf_counter()
     raster = await reader.read(window=window)
@@ -289,15 +339,6 @@ async def async_mosaic_chunk(
     if mosaic_method is None:
         mosaic_method = FirstMethod()
 
-    logger.debug(
-        "async_mosaic_chunk band=%r %dx%d px, %d items (max_concurrent_reads=%d)",
-        band,
-        chunk_width,
-        chunk_height,
-        len(items),
-        max_concurrent_reads,
-    )
-
     semaphore = asyncio.Semaphore(max_concurrent_reads)
 
     async def _guarded(item: dict) -> tuple[np.ndarray, float | None] | None:
@@ -333,27 +374,19 @@ async def async_mosaic_chunk(
     # Process items in batches of max_concurrent_reads so that:
     # 1. At most max_concurrent_reads arrays are held in memory at once.
     # 2. When the mosaic method signals is_done, we skip remaining batches.
-    t0 = time.perf_counter()
     done = False
-    items_read = 0
     for batch_start in range(0, len(items), max_concurrent_reads):
         batch = items[batch_start : batch_start + max_concurrent_reads]
         batch_results = await asyncio.gather(
             *[_guarded(item) for item in batch],
             return_exceptions=True,
         )
-        items_read += len(batch)
 
         for j, result in enumerate(batch_results):
             item_idx = batch_start + j
             if isinstance(result, BaseException):
-                item_id = items[item_idx].get("id", "<unknown>")
-                logger.warning(
-                    "Failed to read band %r from item %s: %s",
-                    band,
-                    item_id,
-                    result,
-                    exc_info=result,
+                _log_batch_failure(
+                    "band", band, items[item_idx].get("id", "<unknown>"), result
                 )
                 continue
 
@@ -361,14 +394,7 @@ async def async_mosaic_chunk(
                 continue
 
             arr, effective_nodata = result
-            arr_mask: np.ndarray
-            if effective_nodata is not None:
-                arr_mask = np.all(arr == effective_nodata, axis=0, keepdims=True)
-                arr_mask = np.broadcast_to(arr_mask, arr.shape).copy()
-            else:
-                arr_mask = np.zeros(arr.shape, dtype=bool)
-
-            mosaic_method.feed(ma.MaskedArray(arr, mask=arr_mask))
+            mosaic_method.feed(_array_to_masked(arr, effective_nodata))
 
             if mosaic_method.is_done:
                 done = True
@@ -376,14 +402,6 @@ async def async_mosaic_chunk(
 
         if done:
             break
-
-    logger.debug(
-        "async_mosaic_chunk band=%r read %d/%d items in %.3fs",
-        band,
-        items_read,
-        len(items),
-        time.perf_counter() - t0,
-    )
 
     if mosaic_method._mosaic is None:
         bands = 1
@@ -504,11 +522,7 @@ async def _read_item_bands(
 
     # Open all COGs concurrently for metadata.
     async def _open_band(band: str, href: str) -> tuple[str, GeoTIFF, ObjectStore]:
-        if store is not None:
-            path = path_from_href(href)
-            geotiff = await GeoTIFF.open(path, store=store)
-            return band, geotiff, store
-        band_store, path = store_from_href(href)
+        band_store, path = _resolve_store(href, store)
         geotiff = await GeoTIFF.open(path, store=band_store)
         return band, geotiff, band_store
 
@@ -525,43 +539,14 @@ async def _read_item_bands(
     for band, geotiff, _ in open_results:
         effective_nodata = nodata if nodata is not None else geotiff.nodata
         src_crs = geotiff.crs
-        same_crs = dst_crs.equals(src_crs)
-
-        target_res_native = abs(chunk_affine.a)
-        if not same_crs:
-            # One transformer per unique (dst_crs, src_crs) pair; reused below
-            # for the bbox calculation and inside compute_warp_map.
-            t = _get_transformer(dst_crs, src_crs)
-            cx = chunk_affine.c + (chunk_width / 2) * chunk_affine.a
-            cy = chunk_affine.f + (chunk_height / 2) * chunk_affine.e
-            x0, y0 = t.transform(cx, cy)
-            x1, y1 = t.transform(cx + chunk_affine.a, cy)
-            target_res_native = abs(x1 - x0)
-
+        target_res_native, t = _target_res_and_transformer(
+            chunk_affine, chunk_width, chunk_height, dst_crs, src_crs
+        )
         overview = _select_overview(geotiff, target_res_native)
         reader = overview if overview is not None else geotiff
-
-        chunk_minx = chunk_affine.c
-        chunk_maxy = chunk_affine.f
-        chunk_maxx = chunk_minx + chunk_width * chunk_affine.a
-        chunk_miny = chunk_maxy + chunk_height * chunk_affine.e
-
-        if same_crs:
-            bbox_native = (chunk_minx, chunk_miny, chunk_maxx, chunk_maxy)
-        else:
-            xs, ys = t.transform(
-                [chunk_minx, chunk_maxx, chunk_minx, chunk_maxx],
-                [chunk_maxy, chunk_maxy, chunk_miny, chunk_miny],
-            )
-            bbox_native = (min(xs), min(ys), max(xs), max(ys))
-
+        bbox_native = _chunk_bbox_native(chunk_affine, chunk_width, chunk_height, t)
         window = _native_window(reader, bbox_native, reader.width, reader.height)
         if window is None:
-            logger.debug(
-                "Item %s band %r does not overlap chunk; skipping.",
-                item.get("id"),
-                band,
-            )
             continue
 
         band_read_plan.append(
@@ -652,15 +637,6 @@ async def async_mosaic_chunk_multiband(
     if mosaic_method_cls is None:
         mosaic_method_cls = FirstMethod
 
-    logger.debug(
-        "async_mosaic_chunk_multiband bands=%r %dx%d px, %d items (max_concurrent_reads=%d)",
-        bands,
-        chunk_width,
-        chunk_height,
-        len(items),
-        max_concurrent_reads,
-    )
-
     semaphore = asyncio.Semaphore(max_concurrent_reads)
 
     async def _guarded(item: dict) -> dict[str, tuple[np.ndarray, float | None]] | None:
@@ -698,27 +674,19 @@ async def async_mosaic_chunk_multiband(
         b: mosaic_method_cls() for b in bands
     }
 
-    t0 = time.perf_counter()
     done = False
-    items_read = 0
     for batch_start in range(0, len(items), max_concurrent_reads):
         batch = items[batch_start : batch_start + max_concurrent_reads]
         batch_results = await asyncio.gather(
             *[_guarded(item) for item in batch],
             return_exceptions=True,
         )
-        items_read += len(batch)
 
         for j, result in enumerate(batch_results):
             item_idx = batch_start + j
             if isinstance(result, BaseException):
-                item_id = items[item_idx].get("id", "<unknown>")
-                logger.warning(
-                    "Failed to read bands %r from item %s: %s",
-                    bands,
-                    item_id,
-                    result,
-                    exc_info=result,
+                _log_batch_failure(
+                    "bands", bands, items[item_idx].get("id", "<unknown>"), result
                 )
                 continue
 
@@ -726,13 +694,7 @@ async def async_mosaic_chunk_multiband(
                 continue
 
             for band, (arr, effective_nodata) in result.items():
-                arr_mask: np.ndarray
-                if effective_nodata is not None:
-                    arr_mask = np.all(arr == effective_nodata, axis=0, keepdims=True)
-                    arr_mask = np.broadcast_to(arr_mask, arr.shape).copy()
-                else:
-                    arr_mask = np.zeros(arr.shape, dtype=bool)
-                mosaic_methods[band].feed(ma.MaskedArray(arr, mask=arr_mask))
+                mosaic_methods[band].feed(_array_to_masked(arr, effective_nodata))
 
             if all(m.is_done for m in mosaic_methods.values()):
                 done = True
@@ -740,14 +702,6 @@ async def async_mosaic_chunk_multiband(
 
         if done:
             break
-
-    logger.debug(
-        "async_mosaic_chunk_multiband bands=%r read %d/%d items in %.3fs",
-        bands,
-        items_read,
-        len(items),
-        time.perf_counter() - t0,
-    )
 
     fill = nodata if nodata is not None else 0
     output: dict[str, np.ndarray] = {}

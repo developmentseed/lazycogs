@@ -13,47 +13,8 @@ from lazycogs._temporal import (
     _MonthGrouper,
     _WeekGrouper,
     _YearGrouper,
-    _parse_iso_duration,
     grouper_from_period,
 )
-
-
-# ---------------------------------------------------------------------------
-# _parse_iso_duration
-# ---------------------------------------------------------------------------
-
-
-class TestParseIsoDuration:
-    def test_p1d(self):
-        assert _parse_iso_duration("P1D") == (1, "D")
-
-    def test_p16d(self):
-        assert _parse_iso_duration("P16D") == (16, "D")
-
-    def test_p5d(self):
-        assert _parse_iso_duration("P5D") == (5, "D")
-
-    def test_p1w(self):
-        assert _parse_iso_duration("P1W") == (1, "W")
-
-    def test_p1m(self):
-        assert _parse_iso_duration("P1M") == (1, "M")
-
-    def test_p1y(self):
-        assert _parse_iso_duration("P1Y") == (1, "Y")
-
-    def test_invalid_raises(self):
-        with pytest.raises(ValueError, match="Unsupported ISO 8601 duration"):
-            _parse_iso_duration("1D")
-
-    def test_invalid_time_component_raises(self):
-        # PT1H is a valid ISO duration but not supported
-        with pytest.raises(ValueError):
-            _parse_iso_duration("PT1H")
-
-    def test_empty_raises(self):
-        with pytest.raises(ValueError):
-            _parse_iso_duration("")
 
 
 # ---------------------------------------------------------------------------

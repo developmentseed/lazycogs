@@ -15,31 +15,6 @@ _EPOCH = date(2000, 1, 1)
 _ISO_DURATION_RE = re.compile(r"^P(\d+)(D|W|M|Y)$")
 
 
-def _parse_iso_duration(s: str) -> tuple[int, str]:
-    """Parse a simple ISO 8601 duration string into ``(count, unit)``.
-
-    Only the ``PnD``, ``PnW``, ``PnM``, and ``PnY`` forms are supported.
-
-    Args:
-        s: ISO 8601 duration string, e.g. ``"P1D"``, ``"P16D"``, ``"P1M"``.
-
-    Returns:
-        ``(count, unit)`` where *unit* is one of ``"D"``, ``"W"``, ``"M"``,
-        ``"Y"``.
-
-    Raises:
-        ValueError: If *s* does not match the supported pattern.
-
-    """
-    m = _ISO_DURATION_RE.match(s)
-    if not m:
-        raise ValueError(
-            f"Unsupported ISO 8601 duration {s!r}. "
-            "Expected PnD, PnW, PnM, or PnY (e.g. 'P1D', 'P1M', 'P16D')."
-        )
-    return int(m.group(1)), m.group(2)
-
-
 class _TemporalGrouper(ABC):
     """Abstract base for temporal grouping strategies.
 
@@ -242,20 +217,17 @@ def grouper_from_period(time_period: str) -> _TemporalGrouper:
         ValueError: If *time_period* is not a recognised duration string.
 
     """
-    count, unit = _parse_iso_duration(time_period)
-
-    if unit == "D" and count == 1:
-        return _DayGrouper()
-    if unit == "D":
-        return _FixedDayGrouper(count)
-    if unit == "W" and count == 1:
-        return _WeekGrouper()
-    if unit == "W":
-        return _FixedDayGrouper(count * 7)
-    if unit == "M" and count == 1:
-        return _MonthGrouper()
-    if unit == "Y" and count == 1:
-        return _YearGrouper()
+    m = _ISO_DURATION_RE.match(time_period)
+    if m:
+        count, unit = int(m.group(1)), m.group(2)
+        if unit == "D":
+            return _DayGrouper() if count == 1 else _FixedDayGrouper(count)
+        if unit == "W":
+            return _WeekGrouper() if count == 1 else _FixedDayGrouper(count * 7)
+        if unit == "M" and count == 1:
+            return _MonthGrouper()
+        if unit == "Y" and count == 1:
+            return _YearGrouper()
 
     raise ValueError(
         f"Unsupported time_period {time_period!r}. "
