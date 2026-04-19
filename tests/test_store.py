@@ -494,6 +494,31 @@ def test_store_for_malformed_extension_does_not_raise():
     assert store is not None
 
 
+def test_store_for_https_url_region_in_hostname_no_duplicate():
+    """store_for must not raise when the asset HREF is an HTTPS S3 URL with the
+    region encoded in the hostname AND the storage extension also declares a region.
+    Previously, passing region twice caused an obstore duplicate-key error.
+    """
+    item = {
+        "id": "test-item",
+        "stac_extensions": [_V1_EXTENSION_URL],
+        "properties": {
+            "storage:platform": "AWS",
+            "storage:region": "us-west-2",
+            "datetime": "2023-06-01T00:00:00Z",
+        },
+        "assets": {
+            "data": {
+                "href": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/file.tif",
+                "roles": ["data"],
+            }
+        },
+    }
+    with patch("lazycogs._store.rustac.search_sync", return_value=[item]):
+        store = store_for("items.parquet")
+    assert store is not None
+
+
 def test_store_for_kwargs_override_defaults():
     """Caller kwargs override the skip_signature=True default for public schemes."""
     call_kwargs: dict = {}
