@@ -24,6 +24,24 @@ from lazycogs._temporal import _TemporalGrouper, grouper_from_period
 
 logger = logging.getLogger(__name__)
 
+
+class _CompactDateArray(np.ndarray):
+    """Numpy datetime64 array subclass with a compact display for xarray HTML repr."""
+
+    def __new__(cls, values: np.ndarray) -> "_CompactDateArray":
+        return np.asarray(values, dtype="datetime64[D]").view(cls)
+
+    def __str__(self) -> str:
+        arr = self.view(np.ndarray)
+        n = len(arr)
+        if n == 1:
+            return str(arr[0])
+        return f"{arr[0]} \u2026 {arr[-1]} (n={n})"
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
+
 if TYPE_CHECKING:
     from obstore.store import ObjectStore
 
@@ -250,7 +268,7 @@ def _build_dataarray(
     # Store explain metadata so that da.lazycogs.explain() can reconstruct
     # which DuckDB queries to run without re-specifying all open() parameters.
     da.attrs["_stac_backends"] = band_arrays
-    da.attrs["_stac_time_coords"] = time_coord
+    da.attrs["_stac_time_coords"] = _CompactDateArray(time_coord)
     return da
 
 
