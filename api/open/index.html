@@ -904,8 +904,25 @@ Defaults to 32.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Optional callable <code>(href: str) -&gt; str</code>.  See
-:func:<code>open_async</code> for full documentation.</p>
+                <p>Optional callable <code>(href: str) -&gt; str</code> that extracts
+the object path from an asset HREF.  When provided, it replaces the
+default <code>urlparse</code>-based extraction used in
+:func:<code>~lazycogs._store.resolve</code>.  Most useful when combined with
+a custom <code>store</code> whose root does not align with the URL path
+structure of the asset HREFs.</p>
+<p>Example — NASA LPDAAC proxy https url for S3 asset::</p>
+<div class="highlight"><pre><span></span><code>from obstore.store import S3Store
+from urllib.parse import urlparse
+
+store = S3Store(bucket=&quot;lp-prod-protected&quot;, ...)
+
+def strip_bucket(href: str) -&gt; str:
+    # href: https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/path/to/file.tif
+    # store is rooted at the bucket, so the path is just path/to/file.tif
+    return urlparse(href).path.lstrip(&quot;/&quot;).removeprefix(&quot;lp-prod-protected/&quot;)
+
+da = lazycogs.open(&quot;items.parquet&quot;, ..., store=store, path_from_href=strip_bucket)
+</code></pre></div>
               </div>
             </td>
             <td>

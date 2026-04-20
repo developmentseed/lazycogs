@@ -70,7 +70,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#why" class="md-skip">
+        <a href="#introduction" class="md-skip">
           Skip to content
         </a>
       
@@ -282,10 +282,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#why" class="md-nav__link">
+  <a href="#introduction" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Why
+        Introduction
       
     </span>
   </a>
@@ -621,10 +621,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#why" class="md-nav__link">
+  <a href="#introduction" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Why
+        Introduction
       
     </span>
   </a>
@@ -759,10 +759,14 @@
   <h1>Home</h1>
 
 <p><img alt="lazycogs" src="lazycogs.svg" /></p>
-<p>Open a geoparquet STAC item collection as a lazy <code>(time, band, y, x)</code> xarray DataArray backed by Cloud Optimized GeoTIFFs. No GDAL required.</p>
-<h2 id="why">Why<a class="headerlink" href="#why" title="Permanent link">&para;</a></h2>
-<p>Most tools that combine STAC and xarray (stackstac, odc-stac, rioxarray's GTI backend) depend on GDAL for spatial indexing, COG I/O, and reprojection. GDAL works, but it introduces a large build-time dependency that is difficult to distribute as a standard wheel.</p>
-<p>This package replaces GDAL with a set of modern, Rust-backed libraries that ship as standard Python wheels:</p>
+<p>Open a lazy <code>(time, band, y, x)</code> xarray DataArray from thousands of cloud-optimized geotiffs (COGs). No GDAL required.</p>
+<h2 id="introduction">Introduction<a class="headerlink" href="#introduction" title="Permanent link">&para;</a></h2>
+<p><a href="https://stackstac.readthedocs.io">stackstac</a> and <a href="https://odc-stac.readthedocs.io">odc-stac</a> established the pattern that lazycogs builds on: take a STAC item collection and expose it as a spatially-aligned xarray DataArray ready for dask-parallel computation. Both are excellent tools that cover most satellite imagery workflows well: time series extraction, ML training data, mosaic compositing. These tools rely on the trusty combination of rasterio and GDAL for data i/o and warping operations.</p>
+<p>lazycogs builds off of the approach used by stackstac and odc-stac but instead of relying on GDAL and rasterio, lazycogs uses <a href="https://stac-utils.github.io/rustac-py">rustac</a> to query stac-geoparquet files for determining the assets required for any array operation and <a href="https://developmentseed/async-geotiff">async-geotiff</a> + <a href="https://developmentseed.org/obstore">obstore</a> for raster i/o. </p>
+<p>This structure enables you to instantly materialize a lazy xarray DataArray view of massive STAC item archives in any CRS and resolution.</p>
+<p>Subsequent queries of the DataArray will perform targeted queries on the stac-geoparquet file for the specified spatial/temporal area of interest to determine which underlying assets need to be accessed for the array operation.</p>
+<p>One trade-off worth naming up front: lazycogs only reads Cloud Optimized GeoTIFFs. If your assets are in another format, lazycogs is not the right tool!</p>
+<p>Here is a summary of the tool/approach that lazycogs uses for each phase:</p>
 <table>
 <thead>
 <tr>
@@ -915,16 +919,16 @@ and the empty-chunk fraction (useful for diagnosing sparse time series).</p>
 <p>By default, <code>lazycogs</code> extracts the object path from an asset HREF by stripping the <code>scheme://netloc</code> prefix. This works for standard S3 and GCS URLs but may not match the root of your custom store — for example, when an Azure Blob Storage store is rooted at a container but the HREFs include the container name in the path.</p>
 <p>Use <code>path_from_href=</code> to supply a callable that takes the full HREF and returns the object path your store expects:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">urllib.parse</span><span class="w"> </span><span class="kn">import</span> <span class="n">urlparse</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">obstore.store</span><span class="w"> </span><span class="kn">import</span> <span class="n">AzureBlobStore</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">obstore.store</span><span class="w"> </span><span class="kn">import</span> <span class="n">S3Store</span>
 <a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">store</span> <span class="o">=</span> <span class="n">AzureBlobStore</span><span class="p">(</span><span class="n">container</span><span class="o">=</span><span class="s2">&quot;my-container&quot;</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">store</span> <span class="o">=</span> <span class="n">S3Store</span><span class="p">(</span><span class="n">bucket</span><span class="o">=</span><span class="s2">&quot;lp-prod-protected&quot;</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
 <a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>
-<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="k">def</span><span class="w"> </span><span class="nf">strip_container</span><span class="p">(</span><span class="n">href</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>    <span class="c1"># href: https://account.blob.core.windows.net/my-container/path/to/file.tif</span>
-<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>    <span class="c1"># store is rooted at the container level, so drop the container prefix</span>
-<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>    <span class="k">return</span> <span class="n">urlparse</span><span class="p">(</span><span class="n">href</span><span class="p">)</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">lstrip</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">removeprefix</span><span class="p">(</span><span class="s2">&quot;my-container/&quot;</span><span class="p">)</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="k">def</span><span class="w"> </span><span class="nf">strip_bucket</span><span class="p">(</span><span class="n">href</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>    <span class="c1"># href: https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/path/to/file.tif</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>    <span class="c1"># store is rooted at the bucket, so the path is just path/to/file.tif</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>    <span class="k">return</span> <span class="n">urlparse</span><span class="p">(</span><span class="n">href</span><span class="p">)</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">lstrip</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">removeprefix</span><span class="p">(</span><span class="s2">&quot;lp-prod-protected/&quot;</span><span class="p">)</span>
 <a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>
-<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="n">da</span> <span class="o">=</span> <span class="n">lazycogs</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s2">&quot;items.parquet&quot;</span><span class="p">,</span> <span class="o">...</span><span class="p">,</span> <span class="n">store</span><span class="o">=</span><span class="n">store</span><span class="p">,</span> <span class="n">path_from_href</span><span class="o">=</span><span class="n">strip_container</span><span class="p">)</span>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="n">da</span> <span class="o">=</span> <span class="n">lazycogs</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s2">&quot;items.parquet&quot;</span><span class="p">,</span> <span class="o">...</span><span class="p">,</span> <span class="n">store</span><span class="o">=</span><span class="n">store</span><span class="p">,</span> <span class="n">path_from_href</span><span class="o">=</span><span class="n">strip_bucket</span><span class="p">)</span>
 </code></pre></div>
 <h3 id="nasa-earthdata">NASA Earthdata<a class="headerlink" href="#nasa-earthdata" title="Permanent link">&para;</a></h3>
 <p>NASA Earthdata supports in-region direct S3 access through a temporary-credential endpoint. Use the <strong>synchronous</strong> <code>NasaEarthdataCredentialProvider</code> (not the async variant) when constructing the store:</p>
