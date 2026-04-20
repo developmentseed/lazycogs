@@ -548,8 +548,27 @@ def open(  # noqa: A001
         max_concurrent_reads: Maximum number of COG reads to run concurrently
             per chunk.  See :func:`open_async` for full documentation.
             Defaults to 32.
-        path_from_href: Optional callable ``(href: str) -> str``.  See
-            :func:`open_async` for full documentation.
+        path_from_href: Optional callable ``(href: str) -> str`` that extracts
+            the object path from an asset HREF.  When provided, it replaces the
+            default ``urlparse``-based extraction used in
+            :func:`~lazycogs._store.resolve`.  Most useful when combined with
+            a custom ``store`` whose root does not align with the URL path
+            structure of the asset HREFs.
+
+            Example — NASA LPDAAC proxy https url for S3 asset::
+
+                from obstore.store import S3Store
+                from urllib.parse import urlparse
+
+                store = S3Store(bucket="lp-prod-protected", ...)
+
+                def strip_bucket(href: str) -> str:
+                    # href: https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/path/to/file.tif
+                    # store is rooted at the bucket, so the path is just path/to/file.tif
+                    return urlparse(href).path.lstrip("/").removeprefix("lp-prod-protected/")
+
+                da = lazycogs.open("items.parquet", ..., store=store, path_from_href=strip_bucket)
+
 
     Returns:
         Lazy ``xr.DataArray`` with dimensions ``(time, band, y, x)``.

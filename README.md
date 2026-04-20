@@ -1,12 +1,20 @@
 ![lazycogs](./lazycogs.svg)
 
-Open a geoparquet STAC item collection as a lazy `(time, band, y, x)` xarray DataArray backed by Cloud Optimized GeoTIFFs. No GDAL required.
+Open a lazy `(time, band, y, x)` xarray DataArray from thousands of cloud-optimized geotiffs (COGs). No GDAL required.
 
-## Why
+## Introduction
 
-Most tools that combine STAC and xarray (stackstac, odc-stac, rioxarray's GTI backend) depend on GDAL for spatial indexing, COG I/O, and reprojection. GDAL works, but it introduces a large build-time dependency that is difficult to distribute as a standard wheel.
+[stackstac](https://stackstac.readthedocs.io) and [odc-stac](https://odc-stac.readthedocs.io) established the pattern that lazycogs builds on: take a STAC item collection and expose it as a spatially-aligned xarray DataArray ready for dask-parallel computation. Both are excellent tools that cover most satellite imagery workflows well: time series extraction, ML training data, mosaic compositing. These tools rely on the trusty combination of rasterio and GDAL for data i/o and warping operations.
 
-This package replaces GDAL with a set of modern, Rust-backed libraries that ship as standard Python wheels:
+lazycogs builds off of the approach used by stackstac and odc-stac but instead of relying on GDAL and rasterio, lazycogs uses [rustac](https://stac-utils.github.io/rustac-py) to query stac-geoparquet files for determining the assets required for any array operation and [async-geotiff](https://developmentseed/async-geotiff) + [obstore](https://developmentseed.org/obstore) for raster i/o. 
+
+This structure enables you to instantly materialize a lazy xarray DataArray view of massive STAC item archives in any CRS and resolution.
+
+Subsequent queries of the DataArray will perform targeted queries on the stac-geoparquet file for the specified spatial/temporal area of interest to determine which underlying assets need to be accessed for the array operation.
+
+One trade-off worth naming up front: lazycogs only reads Cloud Optimized GeoTIFFs. If your assets are in another format, lazycogs is not the right tool!
+
+Here is a summary of the tool/approach that lazycogs uses for each phase:
 
 | Task | Library |
 |---|---|
@@ -170,16 +178,16 @@ Use `path_from_href=` to supply a callable that takes the full HREF and returns 
 
 ```python
 from urllib.parse import urlparse
-from obstore.store import AzureBlobStore
+from obstore.store import S3Store
 
-store = AzureBlobStore(container="my-container", ...)
+store = S3Store(bucket="lp-prod-protected", ...)
 
-def strip_container(href: str) -> str:
-    # href: https://account.blob.core.windows.net/my-container/path/to/file.tif
-    # store is rooted at the container level, so drop the container prefix
-    return urlparse(href).path.lstrip("/").removeprefix("my-container/")
+def strip_bucket(href: str) -> str:
+    # href: https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/path/to/file.tif
+    # store is rooted at the bucket, so the path is just path/to/file.tif
+    return urlparse(href).path.lstrip("/").removeprefix("lp-prod-protected/")
 
-da = lazycogs.open("items.parquet", ..., store=store, path_from_href=strip_container)
+da = lazycogs.open("items.parquet", ..., store=store, path_from_href=strip_bucket)
 ```
 
 ### NASA Earthdata
