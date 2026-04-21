@@ -254,7 +254,9 @@ def _make_raster(transform: Affine, value: float, h: int = 4, w: int = 4) -> Mag
 def test_apply_bands_with_warp_cache_shared_geometry():
     """Bands with the same transform/CRS share a single warp map computation."""
     crs = CRS.from_epsg(4326)
-    transform = Affine(1.0, 0.0, 0.0, 0.0, -1.0, 4.0)
+    # Offset the source transform slightly so it differs from dst_transform and
+    # the warp path (rather than the identity fast-path) is exercised.
+    transform = Affine(1.0, 0.0, 0.5, 0.0, -1.0, 4.0)
     dst_transform = Affine(1.0, 0.0, 0.0, 0.0, -1.0, 4.0)
 
     raster_a = _make_raster(transform, 1.0)
@@ -290,7 +292,9 @@ def test_apply_bands_with_warp_cache_shared_geometry():
 def test_apply_bands_with_warp_cache_different_geometry():
     """Bands with different transforms each compute their own warp map."""
     crs = CRS.from_epsg(4326)
-    transform_a = Affine(1.0, 0.0, 0.0, 0.0, -1.0, 4.0)
+    # Both source transforms differ from dst_transform so the warp path is
+    # exercised for each band (fast-path is not triggered).
+    transform_a = Affine(1.0, 0.0, 0.5, 0.0, -1.0, 4.0)
     transform_b = Affine(2.0, 0.0, 0.0, 0.0, -2.0, 8.0)
     dst_transform = Affine(1.0, 0.0, 0.0, 0.0, -1.0, 4.0)
 
@@ -325,7 +329,8 @@ def test_apply_bands_with_warp_cache_different_geometry():
 def test_apply_bands_with_warp_cache_shared_across_calls():
     """A shared external cache reuses warp maps across separate calls (e.g. time steps)."""
     crs = CRS.from_epsg(4326)
-    transform = Affine(1.0, 0.0, 0.0, 0.0, -1.0, 4.0)
+    # Source transform offset from dst so the warp path is exercised.
+    transform = Affine(1.0, 0.0, 0.5, 0.0, -1.0, 4.0)
     dst_transform = Affine(1.0, 0.0, 0.0, 0.0, -1.0, 4.0)
 
     raster = _make_raster(transform, 1.0)

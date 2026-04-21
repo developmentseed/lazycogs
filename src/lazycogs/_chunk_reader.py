@@ -282,6 +282,17 @@ async def _read_item_band(
         time.perf_counter() - t0,
     )
 
+    # Fast path: skip reprojection when the read window already matches the
+    # destination chunk exactly (same CRS, same affine, same pixel dimensions).
+    if (
+        geotiff.crs.equals(dst_crs)
+        and raster.transform == chunk_affine
+        and raster.data.shape[1] == chunk_height
+        and raster.data.shape[2] == chunk_width
+    ):
+        logger.debug("Skipping reprojection for %s (identity grid)", path)
+        return raster.data, effective_nodata
+
     # Reproject to the destination chunk grid.
     # Run in a thread executor so the event loop stays free to process
     # concurrent I/O completions from other items in the same gather.
@@ -469,6 +480,16 @@ def _apply_bands_with_warp_cache(
     results: dict[str, tuple[np.ndarray, float | None]] = {}
 
     for band, raster, src_crs, effective_nodata in band_rasters:
+        # Fast path: skip reprojection when the read window already matches the
+        # destination chunk exactly (same CRS, same affine, same pixel dimensions).
+        if (
+            src_crs.equals(dst_crs)
+            and raster.transform == dst_transform
+            and raster.data.shape[1] == dst_height
+            and raster.data.shape[2] == dst_width
+        ):
+            results[band] = (raster.data, effective_nodata)
+            continue
         cache_key = (tuple(raster.transform), src_crs)
         if cache_key not in cache:
             cache[cache_key] = compute_warp_map(

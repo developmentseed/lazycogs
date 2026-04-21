@@ -22,6 +22,16 @@ BENCHMARK_CRS = "EPSG:5070"
 BENCHMARK_SINGLE_BAND: list[str] = ["red"]
 BENCHMARK_MULTIBAND: list[str] = ["red", "nir08"]
 
+# Native CRS/resolution for the benchmark dataset (Sentinel-2 UTM Zone 12N).
+# Used to benchmark the no-reprojection path.
+BENCHMARK_NATIVE_CRS = "EPSG:32612"
+# 30 km x 30 km area fully within the source COG footprint, snapped to the
+# native 10 m pixel grid so col_off and row_off are whole numbers.
+# Source transform origin: (699960, 4200000), pixel size: (10, -10).
+# col_off=1000, row_off=200 from the top-left corner.
+BENCHMARK_NATIVE_BBOX = (709960.0, 4_168_000.0, 739960.0, 4_198_000.0)
+BENCHMARK_NATIVE_RESOLUTION = 10.0  # red band native pixel size
+
 
 @pytest.fixture(scope="session")
 def benchmark_parquet() -> str:
