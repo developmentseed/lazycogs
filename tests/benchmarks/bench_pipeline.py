@@ -16,6 +16,9 @@ from .conftest import (
     BENCHMARK_BBOX,
     BENCHMARK_CRS,
     BENCHMARK_MULTIBAND,
+    BENCHMARK_NATIVE_BBOX,
+    BENCHMARK_NATIVE_CRS,
+    BENCHMARK_NATIVE_RESOLUTION,
     BENCHMARK_SINGLE_BAND,
 )
 
@@ -103,6 +106,28 @@ def test_reproject_workers(
     finally:
         # Reset to default so other benchmarks are not affected.
         set_reproject_workers(min(__import__("os").cpu_count() or 4, 4))
+
+
+@pytest.mark.benchmark
+def test_native_crs_resolution(benchmark, benchmark_parquet: str) -> None:
+    """Full pipeline using the assets' native CRS and resolution.
+
+    Requests data in EPSG:32612 at 10 m — exactly the source COG projection and
+    pixel size — so reprojection should be a no-op.  Compared against
+    ``test_full_compute`` (which reprojects to EPSG:5070 at 60 m) to quantify
+    the overhead of the warp path when it is not needed.
+    """
+
+    def run() -> object:
+        da = lazycogs.open(
+            benchmark_parquet,
+            bbox=BENCHMARK_NATIVE_BBOX,
+            crs=BENCHMARK_NATIVE_CRS,
+            resolution=BENCHMARK_NATIVE_RESOLUTION,
+        )
+        return da.compute()
+
+    benchmark(run)
 
 
 @pytest.mark.benchmark
