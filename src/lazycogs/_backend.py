@@ -13,12 +13,12 @@ from typing import Any
 import numpy as np
 from affine import Affine
 from pyproj import CRS, Transformer
+from rustac import DuckdbClient
 from xarray.backends.common import BackendArray
 from xarray.core import indexing
 
-from rustac import DuckdbClient
-
 from lazycogs._chunk_reader import async_mosaic_chunk, async_mosaic_chunk_multiband
+from lazycogs._cql2 import _extract_filter_fields, _sortby_fields
 from lazycogs._executor import get_max_workers
 from lazycogs._mosaic_methods import MosaicMethodBase
 
@@ -124,7 +124,7 @@ class StacBackendArray(BackendArray):
     dst_affine: Affine
     dst_crs: CRS
     bbox_4326: list[float]
-    sortby: list[str] | None
+    sortby: str | list[str | dict[str, str]] | None
     filter: str | dict[str, Any] | None
     ids: list[str] | None
     dst_width: int
@@ -266,6 +266,8 @@ class StacBackendArray(BackendArray):
             dtype=self.dtype,
         )
 
+        filter_fields = _extract_filter_fields(self.filter) if self.filter else set()
+
         for i, t_idx in enumerate(time_indices):
             date = self.dates[t_idx]
 
@@ -277,6 +279,11 @@ class StacBackendArray(BackendArray):
                 sortby=self.sortby,
                 filter=self.filter,
                 ids=self.ids,
+                include=list(
+                    {"id", "assets"}.union(filter_fields).union(
+                        _sortby_fields(self.sortby)
+                    )
+                ),
             )
             logger.debug(
                 "duckdb_client.search band=%r date=%s returned %d items in %.3fs",
@@ -478,6 +485,8 @@ class MultiBandStacBackendArray(BackendArray):
         # (identical src_transform + src_crs) reuse the same WarpMap.
         warp_cache: dict = {}
 
+        filter_fields = _extract_filter_fields(ref.filter) if ref.filter else set()
+
         for i, t_idx in enumerate(time_indices):
             date = ref.dates[t_idx]
 
@@ -489,6 +498,11 @@ class MultiBandStacBackendArray(BackendArray):
                 sortby=ref.sortby,
                 filter=ref.filter,
                 ids=ref.ids,
+                include=list(
+                    {"id", "assets"}.union(filter_fields).union(
+                        _sortby_fields(ref.sortby)
+                    )
+                ),
             )
             logger.debug(
                 "duckdb_client.search bands=%r date=%s returned %d items in %.3fs",
