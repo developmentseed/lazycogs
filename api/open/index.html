@@ -1017,7 +1017,7 @@ hive-partitioned parquet directory.</p>
    time steps (applying <code>bbox</code>, <code>datetime</code>, <code>filter</code>, and <code>ids</code>
    so the time axis contains no empty slices).</li>
 <li>Compute the output grid (affine transform + coordinate arrays).</li>
-<li>Create one <code>StacBackendArray</code> per band wrapped in a
+<li>Create a <code>MultiBandStacBackendArray</code> wrapped in a
    <code>LazilyIndexedArray</code> -- no pixel I/O yet.</li>
 <li>Assemble an <code>xr.Dataset</code>, convert to <code>xr.DataArray</code>, and
    optionally chunk with dask.</li>
