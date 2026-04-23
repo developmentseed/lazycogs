@@ -9,6 +9,7 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "async-geotiff>=0.4.0",
+    "cql2>=0.5.5",
     "numpy>=2.4.4",
     "obstore>=0.9.2",
     "pyproj>=3.7.2",

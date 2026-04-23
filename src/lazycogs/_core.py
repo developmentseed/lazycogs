@@ -18,6 +18,7 @@ from lazycogs._backend import (
     StacBackendArray,
     _run_coroutine,
 )
+from lazycogs._cql2 import _extract_filter_fields, _sortby_fields
 from lazycogs._grid import compute_output_grid
 from lazycogs._mosaic_methods import FirstMethod, MosaicMethodBase
 from lazycogs._temporal import _TemporalGrouper, grouper_from_period
@@ -53,6 +54,7 @@ def _discover_bands(
     datetime: str | None = None,
     filter: str | dict[str, Any] | None = None,
     ids: list[str] | None = None,
+    sortby: str | list[str | dict[str, str]] | None = None,
 ) -> list[str]:
     """Return the asset keys present in the first matching item of the parquet file.
 
@@ -80,8 +82,10 @@ def _discover_bands(
         max_items=1,
         bbox=bbox,
         datetime=datetime,
+        sortby=sortby,
         filter=filter,
         ids=ids,
+        include=list({"assets"}.union(_sortby_fields(sortby))),
     )
     if not items:
         raise ValueError(f"No STAC items found in {parquet_path!r}")
@@ -108,6 +112,7 @@ def _build_time_steps(
     datetime: str | None = None,
     filter: str | dict[str, Any] | None = None,
     ids: list[str] | None = None,
+    sortby: str | list[str | dict[str, str]] | None = None,
     temporal_grouper: _TemporalGrouper,
 ) -> tuple[list[str], list[np.datetime64]]:
     """Return filter strings and coordinate values for each unique time step.
@@ -133,14 +138,24 @@ def _build_time_steps(
         ``numpy.datetime64[D]`` coordinate values.
 
     """
+    filter_fields = _extract_filter_fields(filter) if filter else set()
+
     items = duckdb_client.search(
         parquet_path,
         bbox=bbox,
         datetime=datetime,
+        sortby=sortby,
         filter=filter,
         ids=ids,
+        include=list(
+            {"datetime", "start_datetime"}.union(filter_fields).union(
+                _sortby_fields(sortby)
+            )
+        ),
     )
+
     keys: set[str] = set()
+
     for item in items:
         props = item.get("properties", {})
         dt: str | None = props.get("datetime") or props.get("start_datetime")
@@ -164,7 +179,7 @@ def _build_dataarray(
     bbox_4326: list[float],
     dst_crs: CRS,
     resolution: float,
-    sortby: list[str] | None,
+    sortby: str | list[str | dict[str, str]] | None,
     filter: str | dict[str, Any] | None,
     ids: list[str] | None,
     nodata: float | None,
@@ -288,7 +303,7 @@ async def open_async(  # noqa: A001
     ids: list[str] | None = None,
     bands: list[str] | None = None,
     chunks: dict[str, int] | None = None,
-    sortby: list[str] | None = None,
+    sortby: str | list[str | dict[str, str]] | None = None,
     nodata: float | None = None,
     dtype: str | np.dtype | None = None,
     mosaic_method: type[MosaicMethodBase] | None = None,
@@ -445,6 +460,7 @@ async def open_async(  # noqa: A001
             datetime=datetime,
             filter=filter,
             ids=ids,
+            sortby=sortby,
         )
         logger.debug(
             "_discover_bands took %.3fs, found %d bands",
@@ -460,6 +476,7 @@ async def open_async(  # noqa: A001
         datetime=datetime,
         filter=filter,
         ids=ids,
+        sortby=sortby,
         temporal_grouper=grouper,
     )
     logger.debug(
@@ -517,7 +534,7 @@ def open(  # noqa: A001
     ids: list[str] | None = None,
     bands: list[str] | None = None,
     chunks: dict[str, int] | None = None,
-    sortby: list[str] | None = None,
+    sortby: str | list[str | dict[str, str]] | None = None,
     nodata: float | None = None,
     dtype: str | np.dtype | None = None,
     mosaic_method: type[MosaicMethodBase] | None = None,
