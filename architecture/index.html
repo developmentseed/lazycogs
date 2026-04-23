@@ -1067,7 +1067,7 @@
 <h2 id="why-parquet-not-a-stac-api-url">Why parquet, not a STAC API URL<a class="headerlink" href="#why-parquet-not-a-stac-api-url" title="Permanent link">&para;</a></h2>
 <p><code>open()</code> accepts a path to a geoparquet file or directory, not a STAC API endpoint. This is intentional. When dask computes a large DataArray, it may execute hundreds of chunk tasks in parallel. If each task queried a remote STAC API directly, that would fire hundreds of concurrent HTTP requests at the API, which is both impolite and likely to trigger rate limiting or outright bans.</p>
 <p>Instead, the expected workflow is to run one <code>rustac.search_to("items.parquet", api_url, ...)</code> call upfront to download the matching items into a local geoparquet file, and then pass that file to <code>open()</code>. Per-chunk spatial filtering is then a fast DuckDB query, with no network traffic and no API involvement.</p>
-<p>For large pre-existing STAC archives stored as hive-partitioned parquet directories (e.g. <code>year=2023/month=01/...</code>), pass a <code>DuckdbClient(use_hive_partitioning=True)</code> via the <code>duckdb_client</code> parameter to enable DuckDB partition pruning. All internal queries use <code>duckdb_client.search()</code> regardless of whether a custom client is supplied; when <code>duckdb_client</code> is <code>None</code>, a plain <code>DuckdbClient()</code> is created automatically.</p>
+<p>For large pre-existing STAC archives stored as hive-partitioned parquet directories (e.g. <code>year=2023/month=01/...</code>), pass a <code>DuckdbClient(use_hive_partitioning=True)</code> via the <code>duckdb_client</code> parameter to enable DuckDB partition pruning. All internal queries in <code>open()</code> use <code>duckdb_client.search()</code>. When <code>duckdb_client</code> is <code>None</code>, a plain <code>DuckdbClient()</code> is created automatically.</p>
 <h2 id="two-phase-execution-model">Two-phase execution model<a class="headerlink" href="#two-phase-execution-model" title="Permanent link">&para;</a></h2>
 <p>Work is split sharply into two phases.</p>
 <p><strong>Phase 0 — open time</strong> runs at <code>open()</code> / <code>open_async()</code> call time. It does the minimum needed to build a fully-described lazy DataArray: one DuckDB query to discover bands, one DuckDB query to build the time axis, and a grid computation. No pixel I/O happens. No dask task graph is built. Each band becomes a <code>StacBackendArray</code> wrapped in an xarray <code>LazilyIndexedArray</code>.</p>
@@ -1313,8 +1313,12 @@ mean that requires all weeks to be present before reducing).</p>
 </thead>
 <tbody>
 <tr>
-<td><code>rustac</code></td>
-<td>STAC search against local geoparquet files via DuckDB</td>
+<td><code>rustac[arrow]</code></td>
+<td>STAC search against local geoparquet files via DuckDB; Arrow output via <code>arro3-core</code></td>
+</tr>
+<tr>
+<td><code>arro3-core</code></td>
+<td>Zero-copy Arrow table output from DuckDB queries (installed via <code>rustac[arrow]</code>)</td>
 </tr>
 <tr>
 <td><code>async-geotiff</code></td>
