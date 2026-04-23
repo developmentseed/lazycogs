@@ -13,7 +13,7 @@ import xarray as xr
 from affine import Affine
 from pyproj import CRS, Transformer
 
-from lazycogs._backend import StacBackendArray, _run_coroutine
+from lazycogs._backend import MultiBandStacBackendArray, _run_coroutine
 from lazycogs._chunk_reader import _open_and_window
 
 if TYPE_CHECKING:
@@ -401,7 +401,7 @@ def _infer_chunk_sizes(da: xr.DataArray) -> tuple[int, int]:
 
 
 def _roi_pixel_offsets(
-    da: xr.DataArray, backend: StacBackendArray
+    da: xr.DataArray, backend: MultiBandStacBackendArray
 ) -> tuple[int, int, int, int]:
     """Map the DataArray's coordinate extent to pixel offsets in the full grid.
 
@@ -489,14 +489,15 @@ async def _inspect_item_async(
 
 async def _explain_async(
     da: xr.DataArray,
-    backends: list[StacBackendArray],
+    backend: MultiBandStacBackendArray,
     fetch_headers: bool,
 ) -> ExplainPlan:
     """Run DuckDB queries for all (band, time, spatial chunk) combinations.
 
     Args:
         da: DataArray whose extent and chunking define the explain scope.
-        backends: Full list of :class:`StacBackendArray` instances from attrs.
+        backend: :class:`MultiBandStacBackendArray` stored in the DataArray
+            attrs by :func:`~lazycogs._core._build_dataarray`.
         fetch_headers: When ``True``, open each matched COG header.
 
     Returns:
@@ -514,21 +515,20 @@ async def _explain_async(
         current_bands: set[str] = set(
             np.atleast_1d(da.coords["band"].values).astype(str)
         )
-        active_backends = [b for b in backends if b.band in current_bands]
+        active_bands = [b for b in backend.bands if b in current_bands]
     else:
-        active_backends = backends
+        active_bands = backend.bands
 
-    if not active_backends:
-        raise ValueError("No matching bands found in the stored backends.")
+    if not active_bands:
+        raise ValueError("No matching bands found in the stored backend.")
 
-    backend = active_backends[0]
     dst_crs = backend.dst_crs
 
     # Identify which time steps to explain based on current DataArray coords.
     full_time_coords: np.ndarray = np.asarray(
         da.attrs["_stac_time_coords"], dtype="datetime64[D]"
     )
-    full_time_filters: list[str] = backend.dates  # same list as filter_strings
+    full_time_filters: list[str] = backend.dates
 
     if "time" in da.coords:
         current_times: set[np.datetime64] = set(
@@ -547,14 +547,10 @@ async def _explain_async(
     chunk_h, chunk_w = _infer_chunk_sizes(da)
     chunk_reads: list[ChunkRead] = []
 
-    for band_backend in active_backends:
-        x_start, y_start_physical, roi_width, roi_height = _roi_pixel_offsets(
-            da, band_backend
-        )
-        roi_affine = band_backend.dst_affine * Affine.translation(
-            x_start, y_start_physical
-        )
+    x_start, y_start_physical, roi_width, roi_height = _roi_pixel_offsets(da, backend)
+    roi_affine = backend.dst_affine * Affine.translation(x_start, y_start_physical)
 
+    for band in active_bands:
         for t_idx, date_filter, time_coord in time_items:
             for row, col, tile_affine, actual_w, actual_h in _iter_spatial_chunks(
                 roi_affine, roi_width, roi_height, chunk_w, chunk_h
@@ -562,17 +558,17 @@ async def _explain_async(
                 chunk_bbox_4326 = _compute_chunk_bbox_4326(
                     tile_affine, actual_w, actual_h, dst_crs
                 )
-                items = band_backend.duckdb_client.search(
-                    band_backend.parquet_path,
+                items = backend.duckdb_client.search(
+                    backend.parquet_path,
                     bbox=chunk_bbox_4326,
                     datetime=date_filter,
-                    sortby=band_backend.sortby,
-                    filter=band_backend.filter,
-                    ids=band_backend.ids,
+                    sortby=backend.sortby,
+                    filter=backend.filter,
+                    ids=backend.ids,
                 )
                 logger.debug(
                     "explain band=%r date=%s chunk=(%d,%d) -> %d items",
-                    band_backend.band,
+                    band,
                     date_filter,
                     row,
                     col,
@@ -584,12 +580,12 @@ async def _explain_async(
                         *[
                             _inspect_item_async(
                                 item,
-                                band_backend.band,
+                                band,
                                 tile_affine,
                                 dst_crs,
                                 actual_w,
                                 actual_h,
-                                band_backend.store,
+                                backend.store,
                             )
                             for item in items
                         ]
@@ -599,17 +595,15 @@ async def _explain_async(
                     cog_reads = [
                         CogRead(
                             item_id=item.get("id", ""),
-                            asset_key=band_backend.band,
-                            href=item.get("assets", {})
-                            .get(band_backend.band, {})
-                            .get("href", ""),
+                            asset_key=band,
+                            href=item.get("assets", {}).get(band, {}).get("href", ""),
                         )
                         for item in items
                     ]
 
                 chunk_reads.append(
                     ChunkRead(
-                        band=band_backend.band,
+                        band=band,
                         time_index=t_idx,
                         date_filter=date_filter,
                         time_coord=time_coord,
@@ -626,7 +620,7 @@ async def _explain_async(
         href=backend.parquet_path,
         crs=str(dst_crs),
         resolution=backend.dst_affine.a,
-        bands=[b.band for b in active_backends],
+        bands=active_bands,
         time_coords=[tc for _, _, tc in time_items],
         dst_width=da.sizes["x"],
         dst_height=da.sizes["y"],
@@ -685,11 +679,11 @@ class StacCogAccessor:
                 ``attrs``).
 
         """
-        backends: list[StacBackendArray] | None = self._da.attrs.get("_stac_backends")
-        if backends is None:
+        backend: MultiBandStacBackendArray | None = self._da.attrs.get("_stac_backend")
+        if backend is None:
             raise ValueError(
                 "This DataArray does not have stac_cog explain metadata. "
                 "Ensure it was created by lazycogs.open() or "
                 "lazycogs.open_async()."
             )
-        return _run_coroutine(_explain_async(self._da, backends, fetch_headers))
+        return _run_coroutine(_explain_async(self._da, backend, fetch_headers))

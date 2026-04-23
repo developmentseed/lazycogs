@@ -17,7 +17,7 @@ from rustac import DuckdbClient
 from xarray.backends.common import BackendArray
 from xarray.core import indexing
 
-from lazycogs._chunk_reader import async_mosaic_chunk, async_mosaic_chunk_multiband
+from lazycogs._chunk_reader import async_mosaic_chunk_multiband
 from lazycogs._cql2 import _extract_filter_fields, _sortby_fields
 from lazycogs._executor import get_max_workers
 from lazycogs._mosaic_methods import MosaicMethodBase
@@ -68,19 +68,208 @@ def _run_coroutine(coro: Any) -> Any:
 
 
 @dataclass
-class StacBackendArray(BackendArray):
-    """Lazy array for a single band of a STAC collection.
+class _SpatialWindow:
+    """Resolved spatial indexing window.
 
-    One instance is created per band at ``open()`` time.  No pixel I/O
-    happens until ``__getitem__`` is called inside a dask task.
+    Attributes:
+        chunk_affine: Affine transform of the chunk (top-left origin).
+        chunk_bbox_4326: ``[minx, miny, maxx, maxy]`` in EPSG:4326.
+        chunk_height: Chunk height in pixels.
+        chunk_width: Chunk width in pixels.
+        x_start: First x pixel in the destination grid.
+        squeeze_y: Whether the y dimension should be squeezed on return.
+        squeeze_x: Whether the x dimension should be squeezed on return.
+
+    """
+
+    chunk_affine: Affine
+    chunk_bbox_4326: list[float]
+    chunk_height: int
+    chunk_width: int
+    x_start: int
+    squeeze_y: bool
+    squeeze_x: bool
+
+
+def _resolve_time_indices(
+    time_key: int | np.integer | slice, n_dates: int
+) -> tuple[list[int], bool]:
+    """Resolve a time indexer to a list of integer indices.
+
+    Args:
+        time_key: Integer or slice indexer for the time dimension.
+        n_dates: Total number of dates (size of the time dimension).
+
+    Returns:
+        ``(time_indices, squeeze_time)`` where ``squeeze_time`` is ``True``
+        when ``time_key`` was a scalar integer.
+
+    """
+    if isinstance(time_key, (int, np.integer)):
+        return [int(time_key)], True
+    start = time_key.start if time_key.start is not None else 0
+    stop = time_key.stop if time_key.stop is not None else n_dates
+    step = time_key.step if time_key.step is not None else 1
+    return list(range(start, stop, step)), False
+
+
+def _resolve_spatial_window(
+    y_key: int | np.integer | slice,
+    x_key: int | np.integer | slice,
+    dst_height: int,
+    dst_width: int,
+    dst_affine: Affine,
+    dst_crs: CRS,
+) -> _SpatialWindow:
+    """Resolve spatial indexers to a concrete chunk window.
+
+    Converts logical ascending y indices (south-to-north, as exposed to
+    xarray) to physical top-down row offsets (north-to-south, as stored in
+    the COG), then computes the chunk affine transform and EPSG:4326 bounding
+    box.
+
+    Args:
+        y_key: Integer or slice indexer for the y dimension.
+        x_key: Integer or slice indexer for the x dimension.
+        dst_height: Full output grid height in pixels.
+        dst_width: Full output grid width in pixels.
+        dst_affine: Affine transform of the full output grid.
+        dst_crs: CRS of the output grid.
+
+    Returns:
+        A :class:`_SpatialWindow` describing the chunk geometry.
+
+    """
+    if isinstance(y_key, (int, np.integer)):
+        yi = int(y_key)
+        y_key = slice(yi, yi + 1)
+        squeeze_y = True
+    else:
+        squeeze_y = False
+
+    if isinstance(x_key, (int, np.integer)):
+        xi = int(x_key)
+        x_key = slice(xi, xi + 1)
+        squeeze_x = True
+    else:
+        squeeze_x = False
+
+    y_start_logical = y_key.start if y_key.start is not None else 0
+    y_stop_logical = y_key.stop if y_key.stop is not None else dst_height
+    x_start = x_key.start if x_key.start is not None else 0
+    x_stop = x_key.stop if x_key.stop is not None else dst_width
+
+    # logical index 0 = southernmost = physical row (dst_height - 1)
+    y_start_physical = dst_height - y_stop_logical
+    y_stop_physical = dst_height - y_start_logical
+
+    chunk_height = y_stop_physical - y_start_physical
+    chunk_width = x_stop - x_start
+
+    chunk_affine = dst_affine * Affine.translation(x_start, y_start_physical)
+
+    minx = chunk_affine.c
+    maxy = chunk_affine.f
+    maxx = minx + chunk_width * chunk_affine.a
+    miny = maxy + chunk_height * chunk_affine.e  # e < 0
+
+    epsg_4326 = CRS.from_epsg(4326)
+    if dst_crs.equals(epsg_4326):
+        chunk_bbox_4326 = [minx, miny, maxx, maxy]
+    else:
+        transformer = Transformer.from_crs(dst_crs, epsg_4326, always_xy=True)
+        xs, ys = transformer.transform(
+            [minx, maxx, minx, maxx],
+            [maxy, maxy, miny, miny],
+        )
+        chunk_bbox_4326 = [
+            float(min(xs)),
+            float(min(ys)),
+            float(max(xs)),
+            float(max(ys)),
+        ]
+
+    return _SpatialWindow(
+        chunk_affine=chunk_affine,
+        chunk_bbox_4326=chunk_bbox_4326,
+        chunk_height=chunk_height,
+        chunk_width=chunk_width,
+        x_start=x_start,
+        squeeze_y=squeeze_y,
+        squeeze_x=squeeze_x,
+    )
+
+
+def _search_items(
+    client: DuckdbClient,
+    parquet_path: str,
+    bbox: list[float],
+    date: str,
+    sortby: str | list[str | dict[str, str]] | None,
+    filter_expr: str | dict[str, Any] | None,
+    ids: list[str] | None,
+    filter_fields: set[str],
+    label: str,
+) -> list[Any]:
+    """Query the STAC parquet for items overlapping a chunk.
+
+    Args:
+        client: ``DuckdbClient`` instance.
+        parquet_path: Path to the geoparquet file or hive-partitioned directory.
+        bbox: ``[minx, miny, maxx, maxy]`` bounding box in EPSG:4326.
+        date: Acquisition date string (``"YYYY-MM-DD"``).
+        sortby: Optional sort keys forwarded to ``client.search``.
+        filter_expr: Optional CQL2 filter forwarded to ``client.search``.
+        ids: Optional STAC item IDs forwarded to ``client.search``.
+        filter_fields: Field names extracted from ``filter_expr`` (added to
+            the ``include`` list so DuckDB returns them).
+        label: Short identifier used in debug log messages (e.g. the band name
+            or a list of band names).
+
+    Returns:
+        List of STAC items returned by DuckDB.
+
+    """
+    t0 = time.perf_counter()
+    items = client.search(
+        parquet_path,
+        bbox=bbox,
+        datetime=date,
+        sortby=sortby,
+        filter=filter_expr,
+        ids=ids,
+        include=list(
+            {"id", "assets"}.union(filter_fields).union(_sortby_fields(sortby))
+        ),
+    )
+    logger.debug(
+        "duckdb_client.search %s date=%s returned %d items in %.3fs",
+        label,
+        date,
+        len(items),
+        time.perf_counter() - t0,
+    )
+    return items
+
+
+@dataclass
+class MultiBandStacBackendArray(BackendArray):
+    """Lazy ``(band, time, y, x)`` array for a STAC collection.
+
+    One instance is created at ``open()`` time.  No pixel I/O happens until
+    ``__getitem__`` is called inside a dask task.  Reads all selected bands
+    together per time step via
+    :func:`~lazycogs._chunk_reader.async_mosaic_chunk_multiband`, issuing a
+    single DuckDB query per time step and sharing reprojection warp maps across
+    bands that have identical source geometry.
 
     Attributes:
         parquet_path: Path to the geoparquet file or hive-partitioned directory
             passed to ``duckdb_client.search``.
-        duckdb_client: ``DuckdbClient`` instance used for all STAC
-            queries.  Constructed with default settings in :func:`open` when
-            not supplied by the caller.
-        band: STAC asset key for the band this array represents.
+        duckdb_client: ``DuckdbClient`` instance used for all STAC queries.
+            Constructed with default settings in :func:`open` when not supplied
+            by the caller.
+        bands: Ordered list of STAC asset keys, one per band.
         dates: Sorted list of unique acquisition date strings
             (``"YYYY-MM-DD"``), one entry per time step.
         dst_affine: Affine transform of the full output grid.
@@ -96,7 +285,6 @@ class StacBackendArray(BackendArray):
         dst_height: Full output grid height in pixels.
         dtype: NumPy dtype of the output array.
         nodata: No-data fill value, or ``None``.
-        shape: ``(n_dates, dst_height, dst_width)``.
         mosaic_method_cls: Mosaic method class instantiated per chunk, or
             ``None`` to use the default
             :class:`~lazycogs._mosaic_methods.FirstMethod`.
@@ -114,12 +302,14 @@ class StacBackendArray(BackendArray):
             a custom ``store`` whose root does not align with the URL structure
             of the asset HREFs (e.g. Azure Blob Storage with a container-rooted
             store).
+        shape: ``(n_bands, n_dates, dst_height, dst_width)``.  Derived from
+            the other fields; not accepted as a constructor argument.
 
     """
 
     parquet_path: str
     duckdb_client: DuckdbClient
-    band: str
+    bands: list[str]
     dates: list[str]
     dst_affine: Affine
     dst_crs: CRS
@@ -131,256 +321,19 @@ class StacBackendArray(BackendArray):
     dst_height: int
     dtype: np.dtype
     nodata: float | None
-    shape: tuple[int, ...]
     mosaic_method_cls: type[MosaicMethodBase] | None = field(default=None)
     store: Any | None = field(default=None)
     max_concurrent_reads: int = field(default=32)
     path_from_href: Callable[[str], str] | None = field(default=None)
-
-    def __repr__(self) -> str:
-        """Return a compact string representation."""
-        return f"StacBackendArray(band={self.band!r}, shape={self.shape})"
-
-    def __getitem__(self, key: indexing.ExplicitIndexer) -> np.ndarray:
-        """Return the data for the requested index.
-
-        Args:
-            key: An xarray ``ExplicitIndexer``.
-
-        Returns:
-            A numpy array containing the requested chunk.
-
-        """
-        return indexing.explicit_indexing_adapter(
-            key,
-            self.shape,
-            indexing.IndexingSupport.BASIC,
-            self._raw_getitem,
-        )
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
-    def _chunk_bbox_4326(
-        self,
-        chunk_affine: Affine,
-        chunk_width: int,
-        chunk_height: int,
-    ) -> list[float]:
-        """Return the bounding box of a chunk in EPSG:4326.
-
-        Args:
-            chunk_affine: Affine transform of the chunk (top-left origin).
-            chunk_width: Chunk width in pixels.
-            chunk_height: Chunk height in pixels.
-
-        Returns:
-            ``[minx, miny, maxx, maxy]`` in EPSG:4326.
-
-        """
-        minx = chunk_affine.c
-        maxy = chunk_affine.f
-        maxx = minx + chunk_width * chunk_affine.a
-        miny = maxy + chunk_height * chunk_affine.e  # e < 0
-
-        epsg_4326 = CRS.from_epsg(4326)
-        if self.dst_crs.equals(epsg_4326):
-            return [minx, miny, maxx, maxy]
-
-        transformer = Transformer.from_crs(self.dst_crs, epsg_4326, always_xy=True)
-        xs, ys = transformer.transform(
-            [minx, maxx, minx, maxx],
-            [maxy, maxy, miny, miny],
-        )
-        return [float(min(xs)), float(min(ys)), float(max(xs)), float(max(ys))]
-
-    def _raw_getitem(self, key: tuple[Any, ...]) -> np.ndarray:
-        """Materialise the chunk identified by ``key``.
-
-        Args:
-            key: A tuple of ``int | slice`` objects corresponding to the
-                ``(time, y, x)`` dimensions.  Spatial dimensions may be
-                integers (single-pixel selection) or slices.
-
-        Returns:
-            Numpy array with shape determined by the indexing key.
-
-        """
-        time_key, y_key, x_key = key
-
-        # Resolve time dimension.
-        n_dates = len(self.dates)
-        if isinstance(time_key, (int, np.integer)):
-            time_indices: list[int] = [int(time_key)]
-            squeeze_time = True
-        else:
-            start = time_key.start if time_key.start is not None else 0
-            stop = time_key.stop if time_key.stop is not None else n_dates
-            step = time_key.step if time_key.step is not None else 1
-            time_indices = list(range(start, stop, step))
-            squeeze_time = False
-
-        # Resolve spatial dimensions.
-        # y_coords are ascending (south→north), but the affine transform and
-        # the underlying COG data are top-down (north→south).  Convert logical
-        # ascending indices to physical top-down row indices so the affine
-        # correctly addresses the right pixels.
-        #
-        # Integer keys (single-pixel selection) are normalised to size-1
-        # slices here; the dimension is squeezed before returning below.
-        if isinstance(y_key, (int, np.integer)):
-            yi = int(y_key)
-            y_key = slice(yi, yi + 1)
-            squeeze_y = True
-        else:
-            squeeze_y = False
-
-        if isinstance(x_key, (int, np.integer)):
-            xi = int(x_key)
-            x_key = slice(xi, xi + 1)
-            squeeze_x = True
-        else:
-            squeeze_x = False
-
-        y_start_logical = y_key.start if y_key.start is not None else 0
-        y_stop_logical = y_key.stop if y_key.stop is not None else self.dst_height
-        x_start = x_key.start if x_key.start is not None else 0
-        x_stop = x_key.stop if x_key.stop is not None else self.dst_width
-
-        # logical index 0 = southernmost = physical row (dst_height - 1)
-        y_start_physical = self.dst_height - y_stop_logical
-        y_stop_physical = self.dst_height - y_start_logical
-
-        chunk_height = y_stop_physical - y_start_physical
-        chunk_width = x_stop - x_start
-
-        # Translate affine to chunk origin (physical top-down row offset).
-        chunk_affine = self.dst_affine * Affine.translation(x_start, y_start_physical)
-        chunk_bbox_4326 = self._chunk_bbox_4326(chunk_affine, chunk_width, chunk_height)
-
-        fill = self.nodata if self.nodata is not None else 0
-        result = np.full(
-            (len(time_indices), chunk_height, chunk_width),
-            fill,
-            dtype=self.dtype,
-        )
-
-        filter_fields = _extract_filter_fields(self.filter) if self.filter else set()
-
-        for i, t_idx in enumerate(time_indices):
-            date = self.dates[t_idx]
-
-            t0 = time.perf_counter()
-            items = self.duckdb_client.search(
-                self.parquet_path,
-                bbox=chunk_bbox_4326,
-                datetime=date,
-                sortby=self.sortby,
-                filter=self.filter,
-                ids=self.ids,
-                include=list(
-                    {"id", "assets"}.union(filter_fields).union(
-                        _sortby_fields(self.sortby)
-                    )
-                ),
-            )
-            logger.debug(
-                "duckdb_client.search band=%r date=%s returned %d items in %.3fs",
-                self.band,
-                date,
-                len(items),
-                time.perf_counter() - t0,
-            )
-
-            if not items:
-                logger.debug(
-                    "No items for band=%r date=%s chunk_bbox=%s",
-                    self.band,
-                    date,
-                    chunk_bbox_4326,
-                )
-                continue
-
-            mosaic_method = self.mosaic_method_cls() if self.mosaic_method_cls else None
-
-            t0 = time.perf_counter()
-            chunk = _run_coroutine(
-                async_mosaic_chunk(
-                    items=items,
-                    band=self.band,
-                    chunk_affine=chunk_affine,
-                    dst_crs=self.dst_crs,
-                    chunk_width=chunk_width,
-                    chunk_height=chunk_height,
-                    nodata=self.nodata,
-                    mosaic_method=mosaic_method,
-                    store=self.store,
-                    max_concurrent_reads=self.max_concurrent_reads,
-                    path_fn=self.path_from_href,
-                )
-            )
-            logger.debug(
-                "async_mosaic_chunk band=%r date=%s (%d items, %dx%d px) took %.3fs",
-                self.band,
-                date,
-                len(items),
-                chunk_width,
-                chunk_height,
-                time.perf_counter() - t0,
-            )
-
-            # async_mosaic_chunk returns (bands, h, w); take band 0 for
-            # single-band assets (the common case).
-            result[i] = chunk[0] if chunk.ndim == 3 else chunk  # type: ignore[index]
-
-        # Physical data is top-down (north→south); flip to match the ascending
-        # (south→north) y coordinate order exposed to xarray callers.
-        result = result[:, ::-1, :]
-
-        # Apply time squeeze first (removes axis 0), then spatial squeezes
-        # (axes shift down by 1 after time squeeze if it happened).
-        out = result[0] if squeeze_time else result
-        if squeeze_y:
-            out = np.take(out, 0, axis=-2)
-        if squeeze_x:
-            out = out[..., 0]
-        return out
-
-
-@dataclass
-class MultiBandStacBackendArray(BackendArray):
-    """Lazy ``(band, time, y, x)`` array wrapping one backend per band.
-
-    Holds one :class:`StacBackendArray` per band and stacks them along a
-    leading band dimension.  This lets :func:`_build_dataarray` wrap the
-    entire dataset in a single :class:`xarray.core.indexing.LazilyIndexedArray`
-    instead of building per-band Variables and relying on ``xr.concat``
-    (which would eagerly load ``LazilyIndexedArray``-backed objects).
-
-    As a result, a narrow slice such as ``da.isel(time=0, x=0, y=0)``
-    translates directly into a minimal I/O operation — one per-band query
-    for a single pixel — rather than computing the entire array.
-
-    Attributes:
-        band_arrays: One :class:`StacBackendArray` per band, in order.
-        band_names: Asset key strings corresponding to each entry in
-            ``band_arrays``.
-        dtype: NumPy dtype shared by all band arrays.
-        shape: ``(n_bands, n_time, dst_height, dst_width)``.
-
-    """
-
-    band_arrays: list[StacBackendArray]
-    band_names: list[str]
-    dtype: np.dtype = field(init=False)
     shape: tuple[int, ...] = field(init=False)
 
     def __post_init__(self) -> None:
-        """Derive dtype and shape from the first band array."""
-        first = self.band_arrays[0]
-        self.dtype = first.dtype
-        self.shape = (len(self.band_arrays),) + first.shape
+        """Derive shape from the other fields."""
+        self.shape = (len(self.bands), len(self.dates), self.dst_height, self.dst_width)
+
+    def __repr__(self) -> str:
+        """Return a compact string representation."""
+        return f"MultiBandStacBackendArray(bands={self.bands!r}, shape={self.shape})"
 
     def __getitem__(self, key: indexing.ExplicitIndexer) -> np.ndarray:
         """Return the data for the requested index.
@@ -418,7 +371,7 @@ class MultiBandStacBackendArray(BackendArray):
         band_key, time_key, y_key, x_key = key
 
         # -- Band dimension --------------------------------------------------
-        n_bands = len(self.band_arrays)
+        n_bands = len(self.bands)
         if isinstance(band_key, (int, np.integer)):
             band_indices: list[int] = [int(band_key)]
             squeeze_band = True
@@ -429,54 +382,16 @@ class MultiBandStacBackendArray(BackendArray):
             band_indices = list(range(start, stop, step))
             squeeze_band = False
 
-        selected_band_names = [self.band_names[b] for b in band_indices]
-        ref = self.band_arrays[band_indices[0]]
+        selected_bands = [self.bands[b] for b in band_indices]
 
-        # -- Time dimension --------------------------------------------------
-        n_dates = len(ref.dates)
-        if isinstance(time_key, (int, np.integer)):
-            time_indices: list[int] = [int(time_key)]
-            squeeze_time = True
-        else:
-            t_start = time_key.start if time_key.start is not None else 0
-            t_stop = time_key.stop if time_key.stop is not None else n_dates
-            t_step = time_key.step if time_key.step is not None else 1
-            time_indices = list(range(t_start, t_stop, t_step))
-            squeeze_time = False
+        time_indices, squeeze_time = _resolve_time_indices(time_key, len(self.dates))
+        win = _resolve_spatial_window(
+            y_key, x_key, self.dst_height, self.dst_width, self.dst_affine, self.dst_crs
+        )
 
-        # -- Spatial dimensions ----------------------------------------------
-        if isinstance(y_key, (int, np.integer)):
-            yi = int(y_key)
-            y_key = slice(yi, yi + 1)
-            squeeze_y = True
-        else:
-            squeeze_y = False
-
-        if isinstance(x_key, (int, np.integer)):
-            xi = int(x_key)
-            x_key = slice(xi, xi + 1)
-            squeeze_x = True
-        else:
-            squeeze_x = False
-
-        y_start_logical = y_key.start if y_key.start is not None else 0
-        y_stop_logical = y_key.stop if y_key.stop is not None else ref.dst_height
-        x_start = x_key.start if x_key.start is not None else 0
-        x_stop = x_key.stop if x_key.stop is not None else ref.dst_width
-
-        y_start_physical = ref.dst_height - y_stop_logical
-        y_stop_physical = ref.dst_height - y_start_logical
-
-        chunk_height = y_stop_physical - y_start_physical
-        chunk_width = x_stop - x_start
-
-        chunk_affine = ref.dst_affine * Affine.translation(x_start, y_start_physical)
-        chunk_bbox_4326 = ref._chunk_bbox_4326(chunk_affine, chunk_width, chunk_height)
-
-        # -- Read all bands together per time step ---------------------------
-        fill = ref.nodata if ref.nodata is not None else 0
+        fill = self.nodata if self.nodata is not None else 0
         result = np.full(
-            (len(band_indices), len(time_indices), chunk_height, chunk_width),
+            (len(band_indices), len(time_indices), win.chunk_height, win.chunk_width),
             fill,
             dtype=self.dtype,
         )
@@ -485,31 +400,21 @@ class MultiBandStacBackendArray(BackendArray):
         # (identical src_transform + src_crs) reuse the same WarpMap.
         warp_cache: dict = {}
 
-        filter_fields = _extract_filter_fields(ref.filter) if ref.filter else set()
+        filter_fields = _extract_filter_fields(self.filter) if self.filter else set()
 
         for i, t_idx in enumerate(time_indices):
-            date = ref.dates[t_idx]
+            date = self.dates[t_idx]
 
-            t0 = time.perf_counter()
-            items = ref.duckdb_client.search(
-                ref.parquet_path,
-                bbox=chunk_bbox_4326,
-                datetime=date,
-                sortby=ref.sortby,
-                filter=ref.filter,
-                ids=ref.ids,
-                include=list(
-                    {"id", "assets"}.union(filter_fields).union(
-                        _sortby_fields(ref.sortby)
-                    )
-                ),
-            )
-            logger.debug(
-                "duckdb_client.search bands=%r date=%s returned %d items in %.3fs",
-                selected_band_names,
+            items = _search_items(
+                self.duckdb_client,
+                self.parquet_path,
+                win.chunk_bbox_4326,
                 date,
-                len(items),
-                time.perf_counter() - t0,
+                self.sortby,
+                self.filter,
+                self.ids,
+                filter_fields,
+                label=f"bands={selected_bands!r}",
             )
 
             if not items:
@@ -519,30 +424,30 @@ class MultiBandStacBackendArray(BackendArray):
             chunk_data = _run_coroutine(
                 async_mosaic_chunk_multiband(
                     items=items,
-                    bands=selected_band_names,
-                    chunk_affine=chunk_affine,
-                    dst_crs=ref.dst_crs,
-                    chunk_width=chunk_width,
-                    chunk_height=chunk_height,
-                    nodata=ref.nodata,
-                    mosaic_method_cls=ref.mosaic_method_cls,
-                    store=ref.store,
-                    max_concurrent_reads=ref.max_concurrent_reads,
+                    bands=selected_bands,
+                    chunk_affine=win.chunk_affine,
+                    dst_crs=self.dst_crs,
+                    chunk_width=win.chunk_width,
+                    chunk_height=win.chunk_height,
+                    nodata=self.nodata,
+                    mosaic_method_cls=self.mosaic_method_cls,
+                    store=self.store,
+                    max_concurrent_reads=self.max_concurrent_reads,
                     warp_cache=warp_cache,
-                    path_fn=ref.path_from_href,
+                    path_fn=self.path_from_href,
                 )
             )
             logger.debug(
                 "async_mosaic_chunk_multiband bands=%r date=%s (%d items, %dx%d px) took %.3fs",
-                selected_band_names,
+                selected_bands,
                 date,
                 len(items),
-                chunk_width,
-                chunk_height,
+                win.chunk_width,
+                win.chunk_height,
                 time.perf_counter() - t0,
             )
 
-            for bi, band in enumerate(selected_band_names):
+            for bi, band in enumerate(selected_bands):
                 arr = chunk_data[band]
                 result[bi, i] = arr[0] if arr.ndim == 3 else arr
 
@@ -556,8 +461,8 @@ class MultiBandStacBackendArray(BackendArray):
             out = out[:, 0, :, :]
         if squeeze_band:
             out = out[0]
-        if squeeze_y:
+        if win.squeeze_y:
             out = np.take(out, 0, axis=-2)
-        if squeeze_x:
+        if win.squeeze_x:
             out = out[..., 0]
         return out

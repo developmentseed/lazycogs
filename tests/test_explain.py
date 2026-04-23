@@ -11,7 +11,7 @@ import xarray as xr
 from affine import Affine
 from pyproj import CRS
 
-from lazycogs._backend import StacBackendArray
+from lazycogs._backend import MultiBandStacBackendArray
 from lazycogs._explain import (
     ChunkRead,
     CogRead,
@@ -43,20 +43,22 @@ def _make_backend(
     crs: CRS,
     dates: list[str] | None = None,
     parquet_path: str = "/tmp/fake.parquet",
-    band: str = "red",
+    bands: list[str] | None = None,
     dst_width: int = 10,
     dst_height: int = 10,
     affine: Affine | None = None,
-) -> StacBackendArray:
-    """Return a minimal StacBackendArray for unit testing."""
+) -> MultiBandStacBackendArray:
+    """Return a minimal MultiBandStacBackendArray for unit testing."""
     if dates is None:
         dates = ["2023-01-01/2023-01-01", "2023-01-02/2023-01-02"]
+    if bands is None:
+        bands = ["red"]
     if affine is None:
         affine = Affine(1.0, 0.0, 0.0, 0.0, -1.0, 10.0)
-    return StacBackendArray(
+    return MultiBandStacBackendArray(
         parquet_path=parquet_path,
         duckdb_client=DuckdbClient(),
-        band=band,
+        bands=bands,
         dates=dates,
         dst_affine=affine,
         dst_crs=crs,
@@ -68,7 +70,6 @@ def _make_backend(
         dst_height=dst_height,
         dtype=np.dtype("float32"),
         nodata=-9999.0,
-        shape=(len(dates), dst_height, dst_width),
         mosaic_method_cls=FirstMethod,
     )
 
@@ -87,17 +88,14 @@ def _make_da_with_backends(
         resolution = 1.0
         affine = Affine(resolution, 0.0, 0.0, 0.0, -resolution, float(height))
 
-    backends = [
-        _make_backend(
-            crs,
-            dates=dates,
-            band=band,
-            dst_width=width,
-            dst_height=height,
-            affine=affine,
-        )
-        for band in bands
-    ]
+    backend = _make_backend(
+        crs,
+        dates=dates,
+        bands=bands,
+        dst_width=width,
+        dst_height=height,
+        affine=affine,
+    )
 
     time_coord = np.array(time_coords, dtype="datetime64[D]")
     resolution = affine.a
@@ -120,7 +118,7 @@ def _make_da_with_backends(
         },
         dims=("band", "time", "y", "x"),
     )
-    da.attrs["_stac_backends"] = backends
+    da.attrs["_stac_backend"] = backend
     da.attrs["_stac_time_coords"] = time_coord
     return da
 
@@ -274,7 +272,7 @@ def test_roi_pixel_offsets_full_extent(wgs84):
         height=10,
         affine=affine,
     )
-    backend = da.attrs["_stac_backends"][0]
+    backend = da.attrs["_stac_backend"]
     x_start, y_start_physical, roi_w, roi_h = _roi_pixel_offsets(da, backend)
     assert x_start == 0
     assert y_start_physical == 0
