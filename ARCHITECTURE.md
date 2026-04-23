@@ -14,9 +14,9 @@ For large pre-existing STAC archives stored as hive-partitioned parquet director
 
 Work is split sharply into two phases.
 
-**Phase 0 — open time** runs at `open()` / `open_async()` call time. It does the minimum needed to build a fully-described lazy DataArray: one DuckDB query to discover bands, one DuckDB query to build the time axis, and a grid computation. No pixel I/O happens. No dask task graph is built. Each band becomes a `StacBackendArray` wrapped in an xarray `LazilyIndexedArray`.
+**Phase 0 — open time** runs at `open()` / `open_async()` call time. It does the minimum needed to build a fully-described lazy DataArray: one DuckDB query to discover bands, one DuckDB query to build the time axis, and a grid computation. No pixel I/O happens. No dask task graph is built. A single `MultiBandStacBackendArray` is wrapped in an xarray `LazilyIndexedArray`.
 
-**Phase 1 — compute time** runs inside a dask worker when a chunk is actually computed. `StacBackendArray.__getitem__` receives the exact `(time, y, x)` index for the chunk, derives the chunk's spatial footprint, queries DuckDB for only the COGs that overlap that footprint and time step, reads and reprojects them concurrently with `asyncio`, and mosaics the results.
+**Phase 1 — compute time** runs inside a dask worker when a chunk is actually computed. `MultiBandStacBackendArray.__getitem__` receives the exact `(band, time, y, x)` index for the chunk, derives the chunk's spatial footprint, queries DuckDB for only the COGs that overlap that footprint and time step, reads and reprojects all selected bands concurrently with `asyncio`, and mosaics the results.
 
 This split means that `open()` is nearly instant even for large queries, and the DuckDB spatial filter runs once per chunk rather than over the entire bbox at open time.
 
@@ -25,7 +25,7 @@ This split means that `open()` is nearly instant even for large queries, and the
 ```
 src/lazycogs/
   _core.py           Entry point. open() / open_async(), band discovery, time-step building.
-  _backend.py        StacBackendArray (per-band) and MultiBandStacBackendArray (4-D wrapper) — xarray BackendArray implementations that bridge xarray indexing to chunk reads.
+  _backend.py        MultiBandStacBackendArray — xarray BackendArray implementation that bridges xarray indexing to chunk reads.
   _chunk_reader.py   Async mosaic logic: open COGs, select overviews, read windows, reproject, mosaic.
   _executor.py       Per-chunk reprojection thread pool configuration. Exposes set_reproject_workers() and get_max_workers(); the actual pool is created per event loop in _backend.py.
   _explain.py        Dry-run read estimator. Registers the da.lazycogs.explain() xarray accessor.
@@ -46,10 +46,9 @@ src/lazycogs/
 4. Calls `_discover_bands()`: queries the parquet source via `duckdb_client.search(..., max_items=1)` to find asset keys. Assets with role `"data"` or media type `"image/tiff"` are returned first.
 5. Calls `_build_time_steps()`: queries the parquet source for all matching items, extracts their datetimes, buckets them with the `_TemporalGrouper`, deduplicates, and returns sorted `(filter_strings, time_coords)` pairs. Only groups with at least one item produce a time step.
 6. Calls `compute_output_grid()` to get the output affine transform and x/y coordinate arrays.
-7. For each band, creates a `StacBackendArray` (a dataclass) holding all the parameters needed to materialise any chunk later.
-8. Wraps all per-band arrays in a single `MultiBandStacBackendArray` with shape `(band, time, y, x)`, then wraps that in one `xarray.core.indexing.LazilyIndexedArray`. This avoids `xr.concat` (used internally by `ds.to_array()`), which would eagerly load `LazilyIndexedArray`-backed objects.
-9. Constructs the `xr.DataArray` directly from the 4-D variable. If `chunks` is provided, calls `.chunk(chunks)` to convert to a dask-backed array; otherwise the `LazilyIndexedArray` remains in play so narrow slices (e.g. a single pixel) translate to minimal I/O.
-10. Stores `_stac_backends` (the list of `StacBackendArray` instances) and `_stac_time_coords` (the full time coordinate array) in `da.attrs` so that `da.lazycogs.explain()` can reconstruct the explain plan without re-specifying `open()` parameters.
+7. Creates a single `MultiBandStacBackendArray` (a dataclass) with shape `(band, time, y, x)` holding all the parameters needed to materialise any chunk later, then wraps it in one `xarray.core.indexing.LazilyIndexedArray`. This avoids `xr.concat` (used internally by `ds.to_array()`), which would eagerly load `LazilyIndexedArray`-backed objects.
+8. Constructs the `xr.DataArray` directly from the 4-D variable. If `chunks` is provided, calls `.chunk(chunks)` to convert to a dask-backed array; otherwise the `LazilyIndexedArray` remains in play so narrow slices (e.g. a single pixel) translate to minimal I/O.
+9. Stores `_stac_backend` (the `MultiBandStacBackendArray` instance) and `_stac_time_coords` (the full time coordinate array) in `da.attrs` so that `da.lazycogs.explain()` can reconstruct the explain plan without re-specifying `open()` parameters.
 
 `open()` is a thin synchronous wrapper that calls `_run_coroutine(open_async(...))`, which handles both scripts and Jupyter kernels transparently (see the Jupyter fallback section).
 
@@ -64,7 +63,7 @@ print(plan.summary())
 df = plan.to_dataframe()
 ```
 
-The accessor reads `_stac_backends` and `_stac_time_coords` from `da.attrs` and respects the DataArray's current extent and chunk sizes, so explaining a sliced DataArray (`da.isel(time=0).lazycogs.explain()`) queries only the reads needed for that slice.
+The accessor reads `_stac_backend` and `_stac_time_coords` from `da.attrs` and respects the DataArray's current extent and chunk sizes, so explaining a sliced DataArray (`da.isel(time=0).lazycogs.explain()`) queries only the reads needed for that slice.
 
 `ExplainPlan` exposes:
 - `total_chunk_reads` — number of `(band, time, spatial tile)` combinations
@@ -77,23 +76,19 @@ With `fetch_headers=True`, each matched COG header is fetched (a small HTTP rang
 
 ## Phase 1 in detail
 
-`MultiBandStacBackendArray.__getitem__` in `_backend.py` (the 4-D entry point):
+`MultiBandStacBackendArray.__getitem__` in `_backend.py`:
 
 1. xarray calls `__getitem__` with an `ExplicitIndexer`. The call is forwarded through `indexing.explicit_indexing_adapter` to `_raw_getitem` with a basic `(int | slice, int | slice, int | slice, int | slice)` key for `(band, time, y, x)`.
 2. The band key is resolved to a list of integer band indices. If it was an integer the band dimension is squeezed in the output.
-3. For each selected band, `StacBackendArray._raw_getitem((time_key, y_key, x_key))` is called. If the per-band results are not band-squeezed they are stacked with `np.stack(..., axis=0)`.
-
-`StacBackendArray._raw_getitem` in `_backend.py` (per-band):
-
-1. The time key is resolved to a list of integer positions. Integer keys squeeze the time dimension.
-2. Integer y or x keys are normalised to size-1 slices; the dimension is squeezed before returning.
-3. Logical y-indices (ascending, south-to-north) are converted to physical row indices (descending, north-to-south) to match the affine transform origin.
-4. The chunk's affine transform is derived: `chunk_affine = dst_affine * Affine.translation(x_start, y_start_physical)`.
-5. The chunk's EPSG:4326 bounding box is computed from the four corners of the chunk using `pyproj.Transformer`.
-6. For each time step:
+3. The time key is resolved to a list of integer positions. Integer keys squeeze the time dimension.
+4. Integer y or x keys are normalised to size-1 slices; the dimension is squeezed before returning.
+5. Logical y-indices (ascending, south-to-north) are converted to physical row indices (descending, north-to-south) to match the affine transform origin.
+6. The chunk's affine transform is derived: `chunk_affine = dst_affine * Affine.translation(x_start, y_start_physical)`.
+7. The chunk's EPSG:4326 bounding box is computed from the four corners of the chunk using `pyproj.Transformer`.
+8. For each time step:
    a. `duckdb_client.search(parquet_path, bbox=chunk_bbox_4326, datetime=date)` returns only items whose geometry intersects this specific chunk for this date. Empty results short-circuit to nodata immediately.
-   b. `_run_coroutine(async_mosaic_chunk(...))` materialises the chunk. This helper uses `asyncio.run` normally, but falls back to a `ThreadPoolExecutor` worker when called from inside a running event loop (e.g. a Jupyter kernel) to avoid the "asyncio.run() cannot be called from a running event loop" error. The same helper is used at open time, so `open()` works in Jupyter without `await`.
-7. The result array is flipped vertically (`result[:, ::-1, :]`) to restore ascending y-order before squeezing and returning.
+   b. `_run_coroutine(async_mosaic_chunk_multiband(...))` materialises all selected bands in one call. This helper uses `asyncio.run` normally, but falls back to a `ThreadPoolExecutor` worker when called from inside a running event loop (e.g. a Jupyter kernel) to avoid the "asyncio.run() cannot be called from a running event loop" error. The same helper is used at open time, so `open()` works in Jupyter without `await`.
+9. The result array is flipped vertically (`result[:, :, ::-1, :]`) to restore ascending y-order before squeezing and returning.
 
 `async_mosaic_chunk` in `_chunk_reader.py`:
 
@@ -126,6 +121,8 @@ Each call to `_read_item_band()` in `_chunk_reader.py` follows a four-step pipel
 Before fetching any pixels, `_select_overview()` picks the right level of the COG's built-in pyramid. The target resolution is estimated in the source image's native CRS: if `dst_crs` differs from the COG's CRS, a 1-pixel offset at the chunk centre is transformed with pyproj to approximate the pixel size in source units. The overview list (ordered finest → coarsest) is walked to find the coarsest overview whose pixel size is still ≤ the target — i.e. the finest source data that avoids upsampling. This preserves as much spatial detail as the output scale warrants without reading unnecessarily fine data. If no overview satisfies the condition (target falls between native and the finest overview), or no overviews exist, full-resolution is used.
 
 This is the primary resampling control: the pyramid level is chosen to match the output resolution, so the reprojection step works on roughly the right amount of data.
+
+**Why we don't use the STAC projection extension.** The [projection extension](https://github.com/stac-extensions/projection) fields (`proj:epsg`, `proj:transform`, `proj:shape`) could theoretically substitute for the CRS, affine transform, and full-resolution dimensions read from the COG header. But overview structure — the per-level pixel sizes, transforms, and dimensions needed by `_select_overview()` — is not part of any STAC extension. We would still need `GeoTIFF.open()` to read the IFD chain to get that. Beyond overviews, the IFD also holds the tile index (byte offsets per tile per level), which is required to issue the actual range requests; there is no way to skip the header open regardless of how complete the STAC metadata is. Using projection extension fields would add conditional logic and trust questions (not all catalogs populate them correctly) for zero I/O savings.
 
 ### 2. Source window computation
 

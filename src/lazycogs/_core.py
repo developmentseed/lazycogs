@@ -15,7 +15,6 @@ from xarray.core import indexing
 
 from lazycogs._backend import (
     MultiBandStacBackendArray,
-    StacBackendArray,
     _run_coroutine,
 )
 from lazycogs._cql2 import _extract_filter_fields, _sortby_fields
@@ -198,11 +197,11 @@ def _build_dataarray(
     Args:
         parquet_path: Path to a geoparquet file or hive-partitioned directory.
         duckdb_client: ``DuckdbClient`` instance passed to each
-            :class:`~lazycogs._backend.StacBackendArray` for per-chunk queries.
+            :class:`~lazycogs._backend.MultiBandStacBackendArray` for per-chunk
+        queries.
         resolved_bands: Ordered list of band/asset keys.
         filter_strings: Sorted list of ``rustac``-compatible datetime filter
-            strings, one per time step.  Passed directly to
-            :class:`~lazycogs._backend.StacBackendArray`.
+            strings, one per time step.
         time_coords: ``numpy.datetime64[D]`` coordinate values corresponding
             to each entry in *filter_strings*.
         bbox: Output bounding box in ``dst_crs``.
@@ -220,10 +219,9 @@ def _build_dataarray(
             provided, it is used directly for all asset reads instead of
             resolving a store from each HREF.
         max_concurrent_reads: Maximum number of COG reads to run concurrently
-            per chunk.  Passed to each
-            :class:`~lazycogs._backend.StacBackendArray`.
+            per chunk.
         path_from_href: Optional callable ``(href: str) -> str`` passed to
-            each :class:`~lazycogs._backend.StacBackendArray`.  See
+            :class:`~lazycogs._backend.MultiBandStacBackendArray`.  See
             :func:`open_async` for full documentation.
 
     Returns:
@@ -234,43 +232,34 @@ def _build_dataarray(
         bbox=bbox, crs=dst_crs, resolution=resolution
     )
 
-    band_arrays = [
-        StacBackendArray(
-            parquet_path=parquet_path,
-            duckdb_client=duckdb_client,
-            band=band,
-            dates=filter_strings,
-            dst_affine=dst_affine,
-            dst_crs=dst_crs,
-            bbox_4326=bbox_4326,
-            sortby=sortby,
-            filter=filter,
-            ids=ids,
-            dst_width=dst_width,
-            dst_height=dst_height,
-            dtype=out_dtype,
-            nodata=nodata,
-            shape=(len(filter_strings), dst_height, dst_width),
-            mosaic_method_cls=method_cls,
-            store=store,
-            max_concurrent_reads=max_concurrent_reads,
-            path_from_href=path_from_href,
-        )
-        for band in resolved_bands
-    ]
-
     multi = MultiBandStacBackendArray(
-        band_arrays=band_arrays,
-        band_names=resolved_bands,
+        parquet_path=parquet_path,
+        duckdb_client=duckdb_client,
+        bands=resolved_bands,
+        dates=filter_strings,
+        dst_affine=dst_affine,
+        dst_crs=dst_crs,
+        bbox_4326=bbox_4326,
+        sortby=sortby,
+        filter=filter,
+        ids=ids,
+        dst_width=dst_width,
+        dst_height=dst_height,
+        dtype=out_dtype,
+        nodata=nodata,
+        mosaic_method_cls=method_cls,
+        store=store,
+        max_concurrent_reads=max_concurrent_reads,
+        path_from_href=path_from_href,
     )
     lazy = indexing.LazilyIndexedArray(multi)
     var = xr.Variable(("band", "time", "y", "x"), lazy)
 
     # Only convert to dask when the caller explicitly requests chunking.
     # Without this guard, xr.concat (used inside to_array) would eagerly load
-    # LazilyIndexedArray objects.  MultiBandStacBackendArray avoids that concat
-    # entirely, so LazilyIndexedArray can stay in play: a narrow slice such as
-    # da.isel(time=0, x=0, y=0) fetches only the requested pixels.
+    # LazilyIndexedArray-backed objects.  MultiBandStacBackendArray avoids that
+    # concat entirely, so a narrow slice like da.isel(time=0, x=0, y=0) fetches
+    # only the requested pixels.
     if chunks is not None:
         var = var.chunk(chunks)
 
@@ -287,7 +276,7 @@ def _build_dataarray(
     )
     # Store explain metadata so that da.lazycogs.explain() can reconstruct
     # which DuckDB queries to run without re-specifying all open() parameters.
-    da.attrs["_stac_backends"] = band_arrays
+    da.attrs["_stac_backend"] = multi
     da.attrs["_stac_time_coords"] = _CompactDateArray(time_coord)
     return da
 
@@ -328,7 +317,7 @@ async def open_async(  # noqa: A001
        time steps (applying ``bbox``, ``datetime``, ``filter``, and ``ids``
        so the time axis contains no empty slices).
     2. Compute the output grid (affine transform + coordinate arrays).
-    3. Create one ``StacBackendArray`` per band wrapped in a
+    3. Create a ``MultiBandStacBackendArray`` wrapped in a
        ``LazilyIndexedArray`` -- no pixel I/O yet.
     4. Assemble an ``xr.Dataset``, convert to ``xr.DataArray``, and
        optionally chunk with dask.
