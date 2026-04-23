@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import logging
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -326,6 +327,9 @@ class MultiBandStacBackendArray(BackendArray):
     max_concurrent_reads: int = field(default=32)
     path_from_href: Callable[[str], str] | None = field(default=None)
     shape: tuple[int, ...] = field(init=False)
+    _duckdb_lock: threading.Lock = field(
+        init=False, repr=False, compare=False, default_factory=threading.Lock
+    )
 
     def __post_init__(self) -> None:
         """Derive shape from the other fields."""
@@ -396,33 +400,47 @@ class MultiBandStacBackendArray(BackendArray):
             dtype=self.dtype,
         )
 
-        # Shared across all time steps: source tiles at the same grid position
-        # (identical src_transform + src_crs) reuse the same WarpMap.
+        # warp_cache is shared across time steps: tiles with the same native
+        # CRS and window transform reuse the same WarpMap. Concurrent writes
+        # from the asyncio gather below are safe — compute_warp_map is
+        # deterministic, so a duplicate write just overwrites an identical value.
         warp_cache: dict = {}
 
         filter_fields = _extract_filter_fields(self.filter) if self.filter else set()
 
-        for i, t_idx in enumerate(time_indices):
-            date = self.dates[t_idx]
+        async def _mosaic_all_dates() -> list[dict[str, np.ndarray] | None]:
+            """Run all time steps concurrently inside a single event loop.
 
-            items = _search_items(
-                self.duckdb_client,
-                self.parquet_path,
-                win.chunk_bbox_4326,
-                date,
-                self.sortby,
-                self.filter,
-                self.ids,
-                filter_fields,
-                label=f"bands={selected_bands!r}",
-            )
+            DuckDB queries are dispatched to the loop's thread executor so they
+            don't block the event loop; the threading.Lock on duckdb_client
+            serialises actual DB access for both within-loop and cross-Dask-task
+            safety.  All mosaic coroutines then run concurrently via gather,
+            sharing the same bounded reprojection executor.
+            """
+            loop = asyncio.get_running_loop()
 
-            if not items:
-                continue
+            async def _one_date(t_idx: int) -> dict[str, np.ndarray] | None:
+                date = self.dates[t_idx]
 
-            t0 = time.perf_counter()
-            chunk_data = _run_coroutine(
-                async_mosaic_chunk_multiband(
+                def _query() -> list:
+                    with self._duckdb_lock:
+                        return _search_items(
+                            self.duckdb_client,
+                            self.parquet_path,
+                            win.chunk_bbox_4326,
+                            date,
+                            self.sortby,
+                            self.filter,
+                            self.ids,
+                            filter_fields,
+                            label=f"bands={selected_bands!r}",
+                        )
+
+                items = await loop.run_in_executor(None, _query)
+                if not items:
+                    return None
+                t0 = time.perf_counter()
+                chunk_result = await async_mosaic_chunk_multiband(
                     items=items,
                     bands=selected_bands,
                     chunk_affine=win.chunk_affine,
@@ -436,17 +454,22 @@ class MultiBandStacBackendArray(BackendArray):
                     warp_cache=warp_cache,
                     path_fn=self.path_from_href,
                 )
-            )
-            logger.debug(
-                "async_mosaic_chunk_multiband bands=%r date=%s (%d items, %dx%d px) took %.3fs",
-                selected_bands,
-                date,
-                len(items),
-                win.chunk_width,
-                win.chunk_height,
-                time.perf_counter() - t0,
-            )
+                logger.debug(
+                    "async_mosaic_chunk_multiband bands=%r date=%s (%d items, %dx%d px) took %.3fs",
+                    selected_bands,
+                    date,
+                    len(items),
+                    win.chunk_width,
+                    win.chunk_height,
+                    time.perf_counter() - t0,
+                )
+                return chunk_result
 
+            return list(await asyncio.gather(*[_one_date(t) for t in time_indices]))
+
+        for i, chunk_data in enumerate(_run_coroutine(_mosaic_all_dates())):
+            if chunk_data is None:
+                continue
             for bi, band in enumerate(selected_bands):
                 arr = chunk_data[band]
                 result[bi, i] = arr[0] if arr.ndim == 3 else arr
