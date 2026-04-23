@@ -231,10 +231,13 @@ def test_multiband_raw_getitem_calls_multiband_mosaic(wgs84):
     def _fake_run_coroutine(coro):
         call_count[0] += 1
         coro.close()
-        return {
-            b: np.full((1, 1, 4), float(i), dtype=np.float32)
-            for i, b in enumerate(bands)
-        }
+        # _mosaic_all_dates returns a list with one entry per time step.
+        return [
+            {
+                b: np.full((1, 1, 4), float(i), dtype=np.float32)
+                for i, b in enumerate(bands)
+            }
+        ]
 
     with (
         patch("rustac.DuckdbClient.search", return_value=fake_items),
@@ -242,7 +245,7 @@ def test_multiband_raw_getitem_calls_multiband_mosaic(wgs84):
     ):
         result = multi._raw_getitem((slice(0, 2), 0, slice(0, 1), slice(0, 4)))
 
-    # One time step → one call to async_mosaic_chunk_multiband, not two.
+    # One call to _run_coroutine (which runs all time steps together), not one per band.
     assert call_count[0] == 1
     assert result.shape == (2, 1, 4)
 
