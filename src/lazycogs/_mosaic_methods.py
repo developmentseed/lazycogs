@@ -167,19 +167,22 @@ class MedianMethod(MosaicMethodBase):
         self._stack: list[ma.MaskedArray] = []
 
     def feed(self, arr: ma.MaskedArray) -> None:
-        """Add ``arr`` to the stack.  Median is computed lazily in ``data``.
+        """Add ``arr`` to the stack; maintain mask union for ``is_done``.
+
+        The median is computed lazily in ``data``.
 
         Args:
             arr: Masked array with shape ``(bands, height, width)``.
 
         """
         self._stack.append(arr)
-        # Keep _mosaic updated so is_done works correctly.
         if self._mosaic is None:
             self._mosaic = arr.copy()
         else:
-            stacked = ma.array(self._stack)
-            self._mosaic = ma.median(stacked, axis=0)
+            cur_mask = ma.getmaskarray(self._mosaic)
+            new_mask = ma.getmaskarray(arr)
+            combined_mask = cur_mask & new_mask
+            self._mosaic = ma.MaskedArray(self._mosaic.data, mask=combined_mask)
 
     @property
     def data(self) -> np.ndarray:
@@ -204,7 +207,9 @@ class StdevMethod(MosaicMethodBase):
         self._stack: list[ma.MaskedArray] = []
 
     def feed(self, arr: ma.MaskedArray) -> None:
-        """Add ``arr`` to the stack.
+        """Add ``arr`` to the stack; maintain mask union for ``is_done``.
+
+        The standard deviation is computed lazily in ``data``.
 
         Args:
             arr: Masked array with shape ``(bands, height, width)``.
@@ -214,8 +219,10 @@ class StdevMethod(MosaicMethodBase):
         if self._mosaic is None:
             self._mosaic = arr.copy()
         else:
-            stacked = ma.array(self._stack)
-            self._mosaic = stacked.std(axis=0)
+            cur_mask = ma.getmaskarray(self._mosaic)
+            new_mask = ma.getmaskarray(arr)
+            combined_mask = cur_mask & new_mask
+            self._mosaic = ma.MaskedArray(self._mosaic.data, mask=combined_mask)
 
     @property
     def data(self) -> np.ndarray:
