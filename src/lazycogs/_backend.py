@@ -287,6 +287,14 @@ def _search_items(
         len(items),
         time.perf_counter() - t0,
     )
+    if items and logger.isEnabledFor(logging.DEBUG):
+        unexpected = {k for k in items[0] if k not in {"id", "assets"}}
+        if unexpected:
+            logger.debug(
+                "duckdb_client.search returned unexpected fields %s — "
+                "include filter may not be respected",
+                unexpected,
+            )
     return items
 
 

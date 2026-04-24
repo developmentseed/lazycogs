@@ -492,7 +492,15 @@ async def _explain_async(
     backend: MultiBandStacBackendArray,
     fetch_headers: bool,
 ) -> ExplainPlan:
-    """Run DuckDB queries for all (band, time, spatial chunk) combinations.
+    """Run DuckDB queries for all (time, spatial chunk) combinations.
+
+    Issues one DuckDB query per ``(time step, spatial tile)`` — not one per
+    ``(band, time step, spatial tile)`` — because the query result is
+    band-independent.  All ``(time × tile)`` queries are dispatched
+    concurrently via :func:`asyncio.gather`; the ``backend._duckdb_lock``
+    serialises actual DuckDB access.  Each query result is then fanned across
+    all active bands to produce one :class:`ChunkRead` per
+    ``(band, time, tile)`` combination.
 
     Args:
         da: DataArray whose extent and chunking define the explain scope.
@@ -545,76 +553,114 @@ async def _explain_async(
         ]
 
     chunk_h, chunk_w = _infer_chunk_sizes(da)
-    chunk_reads: list[ChunkRead] = []
 
     x_start, y_start_physical, roi_width, roi_height = _roi_pixel_offsets(da, backend)
     roi_affine = backend.dst_affine * Affine.translation(x_start, y_start_physical)
+    spatial_chunks = list(
+        _iter_spatial_chunks(roi_affine, roi_width, roi_height, chunk_w, chunk_h)
+    )
 
-    for band in active_bands:
-        for t_idx, date_filter, time_coord in time_items:
-            for row, col, tile_affine, actual_w, actual_h in _iter_spatial_chunks(
-                roi_affine, roi_width, roi_height, chunk_w, chunk_h
-            ):
-                chunk_bbox_4326 = _compute_chunk_bbox_4326(
-                    tile_affine, actual_w, actual_h, dst_crs
-                )
-                items = backend.duckdb_client.search(
-                    backend.parquet_path,
-                    bbox=chunk_bbox_4326,
-                    datetime=date_filter,
-                    sortby=backend.sortby,
-                    filter=backend.filter,
-                    ids=backend.ids,
-                )
-                logger.debug(
-                    "explain band=%r date=%s chunk=(%d,%d) -> %d items",
-                    band,
-                    date_filter,
-                    row,
-                    col,
-                    len(items),
-                )
+    n_queries = len(time_items) * len(spatial_chunks)
+    logger.debug(
+        "explain: %d DuckDB queries (%d time step(s) x %d spatial tile(s)) for %d band(s)",
+        n_queries,
+        len(time_items),
+        len(spatial_chunks),
+        len(active_bands),
+    )
 
-                if fetch_headers and items:
-                    raw_reads = await asyncio.gather(
-                        *[
-                            _inspect_item_async(
-                                item,
-                                band,
-                                tile_affine,
-                                dst_crs,
-                                actual_w,
-                                actual_h,
-                                backend.store,
-                            )
-                            for item in items
-                        ]
-                    )
-                    cog_reads = [r for r in raw_reads if r is not None]
-                else:
-                    cog_reads = [
-                        CogRead(
-                            item_id=item.get("id", ""),
-                            asset_key=band,
-                            href=item.get("assets", {}).get(band, {}).get("href", ""),
+    async def _explain_one_tile(
+        t_idx: int,
+        date_filter: str,
+        time_coord: np.datetime64,
+        row: int,
+        col: int,
+        tile_affine: Affine,
+        actual_w: int,
+        actual_h: int,
+    ) -> list[ChunkRead]:
+        """Query once for this (time, tile) and fan results across all bands."""
+        chunk_bbox_4326 = _compute_chunk_bbox_4326(
+            tile_affine, actual_w, actual_h, dst_crs
+        )
+        with backend._duckdb_lock:
+            items = backend.duckdb_client.search(
+                backend.parquet_path,
+                bbox=chunk_bbox_4326,
+                datetime=date_filter,
+                sortby=backend.sortby,
+                filter=backend.filter,
+                ids=backend.ids,
+            )
+        logger.debug(
+            "explain date=%s chunk=(%d,%d) -> %d items (for %d band(s))",
+            date_filter,
+            row,
+            col,
+            len(items),
+            len(active_bands),
+        )
+
+        tile_reads: list[ChunkRead] = []
+        for band in active_bands:
+            if fetch_headers and items:
+                raw_reads = await asyncio.gather(
+                    *[
+                        _inspect_item_async(
+                            item,
+                            band,
+                            tile_affine,
+                            dst_crs,
+                            actual_w,
+                            actual_h,
+                            backend.store,
                         )
                         for item in items
                     ]
-
-                chunk_reads.append(
-                    ChunkRead(
-                        band=band,
-                        time_index=t_idx,
-                        date_filter=date_filter,
-                        time_coord=time_coord,
-                        chunk_row=row,
-                        chunk_col=col,
-                        chunk_affine=tile_affine,
-                        chunk_width=actual_w,
-                        chunk_height=actual_h,
-                        cog_reads=cog_reads,
-                    )
                 )
+                cog_reads = [r for r in raw_reads if r is not None]
+            else:
+                cog_reads = [
+                    CogRead(
+                        item_id=item.get("id", ""),
+                        asset_key=band,
+                        href=item.get("assets", {}).get(band, {}).get("href", ""),
+                    )
+                    for item in items
+                ]
+            tile_reads.append(
+                ChunkRead(
+                    band=band,
+                    time_index=t_idx,
+                    date_filter=date_filter,
+                    time_coord=time_coord,
+                    chunk_row=row,
+                    chunk_col=col,
+                    chunk_affine=tile_affine,
+                    chunk_width=actual_w,
+                    chunk_height=actual_h,
+                    cog_reads=cog_reads,
+                )
+            )
+        return tile_reads
+
+    tile_results = await asyncio.gather(
+        *[
+            _explain_one_tile(
+                t_idx,
+                date_filter,
+                time_coord,
+                row,
+                col,
+                tile_affine,
+                actual_w,
+                actual_h,
+            )
+            for t_idx, date_filter, time_coord in time_items
+            for row, col, tile_affine, actual_w, actual_h in spatial_chunks
+        ]
+    )
+    chunk_reads = [cr for tile_reads in tile_results for cr in tile_reads]
 
     return ExplainPlan(
         href=backend.parquet_path,

@@ -54,7 +54,7 @@ src/lazycogs/
 
 ## Explain: dry-run read estimator
 
-`da.lazycogs.explain()` (registered in `_explain.py` as an xarray accessor) provides an `EXPLAIN ANALYZE`-style dry run. It runs the same DuckDB spatial queries that fire during `.compute()` — one per `(band, time step, spatial chunk)` combination — but stops before any pixel I/O.
+`da.lazycogs.explain()` (registered in `_explain.py` as an xarray accessor) provides an `EXPLAIN ANALYZE`-style dry run. It issues one DuckDB spatial query per `(time step, spatial chunk)` combination — not per band, because the query result is band-independent — fans the result across all active bands in Python, and stops before any pixel I/O. All `(time × spatial tile)` queries are dispatched concurrently via `asyncio.gather` with `backend._duckdb_lock` serialising DuckDB access.
 
 ```python
 plan = da.lazycogs.explain()          # DuckDB queries only, no pixel reads
