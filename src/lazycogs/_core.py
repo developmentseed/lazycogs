@@ -126,6 +126,13 @@ def _discover_bands(
     return data_bands if data_bands else other_bands or list(assets)
 
 
+def _arrow_col(table, name: str) -> list:
+    """Return a column from an Arrow table as a Python list, or all-None if absent."""
+    if name in table.schema.names:
+        return table.column(name).to_pylist()
+    return [None] * len(table)
+
+
 def _build_time_steps(
     parquet_path: str,
     *,
@@ -180,22 +187,15 @@ def _build_time_steps(
 
     if table is not None:
         logger.debug("_build_time_steps: Arrow table has %d rows", len(table))
-        schema_names = table.schema.names
-        dt_list = (
-            table.column("datetime").to_pylist()
-            if "datetime" in schema_names
-            else [None] * len(table)
-        )
-        start_dt_list = (
-            table.column("start_datetime").to_pylist()
-            if "start_datetime" in schema_names
-            else [None] * len(table)
-        )
-        for dt_val, start_val in zip(dt_list, start_dt_list):
+        for dt_val, start_val in zip(
+            _arrow_col(table, "datetime"),
+            _arrow_col(table, "start_datetime"),
+        ):
             val = dt_val if dt_val is not None else start_val
-            if val is not None:
-                iso = val if isinstance(val, str) else val.isoformat()
-                keys.add(temporal_grouper.group_key(iso))
+            if val is None:
+                continue
+            iso = val if isinstance(val, str) else val.isoformat()
+            keys.add(temporal_grouper.group_key(iso))
 
     sorted_keys = sorted(keys)
     filter_strings = [temporal_grouper.datetime_filter(k) for k in sorted_keys]

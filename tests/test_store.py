@@ -7,14 +7,13 @@ from unittest.mock import patch
 import pytest
 from obstore.store import MemoryStore
 
-from lazycogs._store import (
+from lazycogs._storage_ext import (
     _extract_store_kwargs,
     _extract_store_kwargs_v1,
     _extract_store_kwargs_v2,
     _storage_extension_version,
-    resolve,
-    store_for,
 )
+from lazycogs._store import resolve, store_for
 
 
 # ---------------------------------------------------------------------------
