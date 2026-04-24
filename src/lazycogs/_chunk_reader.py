@@ -294,23 +294,20 @@ async def _read_item_band(
         return raster.data, effective_nodata
 
     # Reproject to the destination chunk grid.
-    # Run in a thread executor so the event loop stays free to process
-    # concurrent I/O completions from other items in the same gather.
-    # pyproj and numpy both release the GIL, so threads give real parallelism.
+    # Called synchronously: the semaphore in async_mosaic_chunk already caps
+    # the number of concurrent _read_item_band coroutines, which caps concurrent
+    # reprojections without executor overhead. run_in_executor adds submission
+    # cost and pool contention without meaningful IO overlap on a bounded pool.
     t0 = time.perf_counter()
-    loop = asyncio.get_running_loop()
-    arr = await loop.run_in_executor(
-        None,
-        lambda: reproject_array(
-            data=raster.data,
-            src_transform=raster.transform,
-            src_crs=geotiff.crs,
-            dst_transform=chunk_affine,
-            dst_crs=dst_crs,
-            dst_width=chunk_width,
-            dst_height=chunk_height,
-            nodata=effective_nodata,
-        ),
+    arr = reproject_array(
+        data=raster.data,
+        src_transform=raster.transform,
+        src_crs=geotiff.crs,
+        dst_transform=chunk_affine,
+        dst_crs=dst_crs,
+        dst_width=chunk_width,
+        dst_height=chunk_height,
+        nodata=effective_nodata,
     )
     logger.debug("reproject_array for %s took %.3fs", path, time.perf_counter() - t0)
     return arr, effective_nodata
