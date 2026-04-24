@@ -2,6 +2,8 @@
 
 Open a lazy `(time, band, y, x)` xarray DataArray from thousands of cloud-optimized geotiffs (COGs). No GDAL required.
 
+--8<-- "docs/includes/dataarray_repr.html"
+
 ## Introduction
 
 [stackstac](https://stackstac.readthedocs.io) and [odc-stac](https://odc-stac.readthedocs.io) established the pattern that lazycogs builds on: take a STAC item collection and expose it as a spatially-aligned xarray DataArray ready for dask-parallel computation. Both are excellent tools that cover most satellite imagery workflows well: time series extraction, ML training data, mosaic compositing. These tools rely on the trusty combination of rasterio and GDAL for data i/o and warping operations.
