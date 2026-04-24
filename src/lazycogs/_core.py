@@ -137,7 +137,7 @@ def _build_time_steps(
     """
     filter_fields = _extract_filter_fields(filter) if filter else set()
 
-    items = duckdb_client.search(
+    table = duckdb_client.search_to_arrow(
         parquet_path,
         bbox=bbox,
         datetime=datetime,
@@ -153,11 +153,24 @@ def _build_time_steps(
 
     keys: set[str] = set()
 
-    for item in items:
-        props = item.get("properties", {})
-        dt: str | None = props.get("datetime") or props.get("start_datetime")
-        if dt:
-            keys.add(temporal_grouper.group_key(dt))
+    if table is not None:
+        logger.debug("_build_time_steps: Arrow table has %d rows", len(table))
+        schema_names = table.schema.names
+        dt_list = (
+            table.column("datetime").to_pylist()
+            if "datetime" in schema_names
+            else [None] * len(table)
+        )
+        start_dt_list = (
+            table.column("start_datetime").to_pylist()
+            if "start_datetime" in schema_names
+            else [None] * len(table)
+        )
+        for dt_val, start_val in zip(dt_list, start_dt_list):
+            val = dt_val if dt_val is not None else start_val
+            if val is not None:
+                iso = val if isinstance(val, str) else val.isoformat()
+                keys.add(temporal_grouper.group_key(iso))
 
     sorted_keys = sorted(keys)
     filter_strings = [temporal_grouper.datetime_filter(k) for k in sorted_keys]
