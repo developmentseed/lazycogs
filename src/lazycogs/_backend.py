@@ -116,22 +116,13 @@ def _get_or_create_background_loop() -> asyncio.AbstractEventLoop:
     return loop
 
 
-def _run_coroutine(coro: Any) -> Any:
-    """Run an async coroutine from sync code.
+def _run_in_fresh_loop(coro: Any) -> Any:
+    """Run a coroutine in a new event loop with a bounded reprojection executor.
 
-    Uses ``asyncio.run`` normally, but falls back to a persistent per-thread
-    background loop when called from inside a running event loop (e.g. a
-    Jupyter kernel), which does not allow re-entrant ``asyncio.run`` calls.
-
-    Normal path: ``asyncio.run`` creates a fresh loop with a bounded
-    ``ThreadPoolExecutor``, runs the coroutine, then tears down the loop and
-    executor.  Each call is fully isolated.
-
-    Jupyter / running-loop path: a single background loop is created lazily
-    per thread and reused across all calls on that thread.  The bounded
-    reprojection executor is installed once at loop creation and shared across
-    all coroutines submitted to that loop.  Per-thread isolation is preserved:
-    dask worker threads each get their own independent loop and executor.
+    Creates a fresh loop, installs the bounded ``ThreadPoolExecutor`` before
+    any coroutines run, executes the coroutine, then closes both the loop and
+    the executor.  Each call is fully isolated — no state leaks between chunk
+    reads.
 
     Args:
         coro: The coroutine to execute.
@@ -140,27 +131,44 @@ def _run_coroutine(coro: Any) -> Any:
         The return value of the coroutine.
 
     """
+    loop = asyncio.new_event_loop()
+    executor = concurrent.futures.ThreadPoolExecutor(
+        max_workers=get_max_workers(),
+        thread_name_prefix="lazycogs-reproject",
+    )
+    loop.set_default_executor(executor)
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
+        executor.shutdown(wait=True)
 
-    async def _with_bounded_executor(inner: Any) -> Any:
-        loop = asyncio.get_running_loop()
-        loop.set_default_executor(
-            concurrent.futures.ThreadPoolExecutor(
-                max_workers=get_max_workers(),
-                thread_name_prefix="lazycogs-reproject",
-            )
-        )
-        return await inner
 
+def _run_coroutine(coro: Any) -> Any:
+    """Run an async coroutine from sync code.
+
+    Normal path: creates a fresh event loop with a bounded executor, runs the
+    coroutine, then tears both down.  Each call is fully isolated.
+
+    Jupyter path: a running event loop is detected; the coroutine is submitted
+    to a persistent per-thread background loop that has its own bounded
+    executor installed at creation time.
+
+    Args:
+        coro: The coroutine to execute.
+
+    Returns:
+        The return value of the coroutine.
+
+    """
     try:
         asyncio.get_running_loop()
-        # Already inside a running loop — use a persistent per-thread
-        # background loop to avoid re-entrant asyncio.run() calls.
-        # The background loop has its own bounded executor installed at
-        # creation time; no per-call thread or executor construction.
-        loop = _get_or_create_background_loop()
-        return asyncio.run_coroutine_threadsafe(coro, loop).result()
     except RuntimeError:
-        return asyncio.run(_with_bounded_executor(coro))
+        # No running loop — normal script / dask-worker path.
+        return _run_in_fresh_loop(coro)
+    # Running loop detected (Jupyter kernel or similar).
+    loop = _get_or_create_background_loop()
+    return asyncio.run_coroutine_threadsafe(coro, loop).result()
 
 
 @dataclass
