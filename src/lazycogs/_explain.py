@@ -14,7 +14,7 @@ from affine import Affine
 from pyproj import CRS, Transformer
 
 from lazycogs._backend import MultiBandStacBackendArray, _run_coroutine
-from lazycogs._chunk_reader import _open_and_window
+from lazycogs._chunk_reader import _ChunkContext, _open_and_window
 
 if TYPE_CHECKING:
     from obstore.store import ObjectStore
@@ -466,9 +466,17 @@ async def _inspect_item_async(
         the item has no matching asset or the chunk does not overlap.
 
     """
-    opened = await _open_and_window(
-        item, band, chunk_affine, dst_crs, chunk_width, chunk_height, store=store
+    ctx = _ChunkContext(
+        chunk_affine=chunk_affine,
+        dst_crs=dst_crs,
+        chunk_width=chunk_width,
+        chunk_height=chunk_height,
+        nodata=None,
+        store=store,
+        path_fn=None,
+        warp_cache=None,
     )
+    opened = await _open_and_window(item, band, ctx)
     if opened is None:
         return None
     geotiff, reader, window, _ = opened

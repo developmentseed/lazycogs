@@ -18,7 +18,7 @@ from rustac import DuckdbClient
 from xarray.backends.common import BackendArray
 from xarray.core import indexing
 
-from lazycogs._chunk_reader import async_mosaic_chunk_multiband
+from lazycogs._chunk_reader import async_mosaic_chunk
 from lazycogs._cql2 import _extract_filter_fields, _sortby_fields
 from lazycogs._executor import get_max_workers
 from lazycogs._mosaic_methods import MosaicMethodBase
@@ -27,6 +27,65 @@ logger = logging.getLogger(__name__)
 
 
 _tls = threading.local()
+
+
+@dataclass(frozen=True)
+class _ChunkReadPlan:
+    """Everything needed to materialise one chunk across all its time steps.
+
+    Built once in ``_raw_getitem`` and passed through to
+    ``_run_mosaic_all_dates`` and ``_run_one_date``. Frozen to make the
+    read-only intent explicit.
+
+    Note: ``warp_cache`` is a mutable dict despite the frozen dataclass. This
+    is intentional — concurrent writes from ``asyncio.gather`` coroutines are
+    safe because ``compute_warp_map`` is deterministic (a duplicate write
+    simply overwrites an identical value).
+
+    Attributes:
+        duckdb_client: ``DuckdbClient`` instance used for STAC queries.
+        parquet_path: Path to the geoparquet file or hive-partitioned directory.
+        duckdb_lock: Lock serialising access to ``duckdb_client``.
+        sortby: Optional sort keys forwarded to ``client.search``.
+        filter_expr: Optional CQL2 filter forwarded to ``client.search``.
+        ids: Optional STAC item IDs forwarded to ``client.search``.
+        filter_fields: Field names extracted from ``filter_expr``.
+        dates: Full list of acquisition date strings.
+        chunk_bbox_4326: ``[minx, miny, maxx, maxy]`` in EPSG:4326.
+        selected_bands: STAC asset keys to read.
+        chunk_affine: Affine transform of the chunk.
+        dst_crs: CRS of the output grid.
+        chunk_width: Chunk width in pixels.
+        chunk_height: Chunk height in pixels.
+        nodata: No-data fill value, or ``None``.
+        mosaic_method_cls: Mosaic method class, or ``None`` for the default.
+        store: Pre-configured obstore ``ObjectStore`` instance, or ``None``.
+        max_concurrent_reads: Maximum concurrent COG reads per chunk.
+        warp_cache: Shared warp map cache across time steps.
+        path_fn: Optional callable extracting an object path from an asset HREF.
+
+    """
+
+    duckdb_client: DuckdbClient
+    parquet_path: str
+    duckdb_lock: threading.Lock
+    sortby: str | list[str | dict[str, str]] | None
+    filter_expr: str | dict[str, Any] | None
+    ids: list[str] | None
+    filter_fields: set[str]
+    dates: list[str]
+    chunk_bbox_4326: list[float]
+    selected_bands: list[str]
+    chunk_affine: Affine
+    dst_crs: CRS
+    chunk_width: int
+    chunk_height: int
+    nodata: float | None
+    mosaic_method_cls: type[MosaicMethodBase] | None
+    store: Any | None
+    max_concurrent_reads: int
+    warp_cache: dict
+    path_fn: Callable[[str], str] | None
 
 
 def _get_or_create_background_loop() -> asyncio.AbstractEventLoop:
@@ -57,22 +116,13 @@ def _get_or_create_background_loop() -> asyncio.AbstractEventLoop:
     return loop
 
 
-def _run_coroutine(coro: Any) -> Any:
-    """Run an async coroutine from sync code.
+def _run_in_fresh_loop(coro: Any) -> Any:
+    """Run a coroutine in a new event loop with a bounded reprojection executor.
 
-    Uses ``asyncio.run`` normally, but falls back to a persistent per-thread
-    background loop when called from inside a running event loop (e.g. a
-    Jupyter kernel), which does not allow re-entrant ``asyncio.run`` calls.
-
-    Normal path: ``asyncio.run`` creates a fresh loop with a bounded
-    ``ThreadPoolExecutor``, runs the coroutine, then tears down the loop and
-    executor.  Each call is fully isolated.
-
-    Jupyter / running-loop path: a single background loop is created lazily
-    per thread and reused across all calls on that thread.  The bounded
-    reprojection executor is installed once at loop creation and shared across
-    all coroutines submitted to that loop.  Per-thread isolation is preserved:
-    dask worker threads each get their own independent loop and executor.
+    Creates a fresh loop, installs the bounded ``ThreadPoolExecutor`` before
+    any coroutines run, executes the coroutine, then closes both the loop and
+    the executor.  Each call is fully isolated — no state leaks between chunk
+    reads.
 
     Args:
         coro: The coroutine to execute.
@@ -81,27 +131,44 @@ def _run_coroutine(coro: Any) -> Any:
         The return value of the coroutine.
 
     """
+    loop = asyncio.new_event_loop()
+    executor = concurrent.futures.ThreadPoolExecutor(
+        max_workers=get_max_workers(),
+        thread_name_prefix="lazycogs-reproject",
+    )
+    loop.set_default_executor(executor)
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
+        executor.shutdown(wait=True)
 
-    async def _with_bounded_executor(inner: Any) -> Any:
-        loop = asyncio.get_running_loop()
-        loop.set_default_executor(
-            concurrent.futures.ThreadPoolExecutor(
-                max_workers=get_max_workers(),
-                thread_name_prefix="lazycogs-reproject",
-            )
-        )
-        return await inner
 
+def _run_coroutine(coro: Any) -> Any:
+    """Run an async coroutine from sync code.
+
+    Normal path: creates a fresh event loop with a bounded executor, runs the
+    coroutine, then tears both down.  Each call is fully isolated.
+
+    Jupyter path: a running event loop is detected; the coroutine is submitted
+    to a persistent per-thread background loop that has its own bounded
+    executor installed at creation time.
+
+    Args:
+        coro: The coroutine to execute.
+
+    Returns:
+        The return value of the coroutine.
+
+    """
     try:
         asyncio.get_running_loop()
-        # Already inside a running loop — use a persistent per-thread
-        # background loop to avoid re-entrant asyncio.run() calls.
-        # The background loop has its own bounded executor installed at
-        # creation time; no per-call thread or executor construction.
-        loop = _get_or_create_background_loop()
-        return asyncio.run_coroutine_threadsafe(coro, loop).result()
     except RuntimeError:
-        return asyncio.run(_with_bounded_executor(coro))
+        # No running loop — normal script / dask-worker path.
+        return _run_in_fresh_loop(coro)
+    # Running loop detected (Jupyter kernel or similar).
+    loop = _get_or_create_background_loop()
+    return asyncio.run_coroutine_threadsafe(coro, loop).result()
 
 
 @dataclass
@@ -300,100 +367,61 @@ def _search_items(
 
 async def _run_one_date(
     t_idx: int,
-    *,
-    dates: list[str],
-    duckdb_client: DuckdbClient,
-    parquet_path: str,
-    duckdb_lock: threading.Lock,
-    chunk_bbox_4326: list[float],
-    sortby: str | list[str | dict[str, str]] | None,
-    filter_expr: str | dict[str, Any] | None,
-    ids: list[str] | None,
-    filter_fields: set[str],
-    selected_bands: list[str],
-    chunk_affine: Affine,
-    dst_crs: CRS,
-    chunk_width: int,
-    chunk_height: int,
-    nodata: float | None,
-    mosaic_method_cls: type[MosaicMethodBase] | None,
-    store: Any | None,
-    max_concurrent_reads: int,
-    warp_cache: dict,
-    path_fn: Callable[[str], str] | None,
+    plan: _ChunkReadPlan,
 ) -> dict[str, np.ndarray] | None:
     """Read and mosaic all COGs for a single time step.
 
     Issues one DuckDB query for items overlapping the chunk at this date, then
-    calls async_mosaic_chunk_multiband to fetch and reproject all tiles.
+    calls async_mosaic_chunk to fetch and reproject all tiles.
     Returns None if no items match the query.
 
     Args:
-        t_idx: Index into ``dates`` for the time step to read.
-        dates: Full list of acquisition date strings.
-        duckdb_client: ``DuckdbClient`` instance used for STAC queries.
-        parquet_path: Path to the geoparquet file or hive-partitioned directory.
-        duckdb_lock: Lock serialising access to ``duckdb_client``.
-        chunk_bbox_4326: ``[minx, miny, maxx, maxy]`` in EPSG:4326.
-        sortby: Optional sort keys forwarded to ``client.search``.
-        filter_expr: Optional CQL2 filter forwarded to ``client.search``.
-        ids: Optional STAC item IDs forwarded to ``client.search``.
-        filter_fields: Field names extracted from ``filter_expr``.
-        selected_bands: STAC asset keys to read.
-        chunk_affine: Affine transform of the chunk.
-        dst_crs: CRS of the output grid.
-        chunk_width: Chunk width in pixels.
-        chunk_height: Chunk height in pixels.
-        nodata: No-data fill value, or ``None``.
-        mosaic_method_cls: Mosaic method class, or ``None`` for the default.
-        store: Pre-configured obstore ``ObjectStore`` instance, or ``None``.
-        max_concurrent_reads: Maximum concurrent COG reads per chunk.
-        warp_cache: Shared warp map cache across time steps.
-        path_fn: Optional callable extracting an object path from an asset HREF.
+        t_idx: Index into ``plan.dates`` for the time step to read.
+        plan: Read plan carrying all parameters for this chunk.
 
     Returns:
         Per-band arrays keyed by band name, or ``None`` if no items matched.
 
     """
-    date = dates[t_idx]
+    date = plan.dates[t_idx]
 
-    with duckdb_lock:
+    with plan.duckdb_lock:
         items = _search_items(
-            duckdb_client,
-            parquet_path,
-            chunk_bbox_4326,
+            plan.duckdb_client,
+            plan.parquet_path,
+            plan.chunk_bbox_4326,
             date,
-            sortby,
-            filter_expr,
-            ids,
-            filter_fields,
-            label=f"bands={selected_bands!r}",
+            plan.sortby,
+            plan.filter_expr,
+            plan.ids,
+            plan.filter_fields,
+            label=f"bands={plan.selected_bands!r}",
         )
 
     if not items:
         return None
     t0 = time.perf_counter()
-    chunk_result = await async_mosaic_chunk_multiband(
+    chunk_result = await async_mosaic_chunk(
         items=items,
-        bands=selected_bands,
-        chunk_affine=chunk_affine,
-        dst_crs=dst_crs,
-        chunk_width=chunk_width,
-        chunk_height=chunk_height,
-        nodata=nodata,
-        mosaic_method_cls=mosaic_method_cls,
-        store=store,
-        max_concurrent_reads=max_concurrent_reads,
-        warp_cache=warp_cache,
-        path_fn=path_fn,
+        bands=plan.selected_bands,
+        chunk_affine=plan.chunk_affine,
+        dst_crs=plan.dst_crs,
+        chunk_width=plan.chunk_width,
+        chunk_height=plan.chunk_height,
+        nodata=plan.nodata,
+        mosaic_method_cls=plan.mosaic_method_cls,
+        store=plan.store,
+        max_concurrent_reads=plan.max_concurrent_reads,
+        warp_cache=plan.warp_cache,
+        path_fn=plan.path_fn,
     )
     logger.debug(
-        "async_mosaic_chunk_multiband bands=%r date=%s (%d items, %dx%d px) took %.3fs",
-        selected_bands,
+        "async_mosaic_chunk bands=%r date=%s (%d items, %dx%d px) took %.3fs",
+        plan.selected_bands,
         date,
         len(items),
-        chunk_width,
-        chunk_height,
+        plan.chunk_width,
+        plan.chunk_height,
         time.perf_counter() - t0,
     )
     return chunk_result
@@ -401,27 +429,7 @@ async def _run_one_date(
 
 async def _run_mosaic_all_dates(
     time_indices: list[int],
-    *,
-    dates: list[str],
-    duckdb_client: DuckdbClient,
-    parquet_path: str,
-    duckdb_lock: threading.Lock,
-    chunk_bbox_4326: list[float],
-    sortby: str | list[str | dict[str, str]] | None,
-    filter_expr: str | dict[str, Any] | None,
-    ids: list[str] | None,
-    filter_fields: set[str],
-    selected_bands: list[str],
-    chunk_affine: Affine,
-    dst_crs: CRS,
-    chunk_width: int,
-    chunk_height: int,
-    nodata: float | None,
-    mosaic_method_cls: type[MosaicMethodBase] | None,
-    store: Any | None,
-    max_concurrent_reads: int,
-    warp_cache: dict,
-    path_fn: Callable[[str], str] | None,
+    plan: _ChunkReadPlan,
 ) -> list[dict[str, np.ndarray] | None]:
     """Run all time steps concurrently inside a single event loop.
 
@@ -431,61 +439,13 @@ async def _run_mosaic_all_dates(
 
     Args:
         time_indices: Ordered list of time-dimension indices to materialise.
-        dates: Full list of acquisition date strings.
-        duckdb_client: ``DuckdbClient`` instance used for STAC queries.
-        parquet_path: Path to the geoparquet file or hive-partitioned directory.
-        duckdb_lock: Lock serialising access to ``duckdb_client``.
-        chunk_bbox_4326: ``[minx, miny, maxx, maxy]`` in EPSG:4326.
-        sortby: Optional sort keys forwarded to ``client.search``.
-        filter_expr: Optional CQL2 filter forwarded to ``client.search``.
-        ids: Optional STAC item IDs forwarded to ``client.search``.
-        filter_fields: Field names extracted from ``filter_expr``.
-        selected_bands: STAC asset keys to read.
-        chunk_affine: Affine transform of the chunk.
-        dst_crs: CRS of the output grid.
-        chunk_width: Chunk width in pixels.
-        chunk_height: Chunk height in pixels.
-        nodata: No-data fill value, or ``None``.
-        mosaic_method_cls: Mosaic method class, or ``None`` for the default.
-        store: Pre-configured obstore ``ObjectStore`` instance, or ``None``.
-        max_concurrent_reads: Maximum concurrent COG reads per chunk.
-        warp_cache: Shared warp map cache across time steps.
-        path_fn: Optional callable extracting an object path from an asset HREF.
+        plan: Read plan carrying all parameters for this chunk.
 
     Returns:
         One entry per time index; ``None`` where no items matched.
 
     """
-    return list(
-        await asyncio.gather(
-            *[
-                _run_one_date(
-                    t,
-                    dates=dates,
-                    duckdb_client=duckdb_client,
-                    parquet_path=parquet_path,
-                    duckdb_lock=duckdb_lock,
-                    chunk_bbox_4326=chunk_bbox_4326,
-                    sortby=sortby,
-                    filter_expr=filter_expr,
-                    ids=ids,
-                    filter_fields=filter_fields,
-                    selected_bands=selected_bands,
-                    chunk_affine=chunk_affine,
-                    dst_crs=dst_crs,
-                    chunk_width=chunk_width,
-                    chunk_height=chunk_height,
-                    nodata=nodata,
-                    mosaic_method_cls=mosaic_method_cls,
-                    store=store,
-                    max_concurrent_reads=max_concurrent_reads,
-                    warp_cache=warp_cache,
-                    path_fn=path_fn,
-                )
-                for t in time_indices
-            ]
-        )
-    )
+    return list(await asyncio.gather(*[_run_one_date(t, plan) for t in time_indices]))
 
 
 @dataclass
@@ -495,7 +455,7 @@ class MultiBandStacBackendArray(BackendArray):
     One instance is created at ``open()`` time.  No pixel I/O happens until
     ``__getitem__`` is called inside a dask task.  Reads all selected bands
     together per time step via
-    :func:`~lazycogs._chunk_reader.async_mosaic_chunk_multiband`, issuing a
+    :func:`~lazycogs._chunk_reader.async_mosaic_chunk`, issuing a
     single DuckDB query per time step and sharing reprojection warp maps across
     bands that have identical source geometry.
 
@@ -603,7 +563,7 @@ class MultiBandStacBackendArray(BackendArray):
         """Materialise the chunk identified by ``key``.
 
         Reads all selected bands together per time step via
-        :func:`~lazycogs._chunk_reader.async_mosaic_chunk_multiband`, issuing
+        :func:`~lazycogs._chunk_reader.async_mosaic_chunk`, issuing
         a single DuckDB query per time step and sharing reprojection warp maps
         across bands that have identical source geometry.
 
@@ -644,39 +604,31 @@ class MultiBandStacBackendArray(BackendArray):
 
         fill = self.nodata if self.nodata is not None else 0
 
-        # warp_cache is shared across time steps: tiles with the same native
-        # CRS and window transform reuse the same WarpMap. Concurrent writes
-        # from the asyncio gather below are safe — compute_warp_map is
-        # deterministic, so a duplicate write just overwrites an identical value.
-        warp_cache: dict = {}
-
         filter_fields = _extract_filter_fields(self.filter) if self.filter else set()
-
-        all_chunk_data = _run_coroutine(
-            _run_mosaic_all_dates(
-                time_indices,
-                dates=self.dates,
-                duckdb_client=self.duckdb_client,
-                parquet_path=self.parquet_path,
-                duckdb_lock=self._duckdb_lock,
-                chunk_bbox_4326=win.chunk_bbox_4326,
-                sortby=self.sortby,
-                filter_expr=self.filter,
-                ids=self.ids,
-                filter_fields=filter_fields,
-                selected_bands=selected_bands,
-                chunk_affine=win.chunk_affine,
-                dst_crs=self.dst_crs,
-                chunk_width=win.chunk_width,
-                chunk_height=win.chunk_height,
-                nodata=self.nodata,
-                mosaic_method_cls=self.mosaic_method_cls,
-                store=self.store,
-                max_concurrent_reads=self.max_concurrent_reads,
-                warp_cache=warp_cache,
-                path_fn=self.path_from_href,
-            )
+        plan = _ChunkReadPlan(
+            duckdb_client=self.duckdb_client,
+            parquet_path=self.parquet_path,
+            duckdb_lock=self._duckdb_lock,
+            sortby=self.sortby,
+            filter_expr=self.filter,
+            ids=self.ids,
+            filter_fields=filter_fields,
+            dates=self.dates,
+            chunk_bbox_4326=win.chunk_bbox_4326,
+            selected_bands=selected_bands,
+            chunk_affine=win.chunk_affine,
+            dst_crs=self.dst_crs,
+            chunk_width=win.chunk_width,
+            chunk_height=win.chunk_height,
+            nodata=self.nodata,
+            mosaic_method_cls=self.mosaic_method_cls,
+            store=self.store,
+            max_concurrent_reads=self.max_concurrent_reads,
+            warp_cache={},
+            path_fn=self.path_from_href,
         )
+
+        all_chunk_data = _run_coroutine(_run_mosaic_all_dates(time_indices, plan))
 
         out_shape = (
             len(band_indices),

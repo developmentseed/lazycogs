@@ -6,7 +6,8 @@ import asyncio
 import logging
 import time
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import numpy.ma as ma
@@ -20,7 +21,6 @@ from lazycogs._reproject import (
     _get_transformer,
     apply_warp_map,
     compute_warp_map,
-    reproject_array,
 )
 from lazycogs._store import resolve as _resolve_store
 
@@ -28,6 +28,25 @@ if TYPE_CHECKING:
     from obstore.store import ObjectStore
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class _ChunkContext:
+    """Immutable per-chunk parameters shared across all item reads.
+
+    Built once per chunk in async_mosaic_chunk and passed through to all
+    internal helpers. Frozen to prevent accidental mutation across concurrent
+    coroutines.
+    """
+
+    chunk_affine: Affine
+    dst_crs: CRS
+    chunk_width: int
+    chunk_height: int
+    nodata: float | None
+    store: "ObjectStore | None"
+    path_fn: "Callable[[str], str] | None"
+    warp_cache: dict | None
 
 
 def _log_batch_failure(
@@ -192,12 +211,7 @@ def _native_window(
 async def _open_and_window(
     item: dict,
     band: str,
-    chunk_affine: Affine,
-    dst_crs: CRS,
-    chunk_width: int,
-    chunk_height: int,
-    store: ObjectStore | None = None,
-    path_fn: Callable[[str], str] | None = None,
+    ctx: _ChunkContext,
 ) -> tuple[GeoTIFF, GeoTIFF | Overview, Window | None, str] | None:
     """Open a COG asset and compute the pixel window covering the chunk.
 
@@ -212,14 +226,14 @@ async def _open_and_window(
         return None
 
     href = asset["href"]
-    store, path = _resolve_store(href, store, path_fn)
+    store, path = _resolve_store(href, ctx.store, ctx.path_fn)
 
     t0 = time.perf_counter()
     geotiff = await GeoTIFF.open(path, store=store)
     logger.debug("GeoTIFF.open %s took %.3fs", path, time.perf_counter() - t0)
 
     target_res_native, t = _target_res_and_transformer(
-        chunk_affine, chunk_width, chunk_height, dst_crs, geotiff.crs
+        ctx.chunk_affine, ctx.chunk_width, ctx.chunk_height, ctx.dst_crs, geotiff.crs
     )
     overview = _select_overview(geotiff, target_res_native)
     if overview is not None:
@@ -231,220 +245,11 @@ async def _open_and_window(
             path,
         )
     reader: GeoTIFF | Overview = overview if overview is not None else geotiff
-    bbox_native = _chunk_bbox_native(chunk_affine, chunk_width, chunk_height, t)
+    bbox_native = _chunk_bbox_native(
+        ctx.chunk_affine, ctx.chunk_width, ctx.chunk_height, t
+    )
     window = _native_window(reader, bbox_native, reader.width, reader.height)
     return geotiff, reader, window, path
-
-
-async def _read_item_band(
-    item: dict,
-    band: str,
-    chunk_affine: Affine,
-    dst_crs: CRS,
-    chunk_width: int,
-    chunk_height: int,
-    nodata: float | None,
-    store: ObjectStore | None = None,
-    path_fn: Callable[[str], str] | None = None,
-) -> tuple[np.ndarray, float | None] | None:
-    """Read and reproject one band from one STAC item.
-
-    Returns a tuple of ``(array, effective_nodata)`` where *array* has shape
-    ``(bands, chunk_height, chunk_width)`` and *effective_nodata* is the
-    nodata value that was applied (may be ``None``).  Returns ``None`` if the
-    item has no matching asset or its footprint does not overlap the chunk.
-    """
-    opened = await _open_and_window(
-        item,
-        band,
-        chunk_affine,
-        dst_crs,
-        chunk_width,
-        chunk_height,
-        store=store,
-        path_fn=path_fn,
-    )
-    if opened is None:
-        return None
-    geotiff, reader, window, path = opened
-    if window is None:
-        return None
-
-    # Prefer the caller-supplied nodata; fall back to the value in the COG header.
-    effective_nodata = nodata if nodata is not None else geotiff.nodata
-
-    t0 = time.perf_counter()
-    raster = await reader.read(window=window)
-    logger.debug(
-        "reader.read window=%s on %s took %.3fs",
-        window,
-        path,
-        time.perf_counter() - t0,
-    )
-
-    # Fast path: skip reprojection when the read window already matches the
-    # destination chunk exactly (same CRS, same affine, same pixel dimensions).
-    if (
-        geotiff.crs.equals(dst_crs)
-        and raster.transform == chunk_affine
-        and raster.data.shape[1] == chunk_height
-        and raster.data.shape[2] == chunk_width
-    ):
-        logger.debug("Skipping reprojection for %s (identity grid)", path)
-        return raster.data, effective_nodata
-
-    # Reproject to the destination chunk grid.
-    # Called synchronously: the semaphore in async_mosaic_chunk already caps
-    # the number of concurrent _read_item_band coroutines, which caps concurrent
-    # reprojections without executor overhead. run_in_executor adds submission
-    # cost and pool contention without meaningful IO overlap on a bounded pool.
-    t0 = time.perf_counter()
-    arr = reproject_array(
-        data=raster.data,
-        src_transform=raster.transform,
-        src_crs=geotiff.crs,
-        dst_transform=chunk_affine,
-        dst_crs=dst_crs,
-        dst_width=chunk_width,
-        dst_height=chunk_height,
-        nodata=effective_nodata,
-    )
-    logger.debug("reproject_array for %s took %.3fs", path, time.perf_counter() - t0)
-    return arr, effective_nodata
-
-
-async def async_mosaic_chunk(
-    items: list[dict],
-    band: str,
-    chunk_affine: Affine,
-    dst_crs: CRS,
-    chunk_width: int,
-    chunk_height: int,
-    nodata: float | None = None,
-    mosaic_method: MosaicMethodBase | None = None,
-    store: ObjectStore | None = None,
-    max_concurrent_reads: int = 32,
-    path_fn: Callable[[str], str] | None = None,
-) -> np.ndarray:
-    """Read, reproject, and mosaic a single chunk from multiple STAC items.
-
-    Items are processed in batches of ``max_concurrent_reads`` to bound peak
-    memory usage.  When the mosaic method signals completion (e.g.
-    :class:`~lazycogs._mosaic_methods.FirstMethod` once all pixels are
-    filled), remaining batches are skipped entirely.
-
-    Args:
-        items: List of STAC item dicts to mosaic.  Processed in order.
-        band: Asset key identifying the band to read from each item.
-        chunk_affine: Affine transform of the destination chunk.
-        dst_crs: CRS of the destination chunk.
-        chunk_width: Width of the destination chunk in pixels.
-        chunk_height: Height of the destination chunk in pixels.
-        nodata: No-data fill value.
-        mosaic_method: Pixel-selection strategy.  Defaults to
-            :class:`~lazycogs._mosaic_methods.FirstMethod`.
-        store: Optional pre-configured obstore ``ObjectStore`` instance
-            forwarded to :func:`_read_item_band`.  When ``None``, each item's
-            store is resolved from its HREF.
-        max_concurrent_reads: Maximum number of COG reads to run concurrently.
-            Limits peak in-flight memory when a chunk overlaps many items.
-            Defaults to 32.
-        path_fn: Optional callable that takes an asset HREF and returns the
-            object path to use with *store*.  Forwarded to
-            :func:`_read_item_band`.
-
-    Returns:
-        Array of shape ``(bands, chunk_height, chunk_width)`` with dtype
-        matching the source COGs.
-
-    """
-    if mosaic_method is None:
-        mosaic_method = FirstMethod()
-
-    semaphore = asyncio.Semaphore(max_concurrent_reads)
-
-    async def _guarded(item: dict) -> tuple[np.ndarray, float | None] | None:
-        async with semaphore:
-            return await _read_item_band(
-                item,
-                band,
-                chunk_affine,
-                dst_crs,
-                chunk_width,
-                chunk_height,
-                nodata,
-                store=store,
-                path_fn=path_fn,
-            )
-
-    # Warn when the estimated peak in-flight memory is large. Each concurrent
-    # read holds a reprojected (chunk_height, chunk_width) array; assume 4
-    # bytes per pixel as a conservative upper bound regardless of source dtype.
-    batch = min(max_concurrent_reads, len(items))
-    estimated_peak_mb = batch * chunk_width * chunk_height * 4 / (1024**2)
-    if estimated_peak_mb > 500:
-        logger.warning(
-            "Estimated peak in-flight memory for band=%r is ~%.0f MB "
-            "(%d concurrent reads × %dx%d px). "
-            "Lower max_concurrent_reads or add spatial chunks to reduce memory use.",
-            band,
-            estimated_peak_mb,
-            batch,
-            chunk_width,
-            chunk_height,
-        )
-
-    # Launch all item reads as tasks up front; the semaphore inside _guarded
-    # caps in-flight reads at max_concurrent_reads. Tasks complete in I/O
-    # arrival order, but results are buffered and fed into the mosaic in
-    # source-list order so that FirstMethod sees items in the caller's sorted
-    # order regardless of network timing.
-    task_list: list[asyncio.Task] = [
-        asyncio.ensure_future(_guarded(item)) for item in items
-    ]
-    task_index: dict[int, int] = {id(t): i for i, t in enumerate(task_list)}
-    completed: dict[int, tuple[np.ndarray, float | None] | None] = {}
-    cursor = 0
-    pending: set[asyncio.Task] = set(task_list)
-    try:
-        mosaic_done = False
-        while pending and not mosaic_done:
-            done, pending = await asyncio.wait(
-                pending, return_when=asyncio.FIRST_COMPLETED
-            )
-            for fut in done:
-                idx = task_index[id(fut)]
-                try:
-                    completed[idx] = fut.result()
-                except BaseException as exc:
-                    _log_batch_failure(
-                        "band", band, items[idx].get("id", "<unknown>"), exc
-                    )
-                    completed[idx] = None
-
-            # Drain the in-order prefix into the mosaic.
-            while cursor in completed:
-                result = completed.pop(cursor)
-                cursor += 1
-                if result is None:
-                    continue
-                arr, effective_nodata = result
-                mosaic_method.feed(_array_to_masked(arr, effective_nodata))
-                if mosaic_method.is_done:
-                    mosaic_done = True
-                    break
-    finally:
-        for t in task_list:
-            if not t.done():
-                t.cancel()
-        await asyncio.gather(*task_list, return_exceptions=True)
-
-    if mosaic_method._mosaic is None:
-        bands = 1
-        fill = nodata if nodata is not None else 0
-        return np.full((bands, chunk_height, chunk_width), fill, dtype=np.float32)
-
-    return mosaic_method.data
 
 
 def _apply_bands_with_warp_cache(
@@ -518,17 +323,10 @@ def _apply_bands_with_warp_cache(
     return results
 
 
-async def _read_item_bands(
+async def _read_item_band(
     item: dict,
     bands: list[str],
-    chunk_affine: Affine,
-    dst_crs: CRS,
-    chunk_width: int,
-    chunk_height: int,
-    nodata: float | None,
-    store: ObjectStore | None = None,
-    warp_cache: dict | None = None,
-    path_fn: Callable[[str], str] | None = None,
+    ctx: _ChunkContext,
 ) -> dict[str, tuple[np.ndarray, float | None]] | None:
     """Read and reproject multiple bands from one STAC item, sharing warp maps.
 
@@ -541,17 +339,7 @@ async def _read_item_bands(
     Args:
         item: STAC item dict containing an ``assets`` key.
         bands: Asset keys to read from this item.
-        chunk_affine: Affine transform of the destination chunk.
-        dst_crs: CRS of the destination chunk.
-        chunk_width: Width of the destination chunk in pixels.
-        chunk_height: Height of the destination chunk in pixels.
-        nodata: No-data fill value.  When ``None``, the value stored in the
-            COG header (``GeoTIFF.nodata``) is used if present.
-        store: Optional pre-configured obstore ``ObjectStore`` instance.
-        warp_cache: Optional cache shared across calls for reusing warp maps
-            computed in earlier time steps.
-        path_fn: Optional callable that takes an asset HREF and returns the
-            object path to use with *store*.
+        ctx: Per-chunk invariants (affine, CRS, dimensions, nodata, store, etc.).
 
     Returns:
         ``dict`` mapping band name to ``(array, effective_nodata)`` where
@@ -571,7 +359,7 @@ async def _read_item_bands(
 
     # Open all COGs concurrently for metadata.
     async def _open_band(band: str, href: str) -> tuple[str, GeoTIFF, ObjectStore]:
-        band_store, path = _resolve_store(href, store, path_fn)
+        band_store, path = _resolve_store(href, ctx.store, ctx.path_fn)
         geotiff = await GeoTIFF.open(path, store=band_store)
         return band, geotiff, band_store
 
@@ -586,14 +374,16 @@ async def _read_item_bands(
         tuple[str, GeoTIFF, GeoTIFF | Overview, Window, float | None, CRS]
     ] = []
     for band, geotiff, _ in open_results:
-        effective_nodata = nodata if nodata is not None else geotiff.nodata
+        effective_nodata = ctx.nodata if ctx.nodata is not None else geotiff.nodata
         src_crs = geotiff.crs
         target_res_native, t = _target_res_and_transformer(
-            chunk_affine, chunk_width, chunk_height, dst_crs, src_crs
+            ctx.chunk_affine, ctx.chunk_width, ctx.chunk_height, ctx.dst_crs, src_crs
         )
         overview = _select_overview(geotiff, target_res_native)
         reader = overview if overview is not None else geotiff
-        bbox_native = _chunk_bbox_native(chunk_affine, chunk_width, chunk_height, t)
+        bbox_native = _chunk_bbox_native(
+            ctx.chunk_affine, ctx.chunk_width, ctx.chunk_height, t
+        )
         window = _native_window(reader, bbox_native, reader.width, reader.height)
         if window is None:
             continue
@@ -629,17 +419,73 @@ async def _read_item_bands(
         None,
         lambda: _apply_bands_with_warp_cache(
             band_rasters,
-            chunk_affine,
-            dst_crs,
-            chunk_width,
-            chunk_height,
-            warp_cache,
+            ctx.chunk_affine,
+            ctx.dst_crs,
+            ctx.chunk_width,
+            ctx.chunk_height,
+            ctx.warp_cache,
         ),
     )
     return results
 
 
-async def async_mosaic_chunk_multiband(
+async def _drain_in_order(
+    tasks: list[asyncio.Task],
+    on_result: Callable[[int, Any], None],
+    is_done: Callable[[], bool],
+    on_error: Callable[[int, BaseException], None],
+) -> None:
+    """Feed completed tasks to on_result in source-list order.
+
+    Tasks may complete in any order (I/O arrival order). Results are buffered
+    by their original list index and handed to on_result strictly in the order
+    they appear in tasks, so callers see results in the same order as the
+    input list regardless of network timing.
+
+    Stops early when is_done() returns True. Cancels and drains all remaining
+    tasks on exit, whether done early or exhausted.
+
+    Args:
+        tasks: Pre-created asyncio tasks, in the order results should be fed.
+        on_result: Called with (index, result) for each completed task, in
+            source order. result is whatever the task returned (may be None).
+        is_done: Called after each on_result; if it returns True, remaining
+            tasks are cancelled and the function returns.
+        on_error: Called with (index, exception) for tasks that raised. The
+            task's slot is treated as None for ordering purposes.
+
+    """
+    task_index: dict[int, int] = {id(t): i for i, t in enumerate(tasks)}
+    completed: dict[int, Any] = {}
+    cursor = 0
+    pending: set[asyncio.Task] = set(tasks)
+    try:
+        while pending:
+            done, pending = await asyncio.wait(
+                pending, return_when=asyncio.FIRST_COMPLETED
+            )
+            for fut in done:
+                idx = task_index[id(fut)]
+                try:
+                    completed[idx] = fut.result()
+                except BaseException as exc:
+                    on_error(idx, exc)
+                    completed[idx] = None
+
+            while cursor in completed:
+                result = completed.pop(cursor)
+                on_result(cursor, result)
+                cursor += 1
+                if is_done():
+                    return
+    finally:
+        for t in tasks:
+            if not t.done():
+                t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+
+async def async_mosaic_chunk(
     items: list[dict],
     bands: list[str],
     chunk_affine: Affine,
@@ -655,8 +501,8 @@ async def async_mosaic_chunk_multiband(
 ) -> dict[str, np.ndarray]:
     """Read, reproject, and mosaic multiple bands from a list of STAC items.
 
-    Multi-band variant of :func:`async_mosaic_chunk`.  Processes all requested
-    bands together per item so that bands sharing the same source geometry
+    Processes all requested bands together per item so that bands sharing the
+    same source geometry
     compute the reprojection warp map only once (via
     :func:`_apply_bands_with_warp_cache`).
 
@@ -679,7 +525,7 @@ async def async_mosaic_chunk_multiband(
             from earlier time steps.
         path_fn: Optional callable that takes an asset HREF and returns the
             object path to use with *store*.  Forwarded to
-            :func:`_read_item_bands`.
+            :func:`_read_item_band`.
 
     Returns:
         ``dict`` mapping each band name to an array of shape
@@ -690,22 +536,22 @@ async def async_mosaic_chunk_multiband(
     if mosaic_method_cls is None:
         mosaic_method_cls = FirstMethod
 
+    ctx = _ChunkContext(
+        chunk_affine=chunk_affine,
+        dst_crs=dst_crs,
+        chunk_width=chunk_width,
+        chunk_height=chunk_height,
+        nodata=nodata,
+        store=store,
+        path_fn=path_fn,
+        warp_cache=warp_cache,
+    )
+
     semaphore = asyncio.Semaphore(max_concurrent_reads)
 
     async def _guarded(item: dict) -> dict[str, tuple[np.ndarray, float | None]] | None:
         async with semaphore:
-            return await _read_item_bands(
-                item,
-                bands,
-                chunk_affine,
-                dst_crs,
-                chunk_width,
-                chunk_height,
-                nodata,
-                store=store,
-                warp_cache=warp_cache,
-                path_fn=path_fn,
-            )
+            return await _read_item_band(item, bands, ctx)
 
     batch_size = min(max_concurrent_reads, len(items))
     estimated_peak_mb = (
@@ -728,50 +574,25 @@ async def async_mosaic_chunk_multiband(
         b: mosaic_method_cls() for b in bands
     }
 
-    # Launch all item reads as tasks up front; the semaphore inside _guarded
-    # caps in-flight reads at max_concurrent_reads. Tasks complete in I/O
-    # arrival order, but results are buffered and fed into the mosaic in
-    # source-list order so that FirstMethod sees items in the caller's sorted
-    # order regardless of network timing.
     task_list: list[asyncio.Task] = [
         asyncio.ensure_future(_guarded(item)) for item in items
     ]
-    task_index: dict[int, int] = {id(t): i for i, t in enumerate(task_list)}
-    completed: dict[int, dict[str, tuple[np.ndarray, float | None]] | None] = {}
-    cursor = 0
-    pending: set[asyncio.Task] = set(task_list)
-    try:
-        mosaic_done = False
-        while pending and not mosaic_done:
-            done, pending = await asyncio.wait(
-                pending, return_when=asyncio.FIRST_COMPLETED
-            )
-            for fut in done:
-                idx = task_index[id(fut)]
-                try:
-                    completed[idx] = fut.result()
-                except BaseException as exc:
-                    _log_batch_failure(
-                        "bands", bands, items[idx].get("id", "<unknown>"), exc
-                    )
-                    completed[idx] = None
 
-            # Drain the in-order prefix into the mosaics.
-            while cursor in completed:
-                result = completed.pop(cursor)
-                cursor += 1
-                if result is None:
-                    continue
-                for band, (arr, effective_nodata) in result.items():
-                    mosaic_methods[band].feed(_array_to_masked(arr, effective_nodata))
-                if all(m.is_done for m in mosaic_methods.values()):
-                    mosaic_done = True
-                    break
-    finally:
-        for t in task_list:
-            if not t.done():
-                t.cancel()
-        await asyncio.gather(*task_list, return_exceptions=True)
+    def _feed(
+        idx: int, result: dict[str, tuple[np.ndarray, float | None]] | None
+    ) -> None:
+        if result is None:
+            return
+        for band, (arr, effective_nodata) in result.items():
+            mosaic_methods[band].feed(_array_to_masked(arr, effective_nodata))
+
+    def _done() -> bool:
+        return all(m.is_done for m in mosaic_methods.values())
+
+    def _error(idx: int, exc: BaseException) -> None:
+        _log_batch_failure("bands", bands, items[idx].get("id", "<unknown>"), exc)
+
+    await _drain_in_order(task_list, _feed, _done, _error)
 
     fill = nodata if nodata is not None else 0
     output: dict[str, np.ndarray] = {}

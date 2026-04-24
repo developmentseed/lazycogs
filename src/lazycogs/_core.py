@@ -6,6 +6,7 @@ import asyncio
 import logging
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -24,6 +25,30 @@ if TYPE_CHECKING:
     from obstore.store import ObjectStore
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class _OpenParams:
+    """Captured arguments from open() / open_async(). Internal use only."""
+
+    href: str
+    datetime: str | None
+    bbox: tuple[float, float, float, float]
+    crs: str | CRS
+    resolution: float
+    filter: str | dict[str, Any] | None
+    ids: list[str] | None
+    bands: list[str] | None
+    chunks: dict[str, int] | None
+    sortby: str | list[str | dict[str, str]] | None
+    nodata: float | None
+    dtype: str | np.dtype | None
+    mosaic_method: type[MosaicMethodBase] | None
+    time_period: str
+    store: "ObjectStore | None"
+    max_concurrent_reads: int
+    path_from_href: "Callable[[str], str] | None"
+    duckdb_client: "DuckdbClient | None"
 
 
 class _CompactDateArray(np.ndarray):
@@ -101,6 +126,13 @@ def _discover_bands(
     return data_bands if data_bands else other_bands or list(assets)
 
 
+def _arrow_col(table, name: str) -> list:
+    """Return a column from an Arrow table as a Python list, or all-None if absent."""
+    if name in table.schema.names:
+        return table.column(name).to_pylist()
+    return [None] * len(table)
+
+
 def _build_time_steps(
     parquet_path: str,
     *,
@@ -155,22 +187,15 @@ def _build_time_steps(
 
     if table is not None:
         logger.debug("_build_time_steps: Arrow table has %d rows", len(table))
-        schema_names = table.schema.names
-        dt_list = (
-            table.column("datetime").to_pylist()
-            if "datetime" in schema_names
-            else [None] * len(table)
-        )
-        start_dt_list = (
-            table.column("start_datetime").to_pylist()
-            if "start_datetime" in schema_names
-            else [None] * len(table)
-        )
-        for dt_val, start_val in zip(dt_list, start_dt_list):
+        for dt_val, start_val in zip(
+            _arrow_col(table, "datetime"),
+            _arrow_col(table, "start_datetime"),
+        ):
             val = dt_val if dt_val is not None else start_val
-            if val is not None:
-                iso = val if isinstance(val, str) else val.isoformat()
-                keys.add(temporal_grouper.group_key(iso))
+            if val is None:
+                continue
+            iso = val if isinstance(val, str) else val.isoformat()
+            keys.add(temporal_grouper.group_key(iso))
 
     sorted_keys = sorted(keys)
     filter_strings = [temporal_grouper.datetime_filter(k) for k in sorted_keys]
@@ -292,71 +317,53 @@ def _build_dataarray(
     return da
 
 
-def _open_sync_impl(
-    href: str,
-    *,
-    datetime: str | None,
-    bbox: tuple[float, float, float, float],
-    resolution: float,
-    crs: str | CRS,
-    filter: str | dict[str, Any] | None,
-    ids: list[str] | None,
-    bands: list[str] | None,
-    chunks: dict[str, int] | None,
-    sortby: str | list[str | dict[str, str]] | None,
-    nodata: float | None,
-    dtype: str | np.dtype | None,
-    mosaic_method: type[MosaicMethodBase] | None,
-    time_period: str,
-    store: ObjectStore | None,
-    max_concurrent_reads: int,
-    path_from_href: Callable[[str], str] | None,
-    duckdb_client: DuckdbClient | None,
-) -> xr.DataArray:
-    """Synchronous Phase 0 implementation shared by open() and open_async().
+def _open_impl(params: _OpenParams) -> xr.DataArray:
+    """Phase 0 implementation shared by open() and open_async().
 
     Performs band discovery, time-step discovery, grid computation, and
-    DataArray construction.  All work is synchronous; no event loop is
-    required.  Called directly by open() and via asyncio.to_thread by
-    open_async().
+    DataArray construction. All work is synchronous. Called directly by
+    open() and by open_async() (possibly via asyncio.to_thread).
     """
+    duckdb_client = params.duckdb_client
     if duckdb_client is None:
         duckdb_client = DuckdbClient()
-        if not (href.endswith(".parquet") or href.endswith(".geoparquet")):
+        if not (
+            params.href.endswith(".parquet") or params.href.endswith(".geoparquet")
+        ):
             raise ValueError(
-                f"href must be a .parquet or .geoparquet file path, got: {href!r}. "
+                f"href must be a .parquet or .geoparquet file path, got: {params.href!r}. "
                 "To search a STAC API, use rustac.search_to() first. "
                 "To query a hive-partitioned directory, pass a duckdb_client."
             )
 
     # Validate time_period early before any I/O so bad values fail fast.
-    grouper = grouper_from_period(time_period)
+    grouper = grouper_from_period(params.time_period)
 
-    dst_crs = CRS.from_user_input(crs)
+    dst_crs = CRS.from_user_input(params.crs)
 
     epsg_4326 = CRS.from_epsg(4326)
     if dst_crs.equals(epsg_4326):
-        bbox_4326 = list(bbox)
+        bbox_4326 = list(params.bbox)
     else:
         t = Transformer.from_crs(dst_crs, epsg_4326, always_xy=True)
         xs, ys = t.transform(
-            [bbox[0], bbox[2], bbox[0], bbox[2]],
-            [bbox[1], bbox[1], bbox[3], bbox[3]],
+            [params.bbox[0], params.bbox[2], params.bbox[0], params.bbox[2]],
+            [params.bbox[1], params.bbox[1], params.bbox[3], params.bbox[3]],
         )
         bbox_4326 = [float(min(xs)), float(min(ys)), float(max(xs)), float(max(ys))]
 
-    if bands is not None:
-        resolved_bands = bands
+    if params.bands is not None:
+        resolved_bands = params.bands
     else:
         t0 = time.perf_counter()
         resolved_bands = _discover_bands(
-            href,
+            params.href,
             duckdb_client=duckdb_client,
             bbox=bbox_4326,
-            datetime=datetime,
-            filter=filter,
-            ids=ids,
-            sortby=sortby,
+            datetime=params.datetime,
+            filter=params.filter,
+            ids=params.ids,
+            sortby=params.sortby,
         )
         logger.debug(
             "_discover_bands took %.3fs, found %d bands",
@@ -366,13 +373,13 @@ def _open_sync_impl(
 
     t0 = time.perf_counter()
     filter_strings, time_coords = _build_time_steps(
-        href,
+        params.href,
         duckdb_client=duckdb_client,
         bbox=bbox_4326,
-        datetime=datetime,
-        filter=filter,
-        ids=ids,
-        sortby=sortby,
+        datetime=params.datetime,
+        filter=params.filter,
+        ids=params.ids,
+        sortby=params.sortby,
         temporal_grouper=grouper,
     )
     logger.debug(
@@ -383,8 +390,8 @@ def _open_sync_impl(
 
     if not filter_strings:
         raise ValueError(
-            f"No STAC items matched the query in {href!r} "
-            f"(bbox={bbox_4326}, datetime={datetime})."
+            f"No STAC items matched the query in {params.href!r} "
+            f"(bbox={bbox_4326}, datetime={params.datetime})."
         )
 
     logger.info(
@@ -393,29 +400,33 @@ def _open_sync_impl(
         len(filter_strings),
     )
 
-    out_dtype = np.dtype(dtype) if dtype is not None else np.dtype("float32")
-    method_cls = mosaic_method if mosaic_method is not None else FirstMethod
+    out_dtype = (
+        np.dtype(params.dtype) if params.dtype is not None else np.dtype("float32")
+    )
+    method_cls = (
+        params.mosaic_method if params.mosaic_method is not None else FirstMethod
+    )
 
     return _build_dataarray(
-        parquet_path=href,
+        parquet_path=params.href,
         duckdb_client=duckdb_client,
         resolved_bands=resolved_bands,
         filter_strings=filter_strings,
         time_coords=time_coords,
-        bbox=bbox,
+        bbox=params.bbox,
         bbox_4326=bbox_4326,
         dst_crs=dst_crs,
-        resolution=resolution,
-        sortby=sortby,
-        filter=filter,
-        ids=ids,
-        nodata=nodata,
+        resolution=params.resolution,
+        sortby=params.sortby,
+        filter=params.filter,
+        ids=params.ids,
+        nodata=params.nodata,
         out_dtype=out_dtype,
         method_cls=method_cls,
-        chunks=chunks,
-        store=store,
-        max_concurrent_reads=max_concurrent_reads,
-        path_from_href=path_from_href,
+        chunks=params.chunks,
+        store=params.store,
+        max_concurrent_reads=params.max_concurrent_reads,
+        path_from_href=params.path_from_href,
     )
 
 
@@ -443,7 +454,7 @@ async def open_async(  # noqa: A001
     """Open a mosaic of STAC items as a lazy ``(time, band, y, x)`` DataArray.
 
     Async entry point for use with ``await`` in Jupyter notebooks and other
-    async contexts.  Delegates to :func:`_open_sync_impl` via
+    async contexts.  Delegates to :func:`_open_impl` via
     ``asyncio.to_thread``, which runs the DuckDB queries in a worker thread
     and genuinely yields the event loop during that work.  For synchronous
     scripts, use :func:`open`.
@@ -544,25 +555,27 @@ async def open_async(  # noqa: A001
 
     """
     return await asyncio.to_thread(
-        _open_sync_impl,
-        href,
-        datetime=datetime,
-        bbox=bbox,
-        crs=crs,
-        resolution=resolution,
-        filter=filter,
-        ids=ids,
-        bands=bands,
-        chunks=chunks,
-        sortby=sortby,
-        nodata=nodata,
-        dtype=dtype,
-        mosaic_method=mosaic_method,
-        time_period=time_period,
-        store=store,
-        max_concurrent_reads=max_concurrent_reads,
-        path_from_href=path_from_href,
-        duckdb_client=duckdb_client,
+        _open_impl,
+        _OpenParams(
+            href=href,
+            datetime=datetime,
+            bbox=bbox,
+            crs=crs,
+            resolution=resolution,
+            filter=filter,
+            ids=ids,
+            bands=bands,
+            chunks=chunks,
+            sortby=sortby,
+            nodata=nodata,
+            dtype=dtype,
+            mosaic_method=mosaic_method,
+            time_period=time_period,
+            store=store,
+            max_concurrent_reads=max_concurrent_reads,
+            path_from_href=path_from_href,
+            duckdb_client=duckdb_client,
+        ),
     )
 
 
@@ -590,7 +603,7 @@ def open(  # noqa: A001
     """Open a mosaic of STAC items as a lazy ``(time, band, y, x)`` DataArray.
 
     Synchronous entry point.  Works in regular Python scripts and Jupyter
-    notebooks.  Calls :func:`_open_sync_impl` directly with no event-loop
+    notebooks.  Calls :func:`_open_impl` directly with no event-loop
     overhead.  Use :func:`open_async` if you are already in an async context.
 
     ``href`` must be a path to a geoparquet file (``.parquet`` or
@@ -653,23 +666,25 @@ def open(  # noqa: A001
             duration.
 
     """
-    return _open_sync_impl(
-        href,
-        datetime=datetime,
-        bbox=bbox,
-        crs=crs,
-        resolution=resolution,
-        filter=filter,
-        ids=ids,
-        bands=bands,
-        chunks=chunks,
-        sortby=sortby,
-        nodata=nodata,
-        dtype=dtype,
-        mosaic_method=mosaic_method,
-        time_period=time_period,
-        store=store,
-        max_concurrent_reads=max_concurrent_reads,
-        path_from_href=path_from_href,
-        duckdb_client=duckdb_client,
+    return _open_impl(
+        _OpenParams(
+            href=href,
+            datetime=datetime,
+            bbox=bbox,
+            crs=crs,
+            resolution=resolution,
+            filter=filter,
+            ids=ids,
+            bands=bands,
+            chunks=chunks,
+            sortby=sortby,
+            nodata=nodata,
+            dtype=dtype,
+            mosaic_method=mosaic_method,
+            time_period=time_period,
+            store=store,
+            max_concurrent_reads=max_concurrent_reads,
+            path_from_href=path_from_href,
+            duckdb_client=duckdb_client,
+        )
     )

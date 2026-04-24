@@ -11,10 +11,10 @@ from pyproj import CRS
 
 from lazycogs._chunk_reader import (
     _apply_bands_with_warp_cache,
+    _drain_in_order,
     _native_window,
     _select_overview,
     async_mosaic_chunk,
-    async_mosaic_chunk_multiband,
 )
 from lazycogs._mosaic_methods import FirstMethod
 
@@ -161,6 +161,7 @@ def test_async_mosaic_chunk_limits_concurrent_reads():
     chunk_width, chunk_height = 4, 4
     chunk_affine = Affine(1.0, 0.0, 0.0, 0.0, -1.0, 4.0)
     dst_crs = CRS.from_epsg(4326)
+    bands = ["B01"]
     n_items = 20
     max_concurrent = 5
 
@@ -171,9 +172,11 @@ def test_async_mosaic_chunk_limits_concurrent_reads():
         current_concurrent[0] += 1
         peak_concurrent[0] = max(peak_concurrent[0], current_concurrent[0])
         await asyncio.sleep(0)  # yield to allow other coroutines to increment
-        arr = np.ones((1, chunk_height, chunk_width), dtype=np.float32)
         current_concurrent[0] -= 1
-        return arr, None
+        return {
+            b: (np.ones((1, chunk_height, chunk_width), dtype=np.float32), None)
+            for b in bands
+        }
 
     items = [{"id": f"item-{i}", "assets": {}} for i in range(n_items)]
 
@@ -184,7 +187,7 @@ def test_async_mosaic_chunk_limits_concurrent_reads():
         asyncio.run(
             async_mosaic_chunk(
                 items=items,
-                band="B01",
+                bands=bands,
                 chunk_affine=chunk_affine,
                 dst_crs=dst_crs,
                 chunk_width=chunk_width,
@@ -197,47 +200,66 @@ def test_async_mosaic_chunk_limits_concurrent_reads():
     assert peak_concurrent[0] <= max_concurrent
 
 
-def test_async_mosaic_chunk_early_exit_skips_remaining_reads():
-    """FirstMethod stops fetching items once all pixels are filled."""
-    chunk_width, chunk_height = 4, 4
-    chunk_affine = Affine(1.0, 0.0, 0.0, 0.0, -1.0, 4.0)
-    dst_crs = CRS.from_epsg(4326)
-    n_items = 30
-    reads_executed = [0]
+# ---------------------------------------------------------------------------
+# _drain_in_order
+# ---------------------------------------------------------------------------
 
-    async def _fake_read_item_band(*args, **kwargs):
-        reads_executed[0] += 1
-        # Yield so the semaphore can throttle and the main coroutine can wake
-        # on the first completion instead of processing every task in one
-        # synchronous burst.
-        await asyncio.sleep(0)
-        arr = np.ones((1, chunk_height, chunk_width), dtype=np.float32)
-        return arr, None
 
-    items = [{"id": f"item-{i}", "assets": {}} for i in range(n_items)]
+def test_drain_in_order_preserves_source_order():
+    """Results are delivered to on_result in source order, not I/O arrival order."""
 
-    with patch(
-        "lazycogs._chunk_reader._read_item_band",
-        side_effect=_fake_read_item_band,
-    ):
-        asyncio.run(
-            async_mosaic_chunk(
-                items=items,
-                band="B01",
-                chunk_affine=chunk_affine,
-                dst_crs=dst_crs,
-                chunk_width=chunk_width,
-                chunk_height=chunk_height,
-                nodata=None,
-                mosaic_method=FirstMethod(),
-                max_concurrent_reads=5,
-            )
+    async def _run():
+        event = asyncio.Event()
+
+        async def slow():
+            await event.wait()
+            return "result-0"
+
+        async def fast():
+            await asyncio.sleep(0)
+            return "result-1"
+
+        tasks = [asyncio.ensure_future(slow()), asyncio.ensure_future(fast())]
+        call_order: list[int] = []
+
+        def on_result(idx: int, result) -> None:
+            call_order.append(idx)
+
+        drain = asyncio.ensure_future(
+            _drain_in_order(tasks, on_result, lambda: False, lambda i, e: None)
         )
+        await asyncio.sleep(0)  # let fast() complete first (task index 1)
+        event.set()  # unblock slow() (task index 0)
+        await drain
 
-    # All tasks are launched up front, but the semaphore caps in-flight reads
-    # at max_concurrent_reads.  Once FirstMethod is satisfied, pending tasks
-    # are cancelled, so strictly fewer than n_items reads execute.
-    assert reads_executed[0] < n_items
+        assert call_order == [0, 1]
+
+    asyncio.run(_run())
+
+
+def test_drain_in_order_early_exit_on_is_done():
+    """Drain stops after is_done() returns True without consuming the rest."""
+
+    async def _run():
+        async def make_task(value):
+            await asyncio.sleep(0)
+            return value
+
+        tasks = [asyncio.ensure_future(make_task(i)) for i in range(5)]
+        results: list[int] = []
+        call_count = [0]
+
+        def on_result(idx: int, result) -> None:
+            results.append(result)
+            call_count[0] += 1
+
+        def is_done() -> bool:
+            return call_count[0] >= 2
+
+        await _drain_in_order(tasks, on_result, is_done, lambda i, e: None)
+        assert len(results) == 2
+
+    asyncio.run(_run())
 
 
 # ---------------------------------------------------------------------------
@@ -372,18 +394,18 @@ def test_apply_bands_with_warp_cache_shared_across_calls():
 
 
 # ---------------------------------------------------------------------------
-# async_mosaic_chunk_multiband
+# async_mosaic_chunk (multi-band)
 # ---------------------------------------------------------------------------
 
 
-def test_async_mosaic_chunk_multiband_returns_all_bands():
+def test_async_mosaic_chunk_returns_all_bands():
     """Returns a dict with one entry per requested band."""
     chunk_width, chunk_height = 4, 4
     chunk_affine = Affine(1.0, 0.0, 0.0, 0.0, -1.0, 4.0)
     dst_crs = CRS.from_epsg(4326)
     bands = ["B01", "B02", "B03"]
 
-    async def _fake_read_item_bands(*args, **kwargs):
+    async def _fake_read_item_band(*args, **kwargs):
         return {
             b: (np.ones((1, chunk_height, chunk_width), dtype=np.float32), None)
             for b in bands
@@ -392,10 +414,10 @@ def test_async_mosaic_chunk_multiband_returns_all_bands():
     items = [{"id": "item-0", "assets": {}}]
 
     with patch(
-        "lazycogs._chunk_reader._read_item_bands", side_effect=_fake_read_item_bands
+        "lazycogs._chunk_reader._read_item_band", side_effect=_fake_read_item_band
     ):
         result = asyncio.run(
-            async_mosaic_chunk_multiband(
+            async_mosaic_chunk(
                 items=items,
                 bands=bands,
                 chunk_affine=chunk_affine,
@@ -410,7 +432,7 @@ def test_async_mosaic_chunk_multiband_returns_all_bands():
         assert result[b].shape == (1, chunk_height, chunk_width)
 
 
-def test_async_mosaic_chunk_multiband_early_exit():
+def test_async_mosaic_chunk_early_exit():
     """All bands filled on first item → remaining items are skipped."""
     chunk_width, chunk_height = 4, 4
     chunk_affine = Affine(1.0, 0.0, 0.0, 0.0, -1.0, 4.0)
@@ -419,7 +441,7 @@ def test_async_mosaic_chunk_multiband_early_exit():
     reads_executed = [0]
     n_items = 20
 
-    async def _fake_read_item_bands(*args, **kwargs):
+    async def _fake_read_item_band(*args, **kwargs):
         reads_executed[0] += 1
         # Yield so the semaphore can throttle and the main coroutine can wake
         # on the first completion instead of processing every task in one
@@ -433,10 +455,10 @@ def test_async_mosaic_chunk_multiband_early_exit():
     items = [{"id": f"item-{i}", "assets": {}} for i in range(n_items)]
 
     with patch(
-        "lazycogs._chunk_reader._read_item_bands", side_effect=_fake_read_item_bands
+        "lazycogs._chunk_reader._read_item_band", side_effect=_fake_read_item_band
     ):
         asyncio.run(
-            async_mosaic_chunk_multiband(
+            async_mosaic_chunk(
                 items=items,
                 bands=bands,
                 chunk_affine=chunk_affine,
