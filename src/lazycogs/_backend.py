@@ -157,6 +157,7 @@ def _resolve_spatial_window(
     dst_width: int,
     dst_affine: Affine,
     dst_crs: CRS,
+    dst_to_4326: Transformer | None,
 ) -> _SpatialWindow:
     """Resolve spatial indexers to a concrete chunk window.
 
@@ -172,6 +173,8 @@ def _resolve_spatial_window(
         dst_width: Full output grid width in pixels.
         dst_affine: Affine transform of the full output grid.
         dst_crs: CRS of the output grid.
+        dst_to_4326: Pre-built transformer from ``dst_crs`` to EPSG:4326, or
+            ``None`` when ``dst_crs`` is already EPSG:4326.
 
     Returns:
         A :class:`_SpatialWindow` describing the chunk geometry.
@@ -210,12 +213,10 @@ def _resolve_spatial_window(
     maxx = minx + chunk_width * chunk_affine.a
     miny = maxy + chunk_height * chunk_affine.e  # e < 0
 
-    epsg_4326 = CRS.from_epsg(4326)
-    if dst_crs.equals(epsg_4326):
+    if dst_to_4326 is None:
         chunk_bbox_4326 = [minx, miny, maxx, maxy]
     else:
-        transformer = Transformer.from_crs(dst_crs, epsg_4326, always_xy=True)
-        xs, ys = transformer.transform(
+        xs, ys = dst_to_4326.transform(
             [minx, maxx, minx, maxx],
             [maxy, maxy, miny, miny],
         )
@@ -286,6 +287,14 @@ def _search_items(
         len(items),
         time.perf_counter() - t0,
     )
+    if items and logger.isEnabledFor(logging.DEBUG):
+        unexpected = {k for k in items[0] if k not in {"id", "assets"}}
+        if unexpected:
+            logger.debug(
+                "duckdb_client.search returned unexpected fields %s — "
+                "include filter may not be respected",
+                unexpected,
+            )
     return items
 
 
@@ -553,13 +562,21 @@ class MultiBandStacBackendArray(BackendArray):
     max_concurrent_reads: int = field(default=32)
     path_from_href: Callable[[str], str] | None = field(default=None)
     shape: tuple[int, ...] = field(init=False)
+    _dst_to_4326: Transformer | None = field(init=False, repr=False, compare=False)
     _duckdb_lock: threading.Lock = field(
         init=False, repr=False, compare=False, default_factory=threading.Lock
     )
 
     def __post_init__(self) -> None:
-        """Derive shape from the other fields."""
+        """Derive shape and cache the dst→EPSG:4326 transformer."""
         self.shape = (len(self.bands), len(self.dates), self.dst_height, self.dst_width)
+        epsg_4326 = CRS.from_epsg(4326)
+        if self.dst_crs.equals(epsg_4326):
+            self._dst_to_4326: Transformer | None = None
+        else:
+            self._dst_to_4326 = Transformer.from_crs(
+                self.dst_crs, epsg_4326, always_xy=True
+            )
 
     def __repr__(self) -> str:
         """Return a compact string representation."""
@@ -616,15 +633,16 @@ class MultiBandStacBackendArray(BackendArray):
 
         time_indices, squeeze_time = _resolve_time_indices(time_key, len(self.dates))
         win = _resolve_spatial_window(
-            y_key, x_key, self.dst_height, self.dst_width, self.dst_affine, self.dst_crs
+            y_key,
+            x_key,
+            self.dst_height,
+            self.dst_width,
+            self.dst_affine,
+            self.dst_crs,
+            self._dst_to_4326,
         )
 
         fill = self.nodata if self.nodata is not None else 0
-        result = np.full(
-            (len(band_indices), len(time_indices), win.chunk_height, win.chunk_width),
-            fill,
-            dtype=self.dtype,
-        )
 
         # warp_cache is shared across time steps: tiles with the same native
         # CRS and window transform reuse the same WarpMap. Concurrent writes
@@ -634,38 +652,52 @@ class MultiBandStacBackendArray(BackendArray):
 
         filter_fields = _extract_filter_fields(self.filter) if self.filter else set()
 
-        for i, chunk_data in enumerate(
-            _run_coroutine(
-                _run_mosaic_all_dates(
-                    time_indices,
-                    dates=self.dates,
-                    duckdb_client=self.duckdb_client,
-                    parquet_path=self.parquet_path,
-                    duckdb_lock=self._duckdb_lock,
-                    chunk_bbox_4326=win.chunk_bbox_4326,
-                    sortby=self.sortby,
-                    filter_expr=self.filter,
-                    ids=self.ids,
-                    filter_fields=filter_fields,
-                    selected_bands=selected_bands,
-                    chunk_affine=win.chunk_affine,
-                    dst_crs=self.dst_crs,
-                    chunk_width=win.chunk_width,
-                    chunk_height=win.chunk_height,
-                    nodata=self.nodata,
-                    mosaic_method_cls=self.mosaic_method_cls,
-                    store=self.store,
-                    max_concurrent_reads=self.max_concurrent_reads,
-                    warp_cache=warp_cache,
-                    path_fn=self.path_from_href,
-                )
+        all_chunk_data = _run_coroutine(
+            _run_mosaic_all_dates(
+                time_indices,
+                dates=self.dates,
+                duckdb_client=self.duckdb_client,
+                parquet_path=self.parquet_path,
+                duckdb_lock=self._duckdb_lock,
+                chunk_bbox_4326=win.chunk_bbox_4326,
+                sortby=self.sortby,
+                filter_expr=self.filter,
+                ids=self.ids,
+                filter_fields=filter_fields,
+                selected_bands=selected_bands,
+                chunk_affine=win.chunk_affine,
+                dst_crs=self.dst_crs,
+                chunk_width=win.chunk_width,
+                chunk_height=win.chunk_height,
+                nodata=self.nodata,
+                mosaic_method_cls=self.mosaic_method_cls,
+                store=self.store,
+                max_concurrent_reads=self.max_concurrent_reads,
+                warp_cache=warp_cache,
+                path_fn=self.path_from_href,
             )
-        ):
+        )
+
+        out_shape = (
+            len(band_indices),
+            len(time_indices),
+            win.chunk_height,
+            win.chunk_width,
+        )
+        result: np.ndarray | None = None
+
+        for i, chunk_data in enumerate(all_chunk_data):
             if chunk_data is None:
                 continue
+            if result is None:
+                result = np.full(out_shape, fill, dtype=self.dtype)
             for bi, band in enumerate(selected_bands):
                 arr = chunk_data[band]
-                result[bi, i] = arr[0] if arr.ndim == 3 else arr
+                slice_ = arr[0] if arr.ndim == 3 else arr
+                result[bi, i] = slice_.astype(self.dtype, copy=False)
+
+        if result is None:
+            result = np.full(out_shape, fill, dtype=self.dtype)
 
         # Physical data is top-down; flip to ascending y order for xarray.
         result = result[:, :, ::-1, :]

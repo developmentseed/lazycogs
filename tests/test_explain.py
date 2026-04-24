@@ -604,3 +604,26 @@ def test_accessor_explain_time_slice(wgs84):
 
     assert len(plan.time_coords) == 2
     assert plan.total_chunk_reads == 2  # 1 band * 2 time steps * 1 spatial tile
+
+
+def test_accessor_explain_query_count_not_multiplied_by_bands(wgs84):
+    """DuckDB is queried once per (time, tile) — not once per (band, time, tile)."""
+    dates = ["2023-01-01/2023-01-01", "2023-01-02/2023-01-02"]
+    time_coords = [np.datetime64("2023-01-01", "D"), np.datetime64("2023-01-02", "D")]
+    da = _make_da_with_backends(
+        wgs84,
+        dates=dates,
+        time_coords=time_coords,
+        bands=["red", "green", "blue"],
+        width=4,
+        height=4,
+    )
+
+    with patch("rustac.DuckdbClient.search") as mock_search:
+        mock_search.return_value = _fake_items("red", 1)
+        plan = da.lazycogs.explain()
+
+    # 3 bands * 2 time steps * 1 spatial tile = 6 chunk reads
+    assert plan.total_chunk_reads == 6
+    # but only 2 DuckDB queries (T=2 x S=1), not 6 (B*T*S)
+    assert mock_search.call_count == 2
