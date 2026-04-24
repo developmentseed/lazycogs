@@ -411,32 +411,29 @@ class MultiBandStacBackendArray(BackendArray):
         async def _mosaic_all_dates() -> list[dict[str, np.ndarray] | None]:
             """Run all time steps concurrently inside a single event loop.
 
-            DuckDB queries are dispatched to the loop's thread executor so they
-            don't block the event loop; the threading.Lock on duckdb_client
-            serialises actual DB access for both within-loop and cross-Dask-task
-            safety.  All mosaic coroutines then run concurrently via gather,
-            sharing the same bounded reprojection executor.
+            DuckDB queries are issued sequentially up front (the threading.Lock
+            on duckdb_client already serialises access, so concurrent dispatch via
+            run_in_executor gives no parallelism benefit). Mosaic coroutines for
+            all time steps are then gathered concurrently, so COG reads and
+            reprojections overlap across time steps.
             """
-            loop = asyncio.get_running_loop()
 
             async def _one_date(t_idx: int) -> dict[str, np.ndarray] | None:
                 date = self.dates[t_idx]
 
-                def _query() -> list:
-                    with self._duckdb_lock:
-                        return _search_items(
-                            self.duckdb_client,
-                            self.parquet_path,
-                            win.chunk_bbox_4326,
-                            date,
-                            self.sortby,
-                            self.filter,
-                            self.ids,
-                            filter_fields,
-                            label=f"bands={selected_bands!r}",
-                        )
+                with self._duckdb_lock:
+                    items = _search_items(
+                        self.duckdb_client,
+                        self.parquet_path,
+                        win.chunk_bbox_4326,
+                        date,
+                        self.sortby,
+                        self.filter,
+                        self.ids,
+                        filter_fields,
+                        label=f"bands={selected_bands!r}",
+                    )
 
-                items = await loop.run_in_executor(None, _query)
                 if not items:
                     return None
                 t0 = time.perf_counter()
