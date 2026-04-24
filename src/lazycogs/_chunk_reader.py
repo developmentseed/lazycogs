@@ -6,6 +6,7 @@ import asyncio
 import logging
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -27,6 +28,25 @@ if TYPE_CHECKING:
     from obstore.store import ObjectStore
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class _ChunkContext:
+    """Immutable per-chunk parameters shared across all item reads.
+
+    Built once per chunk in async_mosaic_chunk and passed through to all
+    internal helpers. Frozen to prevent accidental mutation across concurrent
+    coroutines.
+    """
+
+    chunk_affine: Affine
+    dst_crs: CRS
+    chunk_width: int
+    chunk_height: int
+    nodata: float | None
+    store: "ObjectStore | None"
+    path_fn: "Callable[[str], str] | None"
+    warp_cache: dict | None
 
 
 def _log_batch_failure(
@@ -191,12 +211,7 @@ def _native_window(
 async def _open_and_window(
     item: dict,
     band: str,
-    chunk_affine: Affine,
-    dst_crs: CRS,
-    chunk_width: int,
-    chunk_height: int,
-    store: ObjectStore | None = None,
-    path_fn: Callable[[str], str] | None = None,
+    ctx: _ChunkContext,
 ) -> tuple[GeoTIFF, GeoTIFF | Overview, Window | None, str] | None:
     """Open a COG asset and compute the pixel window covering the chunk.
 
@@ -211,14 +226,14 @@ async def _open_and_window(
         return None
 
     href = asset["href"]
-    store, path = _resolve_store(href, store, path_fn)
+    store, path = _resolve_store(href, ctx.store, ctx.path_fn)
 
     t0 = time.perf_counter()
     geotiff = await GeoTIFF.open(path, store=store)
     logger.debug("GeoTIFF.open %s took %.3fs", path, time.perf_counter() - t0)
 
     target_res_native, t = _target_res_and_transformer(
-        chunk_affine, chunk_width, chunk_height, dst_crs, geotiff.crs
+        ctx.chunk_affine, ctx.chunk_width, ctx.chunk_height, ctx.dst_crs, geotiff.crs
     )
     overview = _select_overview(geotiff, target_res_native)
     if overview is not None:
@@ -230,7 +245,9 @@ async def _open_and_window(
             path,
         )
     reader: GeoTIFF | Overview = overview if overview is not None else geotiff
-    bbox_native = _chunk_bbox_native(chunk_affine, chunk_width, chunk_height, t)
+    bbox_native = _chunk_bbox_native(
+        ctx.chunk_affine, ctx.chunk_width, ctx.chunk_height, t
+    )
     window = _native_window(reader, bbox_native, reader.width, reader.height)
     return geotiff, reader, window, path
 
@@ -309,14 +326,7 @@ def _apply_bands_with_warp_cache(
 async def _read_item_band(
     item: dict,
     bands: list[str],
-    chunk_affine: Affine,
-    dst_crs: CRS,
-    chunk_width: int,
-    chunk_height: int,
-    nodata: float | None,
-    store: ObjectStore | None = None,
-    warp_cache: dict | None = None,
-    path_fn: Callable[[str], str] | None = None,
+    ctx: _ChunkContext,
 ) -> dict[str, tuple[np.ndarray, float | None]] | None:
     """Read and reproject multiple bands from one STAC item, sharing warp maps.
 
@@ -329,17 +339,7 @@ async def _read_item_band(
     Args:
         item: STAC item dict containing an ``assets`` key.
         bands: Asset keys to read from this item.
-        chunk_affine: Affine transform of the destination chunk.
-        dst_crs: CRS of the destination chunk.
-        chunk_width: Width of the destination chunk in pixels.
-        chunk_height: Height of the destination chunk in pixels.
-        nodata: No-data fill value.  When ``None``, the value stored in the
-            COG header (``GeoTIFF.nodata``) is used if present.
-        store: Optional pre-configured obstore ``ObjectStore`` instance.
-        warp_cache: Optional cache shared across calls for reusing warp maps
-            computed in earlier time steps.
-        path_fn: Optional callable that takes an asset HREF and returns the
-            object path to use with *store*.
+        ctx: Per-chunk invariants (affine, CRS, dimensions, nodata, store, etc.).
 
     Returns:
         ``dict`` mapping band name to ``(array, effective_nodata)`` where
@@ -359,7 +359,7 @@ async def _read_item_band(
 
     # Open all COGs concurrently for metadata.
     async def _open_band(band: str, href: str) -> tuple[str, GeoTIFF, ObjectStore]:
-        band_store, path = _resolve_store(href, store, path_fn)
+        band_store, path = _resolve_store(href, ctx.store, ctx.path_fn)
         geotiff = await GeoTIFF.open(path, store=band_store)
         return band, geotiff, band_store
 
@@ -374,14 +374,16 @@ async def _read_item_band(
         tuple[str, GeoTIFF, GeoTIFF | Overview, Window, float | None, CRS]
     ] = []
     for band, geotiff, _ in open_results:
-        effective_nodata = nodata if nodata is not None else geotiff.nodata
+        effective_nodata = ctx.nodata if ctx.nodata is not None else geotiff.nodata
         src_crs = geotiff.crs
         target_res_native, t = _target_res_and_transformer(
-            chunk_affine, chunk_width, chunk_height, dst_crs, src_crs
+            ctx.chunk_affine, ctx.chunk_width, ctx.chunk_height, ctx.dst_crs, src_crs
         )
         overview = _select_overview(geotiff, target_res_native)
         reader = overview if overview is not None else geotiff
-        bbox_native = _chunk_bbox_native(chunk_affine, chunk_width, chunk_height, t)
+        bbox_native = _chunk_bbox_native(
+            ctx.chunk_affine, ctx.chunk_width, ctx.chunk_height, t
+        )
         window = _native_window(reader, bbox_native, reader.width, reader.height)
         if window is None:
             continue
@@ -417,11 +419,11 @@ async def _read_item_band(
         None,
         lambda: _apply_bands_with_warp_cache(
             band_rasters,
-            chunk_affine,
-            dst_crs,
-            chunk_width,
-            chunk_height,
-            warp_cache,
+            ctx.chunk_affine,
+            ctx.dst_crs,
+            ctx.chunk_width,
+            ctx.chunk_height,
+            ctx.warp_cache,
         ),
     )
     return results
@@ -534,22 +536,22 @@ async def async_mosaic_chunk(
     if mosaic_method_cls is None:
         mosaic_method_cls = FirstMethod
 
+    ctx = _ChunkContext(
+        chunk_affine=chunk_affine,
+        dst_crs=dst_crs,
+        chunk_width=chunk_width,
+        chunk_height=chunk_height,
+        nodata=nodata,
+        store=store,
+        path_fn=path_fn,
+        warp_cache=warp_cache,
+    )
+
     semaphore = asyncio.Semaphore(max_concurrent_reads)
 
     async def _guarded(item: dict) -> dict[str, tuple[np.ndarray, float | None]] | None:
         async with semaphore:
-            return await _read_item_band(
-                item,
-                bands,
-                chunk_affine,
-                dst_crs,
-                chunk_width,
-                chunk_height,
-                nodata,
-                store=store,
-                warp_cache=warp_cache,
-                path_fn=path_fn,
-            )
+            return await _read_item_band(item, bands, ctx)
 
     batch_size = min(max_concurrent_reads, len(items))
     estimated_peak_mb = (
