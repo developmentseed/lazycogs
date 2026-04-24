@@ -58,3 +58,4 @@ da = lazycogs.open(
 - [Demo notebook](https://hrodmn.github.io/lazycogs/demo/)
 - [Architecture](https://hrodmn.github.io/lazycogs/architecture/)
 - [API Reference](https://hrodmn.github.io/lazycogs/api/)
+- [Contributing](CONTRIBUTING.md)
