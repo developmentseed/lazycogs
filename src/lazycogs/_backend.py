@@ -98,6 +98,11 @@ def _get_or_create_background_loop() -> asyncio.AbstractEventLoop:
     The loop is stored on ``threading.local`` so each thread (each dask worker,
     each Jupyter kernel callback thread) has its own independent loop and
     executor — tasks on different threads do not share a pool.
+
+    Using a persistent loop (rather than a fresh one per call) ensures that
+    any in-flight callbacks from ``async_geotiff``/``obstore`` background
+    threads can always be delivered, avoiding ``RuntimeError: Event loop is
+    closed`` errors from callbacks that fire after a fresh loop is torn down.
     """
     loop: asyncio.AbstractEventLoop | None = getattr(_tls, "loop", None)
     if loop is not None and loop.is_running():
@@ -116,43 +121,13 @@ def _get_or_create_background_loop() -> asyncio.AbstractEventLoop:
     return loop
 
 
-def _run_in_fresh_loop(coro: Any) -> Any:
-    """Run a coroutine in a new event loop with a bounded reprojection executor.
-
-    Creates a fresh loop, installs the bounded ``ThreadPoolExecutor`` before
-    any coroutines run, executes the coroutine, then closes both the loop and
-    the executor.  Each call is fully isolated — no state leaks between chunk
-    reads.
-
-    Args:
-        coro: The coroutine to execute.
-
-    Returns:
-        The return value of the coroutine.
-
-    """
-    loop = asyncio.new_event_loop()
-    executor = concurrent.futures.ThreadPoolExecutor(
-        max_workers=get_max_workers(),
-        thread_name_prefix="lazycogs-reproject",
-    )
-    loop.set_default_executor(executor)
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
-        executor.shutdown(wait=True)
-
-
 def _run_coroutine(coro: Any) -> Any:
     """Run an async coroutine from sync code.
 
-    Normal path: creates a fresh event loop with a bounded executor, runs the
-    coroutine, then tears both down.  Each call is fully isolated.
-
-    Jupyter path: a running event loop is detected; the coroutine is submitted
-    to a persistent per-thread background loop that has its own bounded
-    executor installed at creation time.
+    Submits the coroutine to a persistent per-thread background event loop,
+    blocking until it completes.  The background loop is created on the first
+    call from a given thread (dask worker, Jupyter kernel thread, etc.) and
+    reused for all subsequent calls on that same thread.
 
     Args:
         coro: The coroutine to execute.
@@ -161,12 +136,6 @@ def _run_coroutine(coro: Any) -> Any:
         The return value of the coroutine.
 
     """
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        # No running loop — normal script / dask-worker path.
-        return _run_in_fresh_loop(coro)
-    # Running loop detected (Jupyter kernel or similar).
     loop = _get_or_create_background_loop()
     return asyncio.run_coroutine_threadsafe(coro, loop).result()
 
