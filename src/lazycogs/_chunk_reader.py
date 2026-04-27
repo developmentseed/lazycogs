@@ -46,7 +46,7 @@ class _ChunkContext:
     nodata: float | None
     store: "ObjectStore | None"
     path_fn: "Callable[[str], str] | None"
-    warp_cache: dict | None
+    warp_cache: dict[tuple[tuple[float, ...], CRS], WarpMap] | None
 
 
 def _log_batch_failure(
@@ -258,7 +258,7 @@ def _apply_bands_with_warp_cache(
     dst_crs: CRS,
     dst_width: int,
     dst_height: int,
-    warp_cache: dict[tuple[tuple[float, ...], str], WarpMap] | None = None,
+    warp_cache: dict[tuple[tuple[float, ...], CRS], WarpMap] | None = None,
 ) -> dict[str, tuple[np.ndarray, float | None]]:
     """Apply warp maps to multiple band rasters, reusing maps for identical geometries.
 
@@ -289,7 +289,7 @@ def _apply_bands_with_warp_cache(
         ``dict`` mapping band name to ``(reprojected_array, effective_nodata)``.
 
     """
-    cache: dict[tuple[tuple[float, ...], str], WarpMap] = (
+    cache: dict[tuple[tuple[float, ...], CRS], WarpMap] = (
         warp_cache if warp_cache is not None else {}
     )
     results: dict[str, tuple[np.ndarray, float | None]] = {}

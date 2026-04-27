@@ -20,12 +20,6 @@ logger = logging.getLogger(__name__)
 
 _local = threading.local()
 
-# Native cloud schemes where public-bucket access is the common default.
-# HTTPS URLs are excluded: `from_url` routes known hosts (amazonaws.com, etc.)
-# to the right store, and unsigned requests on a private bucket should fail
-# loudly rather than be forced through here.
-_PUBLIC_DEFAULT_SCHEMES = frozenset({"s3", "s3a", "gs"})
-
 
 def _cache() -> dict[str, ObjectStore]:
     """Return the thread-local store cache, creating it on first access."""
@@ -48,11 +42,11 @@ def resolve(
 
     When ``store`` is ``None``, a store is auto-constructed via
     :func:`obstore.store.from_url` using only the ``scheme://netloc`` portion
-    of the HREF and cached per thread. Native cloud schemes (``s3``, ``s3a``,
-    ``gs``) default to ``skip_signature=True`` so public buckets work without
-    credentials. For authenticated access, signed URLs, custom endpoints, or
+    of the HREF and cached per thread. No credential defaults are applied; the
+    store is constructed with obstore's own environment-based credential
+    discovery. For public buckets, signed URLs, custom endpoints, or
     request-payer buckets, construct the store yourself and pass it via
-    ``store`` — see the README for examples.
+    ``store`` — see the cloud storage guide for examples.
 
     Args:
         href: A storage URL supported by :func:`obstore.store.from_url`
@@ -86,8 +80,7 @@ def resolve(
     root_url = f"{scheme}://{parsed.netloc}" if scheme != "file" else "file:///"
     cache = _cache()
     if root_url not in cache:
-        kwargs = {"skip_signature": True} if scheme in _PUBLIC_DEFAULT_SCHEMES else {}
-        cache[root_url] = from_url(root_url, **kwargs)
+        cache[root_url] = from_url(root_url)
     return cache[root_url], path
 
 
@@ -101,14 +94,14 @@ def store_for(
     """Construct an ``ObjectStore`` by inspecting a geoparquet STAC items file.
 
     Reads one sample item from *href*, derives the store root URL from a data
-    asset HREF, and applies obstore defaults (including ``skip_signature=True``
-    for public cloud schemes ``s3``, ``s3a``, and ``gs``).  If the item
-    carries STAC Storage Extension metadata (v1.0.0 or v2.0.0), ``region``
-    and ``requester_pays`` are also inferred automatically.
+    asset HREF, and constructs an ``ObjectStore`` with obstore's own
+    environment-based credential discovery.  If the item carries STAC Storage
+    Extension metadata (v1.0.0 or v2.0.0), ``region`` and ``requester_pays``
+    are also inferred automatically.
 
-    Caller-supplied *kwargs* override all inferred values, so pass
-    ``skip_signature=False`` to opt out of the anonymous default, or supply
-    credentials directly.
+    Caller-supplied *kwargs* override all inferred values; pass
+    ``skip_signature=True`` for public buckets that do not require signed
+    requests, or supply explicit credentials.
 
     Args:
         href: Path to a geoparquet file or hive-partitioned parquet directory.
@@ -155,7 +148,6 @@ def store_for(
     scheme = parsed.scheme.lower()
     root_url = f"{scheme}://{parsed.netloc}" if scheme != "file" else "file:///"
 
-    defaults = {"skip_signature": True} if scheme in _PUBLIC_DEFAULT_SCHEMES else {}
     try:
         inferred = _extract_store_kwargs(item, asset_obj)
     except Exception:
@@ -165,11 +157,11 @@ def store_for(
         )
         inferred = {}
 
-    # Build the store once with just defaults so we can see which keys obstore
+    # Build the store once without extra kwargs so we can see which keys obstore
     # already derived from the URL (e.g. region from an HTTPS S3 hostname).
     # Only forward inferred keys that aren't already present, so we never hand
     # obstore a duplicate key (which raises an error).
-    base_config = from_url(root_url, **defaults).config
+    base_config = from_url(root_url).config
     filtered_inferred = {k: v for k, v in inferred.items() if k not in base_config}
 
-    return from_url(root_url, **{**defaults, **filtered_inferred, **kwargs})
+    return from_url(root_url, **{**filtered_inferred, **kwargs})

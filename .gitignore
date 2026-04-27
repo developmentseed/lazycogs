@@ -19,3 +19,6 @@ site/
 .benchmark_data/
 .benchmarks/
 
+# docs data directory (fetched at build time, not committed)
+docs/notebooks/data/
+

@@ -19,15 +19,26 @@ extra_css:
 
 nav:
   - Home: index.md
+  - Quickstart: notebooks/quickstart.ipynb
+  - Guides:
+      - STAC item queries: guides/stac-search.md
+      - Mosaic methods: guides/mosaic-methods.md
+      - Temporal grouping: guides/temporal-grouping.md
+      - Inspecting read plans: notebooks/explain.ipynb
+      - Cloud storage: guides/cloud-storage.md
+      - Chunking and concurrency: guides/chunking.md
   - Examples:
-    - demo.ipynb
-    - hls.ipynb
-  - Architecture: architecture.md
-  - lazycogs vs odc-stac: lazycogs-odc-stac.ipynb
-  - Contributing: CONTRIBUTING.md
+      - Midwest US daily array: notebooks/demo_midwest_daily.ipynb
+      - Southwest US monthly composite: notebooks/demo_southwest_monthly.ipynb
+      - NASA HLS: notebooks/hls.ipynb
+      - lazycogs vs odc-stac: notebooks/lazycogs-odc-stac.ipynb
+  - Performance: performance.md
   - API Reference:
-    - Open: api/open.md
-    - Mosaic Methods: api/mosaic.md
+      - open / open_async: api/open.md
+      - Mosaic methods: api/mosaic.md
+      - Utilities: api/utils.md
+  - Architecture: architecture.md
+  - Contributing: CONTRIBUTING.md
 
 plugins:
   - search
@@ -46,6 +57,7 @@ plugins:
             signature_crossrefs: true
   - mkdocs-jupyter:
       execute: false
+      cache: true
 
 markdown_extensions:
   - pymdownx.highlight:

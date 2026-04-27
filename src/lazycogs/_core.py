@@ -126,6 +126,75 @@ def _discover_bands(
     return data_bands if data_bands else other_bands or list(assets)
 
 
+def _smoketest_store(
+    parquet_path: str,
+    *,
+    duckdb_client: DuckdbClient,
+    bbox: list[float] | None = None,
+    datetime: str | None = None,
+    filter: str | dict[str, Any] | None = None,
+    ids: list[str] | None = None,
+    bands: list[str] | None = None,
+    store: "ObjectStore | None" = None,
+    path_from_href: "Callable[[str], str] | None" = None,
+) -> None:
+    """Verify the object store can access a sample asset from the parquet.
+
+    Fetches one item, resolves the object store for a representative data asset
+    HREF, and calls ``head()`` to confirm access.  Raises ``RuntimeError`` if
+    the store cannot reach the asset so misconfiguration is caught at
+    :func:`open` time rather than deferred to the first chunk read.
+    """
+    from lazycogs._store import resolve
+
+    items = duckdb_client.search(
+        parquet_path,
+        max_items=1,
+        bbox=bbox,
+        datetime=datetime,
+        filter=filter,
+        ids=ids,
+        include=["assets"],
+    )
+    if not items:
+        return
+
+    assets: dict[str, Any] = items[0].get("assets", {})
+    if not assets:
+        return
+
+    href: str | None = None
+    if bands:
+        for key in bands:
+            h = assets.get(key, {}).get("href", "")
+            if h:
+                href = h
+                break
+    if not href:
+        data_keys = [
+            k
+            for k, v in assets.items()
+            if "data" in v.get("roles", []) or "image/tiff" in v.get("type", "")
+        ]
+        key = data_keys[0] if data_keys else next(iter(assets))
+        href = assets[key].get("href", "")
+
+    if not href:
+        return
+
+    resolved_store, path = resolve(href, store=store, path_fn=path_from_href)
+    try:
+        resolved_store.head(path)
+    except Exception as e:
+        raise RuntimeError(
+            f"Object store cannot access {href!r}: {e}. "
+            "Pass a configured store= argument to lazycogs.open() to authenticate. "
+            "See the cloud storage guide for examples."
+        ) from e
+
+    logger.debug("Storage smoketest passed for %r", href)
+
+
 def _arrow_col(table, name: str) -> list:
     """Return a column from an Arrow table as a Python list, or all-None if absent."""
     if name in table.schema.names:
@@ -370,6 +439,18 @@ def _open_impl(params: _OpenParams) -> xr.DataArray:
             time.perf_counter() - t0,
             len(resolved_bands),
         )
+
+    _smoketest_store(
+        params.href,
+        duckdb_client=duckdb_client,
+        bbox=bbox_4326,
+        datetime=params.datetime,
+        filter=params.filter,
+        ids=params.ids,
+        bands=params.bands,
+        store=params.store,
+        path_from_href=params.path_from_href,
+    )
 
     t0 = time.perf_counter()
     filter_strings, time_coords = _build_time_steps(

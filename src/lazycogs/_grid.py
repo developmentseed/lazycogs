@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import math
+from collections.abc import Sequence
+
 import numpy as np
 from affine import Affine
 from pyproj import CRS
@@ -43,3 +46,42 @@ def compute_output_grid(
     y_coords = miny + resolution / 2 + np.arange(height) * resolution
 
     return transform, width, height, x_coords, y_coords
+
+
+def align_bbox(
+    affine: Affine | Sequence[float],
+    bbox: tuple[float, float, float, float],
+) -> tuple[float, float, float, float]:
+    """Snap a bounding box to the pixel grid defined by an affine transform.
+
+    Expands the bbox outward so that all four edges fall exactly on a grid
+    line. Useful for aligning an AOI to the native grid of a COG collection
+    (e.g. from a STAC item's ``proj:transform`` property) before calling
+    :func:`lazycogs.open`.
+
+    Args:
+        affine: Affine transform in row-major order, either 6-element
+            ``(pixel_w, 0, x_origin, 0, pixel_h, y_origin)`` or 9-element
+            ``(pixel_w, 0, x_origin, 0, pixel_h, y_origin, 0, 0, 1)``.
+            Accepts an :class:`affine.Affine` object or the list stored in
+            a STAC item's ``proj:transform`` property.
+        bbox: ``(minx, miny, maxx, maxy)`` in the same CRS as the transform.
+
+    Returns:
+        ``(minx, miny, maxx, maxy)`` snapped to the nearest enclosing grid
+        lines.
+
+    """
+    if not isinstance(affine, Affine):
+        affine = Affine(*affine)
+    pixel_w, _, x0, _, pixel_h, y0, _, _, _ = affine
+    xmin, ymin, xmax, ymax = bbox
+
+    snapped_xmin = x0 + math.floor((xmin - x0) / pixel_w) * pixel_w
+    snapped_xmax = x0 + math.ceil((xmax - x0) / pixel_w) * pixel_w
+
+    abs_h = abs(pixel_h)
+    snapped_ymin = y0 + math.floor((ymin - y0) / abs_h) * abs_h
+    snapped_ymax = y0 + math.ceil((ymax - y0) / abs_h) * abs_h
+
+    return (snapped_xmin, snapped_ymin, snapped_xmax, snapped_ymax)
