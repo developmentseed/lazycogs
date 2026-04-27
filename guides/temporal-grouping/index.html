@@ -10,26 +10,28 @@
       
       
       
-        <link rel="canonical" href="https://hrodmn.github.io/lazycogs/CONTRIBUTING/">
+        <link rel="canonical" href="https://hrodmn.github.io/lazycogs/guides/temporal-grouping/">
       
       
-        <link rel="prev" href="../architecture/">
+        <link rel="prev" href="../mosaic-methods/">
       
+      
+        <link rel="next" href="../../notebooks/explain/">
       
       
         
       
       
-      <link rel="icon" href="../favicon.svg">
+      <link rel="icon" href="../../favicon.svg">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
       
-        <title>Contributing - lazycogs</title>
+        <title>Temporal grouping - lazycogs</title>
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
       
       
 
@@ -48,11 +50,11 @@
       
     
     
-      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="../stylesheets/extra.css">
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
     
-    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -70,7 +72,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#contributing-to-lazycogs" class="md-skip">
+        <a href="#temporal-grouping" class="md-skip">
           Skip to content
         </a>
       
@@ -86,9 +88,9 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href=".." title="lazycogs" class="md-header__button md-logo" aria-label="lazycogs" data-md-component="logo">
+    <a href="../.." title="lazycogs" class="md-header__button md-logo" aria-label="lazycogs" data-md-component="logo">
       
-  <img src="../lazycogs-white.svg" alt="logo">
+  <img src="../../lazycogs-white.svg" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -105,7 +107,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Contributing
+              Temporal grouping
             
           </span>
         </div>
@@ -197,9 +199,9 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href=".." title="lazycogs" class="md-nav__button md-logo" aria-label="lazycogs" data-md-component="logo">
+    <a href="../.." title="lazycogs" class="md-nav__button md-logo" aria-label="lazycogs" data-md-component="logo">
       
-  <img src="../lazycogs-white.svg" alt="logo">
+  <img src="../../lazycogs-white.svg" alt="logo">
 
     </a>
     lazycogs
@@ -226,7 +228,7 @@
   
   
     <li class="md-nav__item">
-      <a href=".." class="md-nav__link">
+      <a href="../.." class="md-nav__link">
         
   
   
@@ -253,7 +255,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../notebooks/quickstart/" class="md-nav__link">
+      <a href="../../notebooks/quickstart/" class="md-nav__link">
         
   
   
@@ -277,18 +279,20 @@
       
   
   
+    
   
   
+  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
         
           
           <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
@@ -309,7 +313,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -327,7 +331,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../guides/stac-search/" class="md-nav__link">
+      <a href="../stac-search/" class="md-nav__link">
         
   
   
@@ -355,7 +359,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../guides/mosaic-methods/" class="md-nav__link">
+      <a href="../mosaic-methods/" class="md-nav__link">
         
   
   
@@ -380,10 +384,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../guides/temporal-grouping/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Temporal grouping
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -399,6 +430,70 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#supported-values" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported values
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-this-is-more-efficient-than-post-hoc-resampling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why this is more efficient than post-hoc resampling
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common patterns
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#combining-with-mosaic-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Combining with mosaic methods
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -411,7 +506,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../notebooks/explain/" class="md-nav__link">
+      <a href="../../notebooks/explain/" class="md-nav__link">
         
   
   
@@ -439,7 +534,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../guides/cloud-storage/" class="md-nav__link">
+      <a href="../cloud-storage/" class="md-nav__link">
         
   
   
@@ -467,7 +562,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../guides/chunking/" class="md-nav__link">
+      <a href="../chunking/" class="md-nav__link">
         
   
   
@@ -549,7 +644,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../notebooks/demo_midwest_daily/" class="md-nav__link">
+      <a href="../../notebooks/demo_midwest_daily/" class="md-nav__link">
         
   
   
@@ -577,7 +672,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../notebooks/demo_southwest_monthly/" class="md-nav__link">
+      <a href="../../notebooks/demo_southwest_monthly/" class="md-nav__link">
         
   
   
@@ -605,7 +700,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../notebooks/hls/" class="md-nav__link">
+      <a href="../../notebooks/hls/" class="md-nav__link">
         
   
   
@@ -633,7 +728,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../notebooks/lazycogs-odc-stac/" class="md-nav__link">
+      <a href="../../notebooks/lazycogs-odc-stac/" class="md-nav__link">
         
   
   
@@ -668,7 +763,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../performance/" class="md-nav__link">
+      <a href="../../performance/" class="md-nav__link">
         
   
   
@@ -742,7 +837,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../api/open/" class="md-nav__link">
+      <a href="../../api/open/" class="md-nav__link">
         
   
   
@@ -770,7 +865,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../api/mosaic/" class="md-nav__link">
+      <a href="../../api/mosaic/" class="md-nav__link">
         
   
   
@@ -798,7 +893,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../api/utils/" class="md-nav__link">
+      <a href="../../api/utils/" class="md-nav__link">
         
   
   
@@ -833,7 +928,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../architecture/" class="md-nav__link">
+      <a href="../../architecture/" class="md-nav__link">
         
   
   
@@ -857,37 +952,10 @@
       
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Contributing
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../CONTRIBUTING/" class="md-nav__link">
         
   
   
@@ -903,76 +971,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#development-setup" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Development setup
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#running-tests" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Running tests
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Running tests">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#benchmarks" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Benchmarks
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#building-docs" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Building docs
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1004,10 +1002,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#development-setup" class="md-nav__link">
+  <a href="#supported-values" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Development setup
+        Supported values
       
     </span>
   </a>
@@ -1015,38 +1013,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#running-tests" class="md-nav__link">
+  <a href="#why-this-is-more-efficient-than-post-hoc-resampling" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Running tests
+        Why this is more efficient than post-hoc resampling
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="Running tests">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#benchmarks" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Benchmarks
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#building-docs" class="md-nav__link">
+  <a href="#common-patterns" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Building docs
+        Common patterns
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#combining-with-mosaic-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Combining with mosaic methods
       
     </span>
   </a>
@@ -1073,33 +1065,107 @@
   
 
 
-<h1 id="contributing-to-lazycogs">Contributing to lazycogs<a class="headerlink" href="#contributing-to-lazycogs" title="Permanent link">&para;</a></h1>
-<h2 id="development-setup">Development setup<a class="headerlink" href="#development-setup" title="Permanent link">&para;</a></h2>
-<p>lazycogs uses <a href="https://docs.astral.sh/uv/">uv</a> for dependency management. Install it first if you haven't already.</p>
-<p>Clone the repo and install the dev dependencies:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/hrodmn/lazycogs.git
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>lazycogs
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>uv<span class="w"> </span>sync
+<h1 id="temporal-grouping">Temporal grouping<a class="headerlink" href="#temporal-grouping" title="Permanent link">&para;</a></h1>
+<p>By default, each time step in a lazycogs DataArray represents one calendar day. When multiple scenes were acquired on the same day, the <a href="../mosaic-methods/">mosaic method</a> merges them into a single value per pixel.</p>
+<p>The <code>time_period</code> parameter lets you aggregate across longer windows. Setting <code>time_period="P1W"</code> means each time step represents one ISO calendar week; all scenes within that week are mosaicked together into a single composite. This is more efficient than building a daily array and then reducing along the time axis, because lazycogs only reads the pixels it actually needs for each composite — it never materializes the individual daily values before reducing them.</p>
+<h2 id="supported-values">Supported values<a class="headerlink" href="#supported-values" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th><code>time_period</code></th>
+<th>Window</th>
+<th>Time coordinate</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"P1D"</code> (default)</td>
+<td>Calendar day</td>
+<td><code>YYYY-MM-DD</code></td>
+</tr>
+<tr>
+<td><code>"P1W"</code></td>
+<td>ISO calendar week (Monday through Sunday)</td>
+<td>Monday of the week</td>
+</tr>
+<tr>
+<td><code>"P1M"</code></td>
+<td>Calendar month</td>
+<td>First day of the month</td>
+</tr>
+<tr>
+<td><code>"P1Y"</code></td>
+<td>Calendar year</td>
+<td>January 1st</td>
+</tr>
+<tr>
+<td><code>"P16D"</code></td>
+<td>16-day fixed window</td>
+<td>Aligned to 2000-01-01 epoch</td>
+</tr>
+<tr>
+<td><code>"PnD"</code> (any n)</td>
+<td>n-day fixed window</td>
+<td>Aligned to 2000-01-01 epoch</td>
+</tr>
+</tbody>
+</table>
+<p>The <code>P16D</code> period is useful for Landsat (16-day orbital repeat) and MODIS-style composites. Any integer multiple of days is supported via <code>PnD</code>.</p>
+<h2 id="why-this-is-more-efficient-than-post-hoc-resampling">Why this is more efficient than post-hoc resampling<a class="headerlink" href="#why-this-is-more-efficient-than-post-hoc-resampling" title="Permanent link">&para;</a></h2>
+<p>Suppose you want monthly composites over a year. You could:</p>
+<ol>
+<li>Open a daily DataArray (<code>time_period="P1D"</code>, 365 steps) and call <code>.resample(time="MS").max()</code></li>
+<li>Open directly as monthly (<code>time_period="P1M"</code>, 12 steps)</li>
+</ol>
+<p>Option 1 materializes every daily value before the reduction — even for days with no data. Option 2 queries only the items that fall within each month when a pixel is read. For large archives with sparse coverage, option 2 can be orders of magnitude faster.</p>
+<h2 id="common-patterns">Common patterns<a class="headerlink" href="#common-patterns" title="Permanent link">&para;</a></h2>
+<p><strong>Weekly low-cloud composite:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">da</span> <span class="o">=</span> <span class="n">lazycogs</span><span class="o">.</span><span class="n">open</span><span class="p">(</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="s2">&quot;items.parquet&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">bbox</span><span class="o">=</span><span class="n">dst_bbox</span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">crs</span><span class="o">=</span><span class="n">dst_crs</span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">resolution</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">time_period</span><span class="o">=</span><span class="s2">&quot;P1W&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">sortby</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;eo:cloud_cover&quot;</span><span class="p">],</span>       <span class="c1"># sort by cloud cover ascending (scene-level)</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="p">)</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="c1"># Each time step is a composite that preferentially draws from the least cloudy</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="c1"># scenes acquired during that ISO week. Scene-level cloud cover sorting reduces</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="c1"># overall cloud contamination but does not remove individual cloudy pixels unless</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="c1"># they are masked to nodata in the source data.</span>
 </code></pre></div>
-<p>Install the pre-commit hooks so that ruff runs automatically before each commit:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>uv<span class="w"> </span>run<span class="w"> </span>pre-commit<span class="w"> </span>install
+<p><strong>Monthly composite:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">da</span> <span class="o">=</span> <span class="n">lazycogs</span><span class="o">.</span><span class="n">open</span><span class="p">(</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="s2">&quot;items.parquet&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="n">bbox</span><span class="o">=</span><span class="n">dst_bbox</span><span class="p">,</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="n">crs</span><span class="o">=</span><span class="n">dst_crs</span><span class="p">,</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">resolution</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">time_period</span><span class="o">=</span><span class="s2">&quot;P1M&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="p">)</span>
 </code></pre></div>
-<h2 id="running-tests">Running tests<a class="headerlink" href="#running-tests" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>uv<span class="w"> </span>run<span class="w"> </span>pytest
+<p><strong>16-day Landsat-style composite:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">da</span> <span class="o">=</span> <span class="n">lazycogs</span><span class="o">.</span><span class="n">open</span><span class="p">(</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="s2">&quot;items.parquet&quot;</span><span class="p">,</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">bbox</span><span class="o">=</span><span class="n">dst_bbox</span><span class="p">,</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">crs</span><span class="o">=</span><span class="n">dst_crs</span><span class="p">,</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">resolution</span><span class="o">=</span><span class="mf">30.0</span><span class="p">,</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">time_period</span><span class="o">=</span><span class="s2">&quot;P16D&quot;</span><span class="p">,</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="p">)</span>
 </code></pre></div>
-<p>The test suite uses synthetic COG fixtures generated at runtime — no external data required.</p>
-<h3 id="benchmarks">Benchmarks<a class="headerlink" href="#benchmarks" title="Permanent link">&para;</a></h3>
-<p>Benchmarks live in <code>tests/benchmarks/</code> and are excluded from the default test run. They require a local Sentinel-2 dataset that you download once before running:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>scripts/prepare_benchmark_data.py
+<h2 id="combining-with-mosaic-methods">Combining with mosaic methods<a class="headerlink" href="#combining-with-mosaic-methods" title="Permanent link">&para;</a></h2>
+<p><code>time_period</code> and <code>mosaic_method</code> work together. A common idiom is weekly windows with <code>FirstMethod</code> (default) sorted by ascending cloud cover — this draws each pixel from the least cloudy scene available in the week and stops reading further scenes once all output pixels are filled. Because <code>eo:cloud_cover</code> is a scene-level metric, this reduces overall cloud contamination but does not remove individual cloudy pixels:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">lazycogs</span><span class="w"> </span><span class="kn">import</span> <span class="n">FirstMethod</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">da</span> <span class="o">=</span> <span class="n">lazycogs</span><span class="o">.</span><span class="n">open</span><span class="p">(</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="s2">&quot;items.parquet&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">bbox</span><span class="o">=</span><span class="n">dst_bbox</span><span class="p">,</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">crs</span><span class="o">=</span><span class="n">dst_crs</span><span class="p">,</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="n">resolution</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="n">time_period</span><span class="o">=</span><span class="s2">&quot;P1W&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    <span class="n">sortby</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;eo:cloud_cover&quot;</span><span class="p">],</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="n">mosaic_method</span><span class="o">=</span><span class="n">FirstMethod</span><span class="p">,</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="p">)</span>
 </code></pre></div>
-<p>This queries the Element84 Earth Search STAC API, downloads a small set of COG assets to <code>.benchmark_data/</code>, and writes local parquet index files. Pass <code>--overwrite</code> to re-download if needed.</p>
-<p>Once the data is in place:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>tests/benchmarks<span class="w"> </span>--benchmark-enable
-</code></pre></div>
-<h2 id="building-docs">Building docs<a class="headerlink" href="#building-docs" title="Permanent link">&para;</a></h2>
-<p>Install the docs dependencies and serve the site locally:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>uv<span class="w"> </span>run<span class="w"> </span>--group<span class="w"> </span>docs<span class="w"> </span>mkdocs<span class="w"> </span>serve
-</code></pre></div>
+<p>See also: <a href="../demo.ipynb">Demo notebook</a> for a worked example of monthly compositing, <a href="../mosaic-methods/">Mosaic methods guide</a>, <a href="../../api/open/">API reference for open()</a></p>
 
 
 
@@ -1149,10 +1215,10 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["content.code.copy", "navigation.instant", "navigation.tracking", "search.suggest"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.code.copy", "navigation.instant", "navigation.tracking", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
       
     
   </body>
