@@ -25,7 +25,7 @@ One constraint worth naming: lazycogs only reads Cloud Optimized GeoTIFFs. If yo
 Not yet published to PyPI. Install directly from GitHub:
 
 ```bash
-pip install git+https://github.com/developmentseed/lazycogs.git
+pip install lazycogs
 ```
 
 ## Example

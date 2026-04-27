@@ -25,7 +25,7 @@ Here is a summary of the libraries lazycogs uses for each step:
 Not yet published to PyPI. Install directly from GitHub:
 
 ```bash
-pip install git+https://github.com/developmentseed/lazycogs.git
+pip install lazycogs
 ```
 
 ## Minimal example
