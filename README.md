@@ -1,4 +1,9 @@
-![lazycogs](./lazycogs.svg)
+![lazycogs](https://raw.githubusercontent.com/developmentseed/lazycogs/main/lazycogs.png)
+
+[![CI](https://github.com/developmentseed/lazycogs/actions/workflows/ci.yml/badge.svg)](https://github.com/developmentseed/lazycogs/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/lazycogs)](https://pypi.org/project/lazycogs/)
+[![Python Versions](https://img.shields.io/pypi/pyversions/lazycogs)](https://pypi.org/project/lazycogs/)
+[![License](https://img.shields.io/github/license/developmentseed/lazycogs)](https://github.com/developmentseed/lazycogs/blob/main/LICENSE)
 
 Open a lazy `(time, band, y, x)` xarray DataArray from thousands of cloud-optimized geotiffs (COGs). No GDAL required.
 
