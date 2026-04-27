@@ -64,8 +64,7 @@ da = lazycogs.open(
 ## Documentation
 
 - [Home](https://developmentseed.github.io/lazycogs/) — quickstart and full usage guide
-- [Example: Midwest US daily array](https://developmentseed.github.io/lazycogs/demo_midwest_daily/)
-- [Example: Southwest US monthly composite](https://developmentseed.github.io/lazycogs/demo_southwest_monthly/)
-- [Architecture](https://developmentseed.github.io/lazycogs/architecture/)
-- [API Reference](https://developmentseed.github.io/lazycogs/api/)
+- [Example: Midwest US daily Sentinel-2 array](https://developmentseed.org/lazycogs/notebooks/demo_midwest_daily/)
+- [Example: Southwest US monthly low-cloud Sentinel-2 array](https://developmentseed.org/lazycogs/notebooks/demo_southwest_monthly/)
+- [Architecture](https://developmentseed.org/lazycogs/architecture/)
 - [Contributing](CONTRIBUTING.md)

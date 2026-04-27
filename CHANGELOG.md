@@ -7,4 +7,3 @@
 
 * initial release ([4b5241d](https://github.com/developmentseed/lazycogs/commit/4b5241d24653a28791f07759a4660d7582f2330c))
 
-## Changelog
