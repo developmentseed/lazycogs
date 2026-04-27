@@ -554,8 +554,8 @@ def test_store_for_https_url_region_in_hostname_no_duplicate():
     assert store is not None
 
 
-def test_store_for_kwargs_override_defaults():
-    """Caller kwargs override the skip_signature=True default for public schemes."""
+def test_store_for_no_skip_signature_by_default():
+    """No skip_signature kwarg is passed to from_url by default."""
     call_kwargs: dict = {}
 
     def capture_from_url(url, **kwargs):
@@ -566,6 +566,23 @@ def test_store_for_kwargs_override_defaults():
 
     with patch("rustac.DuckdbClient.search", return_value=[_S3_ITEM]):
         with patch("lazycogs._store.from_url", side_effect=capture_from_url):
-            store_for("items.parquet", skip_signature=False)
+            store_for("items.parquet", skip_signature=True)
 
-    assert call_kwargs.get("skip_signature") is False
+    assert call_kwargs.get("skip_signature") is True
+
+
+def test_store_for_caller_kwargs_forwarded():
+    """Caller kwargs are forwarded to from_url."""
+    call_kwargs: dict = {}
+
+    def capture_from_url(url, **kwargs):
+        call_kwargs.update(kwargs)
+        from obstore.store import from_url as real_from_url
+
+        return real_from_url(url, **kwargs)
+
+    with patch("rustac.DuckdbClient.search", return_value=[_S3_ITEM]):
+        with patch("lazycogs._store.from_url", side_effect=capture_from_url):
+            store_for("items.parquet", skip_signature=True)
+
+    assert "skip_signature" in call_kwargs

@@ -9,7 +9,7 @@ import rustac
 from rustac import DuckdbClient
 
 import lazycogs
-from lazycogs._core import _build_time_steps
+from lazycogs._core import _build_time_steps, _smoketest_store
 from lazycogs._temporal import _DayGrouper, _MonthGrouper, _FixedDayGrouper
 
 
@@ -279,3 +279,87 @@ def test_open_works_inside_running_event_loop(tmp_path):
 
     asyncio.run(_call_open())
     assert "error" not in result, f"Got RuntimeError: {result.get('error')}"
+
+
+# ---------------------------------------------------------------------------
+# _smoketest_store
+# ---------------------------------------------------------------------------
+
+_SMOKETEST_ITEM = {
+    "id": "smoke-item",
+    "stac_extensions": [],
+    "properties": {"datetime": "2023-06-01T00:00:00Z"},
+    "assets": {
+        "B04": {
+            "href": "s3://my-bucket/B04.tif",
+            "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+            "roles": ["data"],
+        }
+    },
+}
+
+
+def test_smoketest_passes_when_head_succeeds():
+    """_smoketest_store does not raise when head() succeeds."""
+    from obstore.store import MemoryStore
+
+    store = MemoryStore()
+    store.put("B04.tif", b"dummy")
+
+    with patch("rustac.DuckdbClient.search", return_value=[_SMOKETEST_ITEM]):
+        _smoketest_store(
+            "items.parquet",
+            duckdb_client=DuckdbClient(),
+            store=store,
+            path_from_href=lambda href: href.split("/", 3)[-1],
+        )
+
+
+def test_smoketest_raises_runtime_error_on_head_failure():
+    """_smoketest_store raises RuntimeError when the store cannot access the asset."""
+    from obstore.store import MemoryStore
+
+    store = MemoryStore()  # empty — head() will raise
+
+    with patch("rustac.DuckdbClient.search", return_value=[_SMOKETEST_ITEM]):
+        with pytest.raises(RuntimeError, match="cannot access"):
+            _smoketest_store(
+                "items.parquet",
+                duckdb_client=DuckdbClient(),
+                store=store,
+                path_from_href=lambda href: href.split("/", 3)[-1],
+            )
+
+
+def test_smoketest_no_op_when_no_items():
+    """_smoketest_store does nothing when the query returns no items."""
+    with patch("rustac.DuckdbClient.search", return_value=[]):
+        _smoketest_store("items.parquet", duckdb_client=DuckdbClient())
+
+
+def test_smoketest_prefers_specified_band():
+    """_smoketest_store uses the first specified band when bands= is given."""
+    from obstore.store import MemoryStore
+
+    store = MemoryStore()
+    store.put("B08.tif", b"dummy")
+
+    item = {
+        "id": "multi-band-item",
+        "stac_extensions": [],
+        "properties": {"datetime": "2023-06-01T00:00:00Z"},
+        "assets": {
+            "B04": {"href": "s3://bucket/B04.tif", "roles": ["data"]},
+            "B08": {"href": "s3://bucket/B08.tif", "roles": ["data"]},
+        },
+    }
+
+    with patch("rustac.DuckdbClient.search", return_value=[item]):
+        # B08 exists in the MemoryStore; B04 does not — smoketest must pick B08
+        _smoketest_store(
+            "items.parquet",
+            duckdb_client=DuckdbClient(),
+            bands=["B08"],
+            store=store,
+            path_from_href=lambda href: href.split("/", 3)[-1],
+        )
