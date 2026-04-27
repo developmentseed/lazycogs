@@ -1,0 +1,33 @@
+name: Publish to PyPI
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish-to-pypi:
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi-release
+      url: https://pypi.org/p/lazycogs
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      - uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
+        with:
+          enable-cache: true
+      - name: Set version from release tag
+        if: github.event_name == 'release'
+        run: |
+          # Strip leading 'v' and normalize to PEP 440 (e.g. 1.0.0-rc1 -> 1.0.0rc1)
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"
+          VERSION="$(echo "$VERSION" | sed 's/-\(a\|alpha\|b\|beta\|rc\)/\1/')"
+          sed -i "s/^version = .*/version = \"$VERSION\"/" pyproject.toml
+      - run: uv build
+      - run: uv publish

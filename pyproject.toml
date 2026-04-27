@@ -1,12 +1,24 @@
 [project]
 name = "lazycogs"
-version = "0.1.0"
+version = "0.0.1"
 description = "Lazily load COG assets from STAC items into xarray DataArrays using async-geotiff"
 readme = "README.md"
+license = {file = "LICENSE"}
 authors = [
     { name = "Henry Rodman", email = "henry.rodman@gmail.com" }
 ]
 requires-python = ">=3.12"
+keywords = ["COG", "STAC", "xarray", "geotiff", "raster", "geospatial"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Topic :: Scientific/Engineering :: Image Processing",
+]
 dependencies = [
     "async-geotiff>=0.4.0",
     "cql2>=0.5.5",
@@ -21,6 +33,10 @@ dependencies = [
 dask = [
     "dask>=2026.3.0",
 ]
+
+[project.urls]
+Repository = "https://github.com/developmentseed/lazycogs"
+Documentation = "https://developmentseed.org/lazycogs"
 
 [build-system]
 requires = ["uv_build>=0.11.6,<0.12.0"]
