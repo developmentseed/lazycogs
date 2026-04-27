@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Lazily load COG assets from STAC items into xarray DataArrays using async-geotiff"
 readme = "README.md"
 authors = [
-    { name = "hrodmn", email = "henry.rodman@gmail.com" }
+    { name = "Henry Rodman", email = "henry.rodman@gmail.com" }
 ]
 requires-python = ">=3.12"
 dependencies = [

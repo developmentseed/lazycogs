@@ -25,7 +25,7 @@ One constraint worth naming: lazycogs only reads Cloud Optimized GeoTIFFs. If yo
 Not yet published to PyPI. Install directly from GitHub:
 
 ```bash
-pip install git+https://github.com/hrodmn/lazycogs.git
+pip install git+https://github.com/developmentseed/lazycogs.git
 ```
 
 ## Example
@@ -63,9 +63,9 @@ da = lazycogs.open(
 
 ## Documentation
 
-- [Home](https://hrodmn.github.io/lazycogs/) — quickstart and full usage guide
-- [Example: Midwest US daily array](https://hrodmn.github.io/lazycogs/demo_midwest_daily/)
-- [Example: Southwest US monthly composite](https://hrodmn.github.io/lazycogs/demo_southwest_monthly/)
-- [Architecture](https://hrodmn.github.io/lazycogs/architecture/)
-- [API Reference](https://hrodmn.github.io/lazycogs/api/)
+- [Home](https://developmentseed.github.io/lazycogs/) — quickstart and full usage guide
+- [Example: Midwest US daily array](https://developmentseed.github.io/lazycogs/demo_midwest_daily/)
+- [Example: Southwest US monthly composite](https://developmentseed.github.io/lazycogs/demo_southwest_monthly/)
+- [Architecture](https://developmentseed.github.io/lazycogs/architecture/)
+- [API Reference](https://developmentseed.github.io/lazycogs/api/)
 - [Contributing](CONTRIBUTING.md)

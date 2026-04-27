@@ -1,8 +1,8 @@
 site_name: lazycogs
-site_url: https://hrodmn.github.io/lazycogs/
+site_url: https://developmentseed.org/lazycogs/
 site_description: Lazy, cloud-native raster mosaics powered by STAC.
-repo_url: https://github.com/hrodmn/lazycogs
-repo_name: hrodmn/lazycogs
+repo_url: https://github.com/developmentseed/lazycogs
+repo_name: developmentseed/lazycogs
 
 theme:
   name: material

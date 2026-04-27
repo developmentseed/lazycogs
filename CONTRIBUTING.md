@@ -7,7 +7,7 @@ lazycogs uses [uv](https://docs.astral.sh/uv/) for dependency management. Instal
 Clone the repo and install the dev dependencies:
 
 ```bash
-git clone https://github.com/hrodmn/lazycogs.git
+git clone https://github.com/developmentseed/lazycogs.git
 cd lazycogs
 uv sync
 ```
