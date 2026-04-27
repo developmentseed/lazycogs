@@ -33,6 +33,15 @@ pip install git+https://github.com/hrodmn/lazycogs.git
 ```python
 import rustac
 import lazycogs
+from pyproj import Transformer
+
+# set a target CRS and extent
+dst_crs = "EPSG:32615"
+dst_bbox = (380000.0, 4928000.0, 420000.0, 4984000.0)
+
+# transform to 4326 for STAC search
+transformer = Transformer.from_crs(dst_crs, "epsg:4326", alwaysxy=True)
+bbox_4326 = transformer.transform_bounds(*dst_bbox)
 
 # Search a STAC API and cache results to a local stac-geoparquet file.
 await rustac.search_to(
@@ -40,14 +49,14 @@ await rustac.search_to(
     "https://earth-search.aws.element84.com/v1",
     collections=["sentinel-2-l2a"],
     datetime="2023-06-01/2023-08-31",
-    bbox=[-93.5, 44.5, -93.0, 45.0],
+    bbox=bbox_4326,
 )
 
 # Open a fully lazy (time, band, y, x) DataArray. No COGs are read yet.
 da = lazycogs.open(
     "items.parquet",
-    bbox=(380000.0, 4928000.0, 420000.0, 4984000.0),
-    crs="EPSG:32615",
+    bbox=dst_bbox,
+    crs=dst_crs,
     resolution=10.0,
 )
 ```
@@ -55,7 +64,8 @@ da = lazycogs.open(
 ## Documentation
 
 - [Home](https://hrodmn.github.io/lazycogs/) — quickstart and full usage guide
-- [Demo notebook](https://hrodmn.github.io/lazycogs/demo/)
+- [Example: Midwest US daily array](https://hrodmn.github.io/lazycogs/demo_midwest_daily/)
+- [Example: Southwest US monthly composite](https://hrodmn.github.io/lazycogs/demo_southwest_monthly/)
 - [Architecture](https://hrodmn.github.io/lazycogs/architecture/)
 - [API Reference](https://hrodmn.github.io/lazycogs/api/)
 - [Contributing](CONTRIBUTING.md)
