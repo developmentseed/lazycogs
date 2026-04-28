@@ -31,8 +31,8 @@ pip install lazycogs
 ## Minimal example
 
 ```python
-import rustac
 import lazycogs
+import rustac
 from pyproj import Transformer
 
 dst_crs = "EPSG:5070"
@@ -59,4 +59,4 @@ da = lazycogs.open(
 )
 ```
 
-Get started with the [Quickstart](quickstart.ipynb). Evaluating lazycogs against alternatives? See [Performance](performance.md).
+Get started with the [Quickstart](notebooks/quickstart.ipynb). Evaluating lazycogs against alternatives? See [Performance](performance.md).
