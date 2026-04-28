@@ -42,7 +42,7 @@ def benchmark_parquet() -> str:
     if not _PARQUET.exists():
         pytest.skip(
             "Benchmark data not found. "
-            "Run `uv run python scripts/prepare_benchmark_data.py` first."
+            "Run `uv run python scripts/prepare_benchmark_data.py` first.",
         )
     return str(_PARQUET)
 
@@ -56,6 +56,6 @@ def expanded_benchmark_parquet() -> str:
     if not _EXPANDED_PARQUET.exists():
         pytest.skip(
             "Expanded benchmark data not found. "
-            "Run `uv run python scripts/prepare_benchmark_data.py` first."
+            "Run `uv run python scripts/prepare_benchmark_data.py` first.",
         )
     return str(_EXPANDED_PARQUET)

@@ -47,7 +47,7 @@ def generate_report(baseline: dict[str, dict], pr: dict[str, dict]) -> str:
         sign = "+" if pct >= 0 else ""
         flag = " :warning:" if pct > 10 else ""
         rows.append(
-            f"| `{name}` | {_ms(base_mean)} | {_ms(pr_mean)} | {sign}{pct:.1f}%{flag} |"
+            f"| `{name}` | {_ms(base_mean)} | {_ms(pr_mean)} | {sign}{pct:.1f}%{flag} |",
         )
 
     table = "\n".join(
@@ -55,7 +55,7 @@ def generate_report(baseline: dict[str, dict], pr: dict[str, dict]) -> str:
             "| Test | Baseline (ms) | PR (ms) | Change |",
             "|------|:-------------:|:-------:|-------:|",
             *rows,
-        ]
+        ],
     )
     return (
         f"<!-- lazycogs-benchmark-comparison -->\n## Benchmark Comparison\n\n{table}\n"
@@ -67,7 +67,9 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--baseline", required=True, help="Glob pattern for the baseline JSON"
+        "--baseline",
+        required=True,
+        help="Glob pattern for the baseline JSON",
     )
     parser.add_argument("--pr", required=True, help="Glob pattern for the PR JSON")
     args = parser.parse_args()
@@ -76,7 +78,7 @@ def main() -> None:
         baseline_path = find_file(args.baseline)
         pr_path = find_file(args.pr)
     except FileNotFoundError as e:
-        logging.error("%s", e)
+        logging.exception("%s", e)
         sys.exit(1)
 
     logging.info("Baseline: %s", baseline_path)

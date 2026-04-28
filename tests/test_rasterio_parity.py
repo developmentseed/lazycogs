@@ -110,13 +110,20 @@ async def _read_lazycogs(
 
     raster = await reader.read(window=window)
     warp_map = compute_warp_map(
-        raster.transform, src_crs, chunk_affine, dst_crs, _CHUNK_SIZE, _CHUNK_SIZE
+        raster.transform,
+        src_crs,
+        chunk_affine,
+        dst_crs,
+        _CHUNK_SIZE,
+        _CHUNK_SIZE,
     )
     return apply_warp_map(raster.data, warp_map, geotiff.nodata)
 
 
 def _odc_overview_level(
-    path: Path, target_res_native: float, native_res: float
+    path: Path,
+    target_res_native: float,
+    native_res: float,
 ) -> int | None:
     """Replicate odc-stac's pick_overview: coarsest shrink <= read_shrink."""
     read_shrink = int(target_res_native / native_res)
@@ -237,7 +244,7 @@ def test_parity_cross_crs(synthetic_cog: Path, resolution: int) -> None:
     """
     src_crs = CRS.from_epsg(32632)
     dst_crs = CRS.from_epsg(
-        3035
+        3035,
     )  # ETRS89 / LAEA Europe — same-unit, low distortion near COG
     t = _get_transformer(src_crs, dst_crs)
     cx_laea, cy_laea = t.transform(_CENTER_UTM_X, _CENTER_UTM_Y)

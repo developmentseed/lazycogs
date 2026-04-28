@@ -73,7 +73,7 @@ def measure(label: str):
         f"time={elapsed:.2f}s  "
         f"rss_before={rss_before:.0f}MB  "
         f"rss_after={rss_after:.0f}MB  "
-        f"delta={rss_after - rss_before:+.0f}MB"
+        f"delta={rss_after - rss_before:+.0f}MB",
     )
 
 

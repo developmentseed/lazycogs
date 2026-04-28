@@ -7,26 +7,32 @@ import concurrent.futures
 import logging
 import threading
 import time
-from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from affine import Affine
 from pyproj import CRS, Transformer
-from rustac import DuckdbClient
 from xarray.backends.common import BackendArray
 from xarray.core import indexing
 
 from lazycogs._chunk_reader import async_mosaic_chunk
 from lazycogs._cql2 import _extract_filter_fields, _sortby_fields
 from lazycogs._executor import get_max_workers
-from lazycogs._mosaic_methods import MosaicMethodBase
 
 logger = logging.getLogger(__name__)
 
 
 _tls = threading.local()
+
+if TYPE_CHECKING:
+    from asyncio.futures import Future
+    from collections.abc import Callable
+    from types import CoroutineType
+
+    from rustac import DuckdbClient
+
+    from lazycogs._mosaic_methods import MosaicMethodBase
 
 
 @dataclass(frozen=True)
@@ -113,7 +119,7 @@ def _get_or_create_background_loop() -> asyncio.AbstractEventLoop:
         concurrent.futures.ThreadPoolExecutor(
             max_workers=get_max_workers(),
             thread_name_prefix="lazycogs-reproject",
-        )
+        ),
     )
     t = threading.Thread(target=loop.run_forever, daemon=True, name="lazycogs-loop")
     t.start()
@@ -121,7 +127,7 @@ def _get_or_create_background_loop() -> asyncio.AbstractEventLoop:
     return loop
 
 
-def _run_coroutine(coro: Any) -> Any:
+def _run_coroutine(coro: CoroutineType) -> Future:
     """Run an async coroutine from sync code.
 
     Submits the coroutine to a persistent per-thread background event loop,
@@ -165,7 +171,8 @@ class _SpatialWindow:
 
 
 def _resolve_time_indices(
-    time_key: int | np.integer | slice, n_dates: int
+    time_key: int | np.integer | slice,
+    n_dates: int,
 ) -> tuple[list[int], bool]:
     """Resolve a time indexer to a list of integer indices.
 
@@ -186,134 +193,54 @@ def _resolve_time_indices(
     return list(range(start, stop, step)), False
 
 
-def _resolve_spatial_window(
-    y_key: int | np.integer | slice,
-    x_key: int | np.integer | slice,
-    dst_height: int,
-    dst_width: int,
-    dst_affine: Affine,
-    dst_crs: CRS,
-    dst_to_4326: Transformer | None,
-) -> _SpatialWindow:
-    """Resolve spatial indexers to a concrete chunk window.
-
-    Converts logical ascending y indices (south-to-north, as exposed to
-    xarray) to physical top-down row offsets (north-to-south, as stored in
-    the COG), then computes the chunk affine transform and EPSG:4326 bounding
-    box.
+def _resolve_band_indices(
+    band_key: int | np.integer | slice,
+    n_bands: int,
+) -> tuple[list[int], bool]:
+    """Resolve a band indexer to a list of integer indices.
 
     Args:
-        y_key: Integer or slice indexer for the y dimension.
-        x_key: Integer or slice indexer for the x dimension.
-        dst_height: Full output grid height in pixels.
-        dst_width: Full output grid width in pixels.
-        dst_affine: Affine transform of the full output grid.
-        dst_crs: CRS of the output grid.
-        dst_to_4326: Pre-built transformer from ``dst_crs`` to EPSG:4326, or
-            ``None`` when ``dst_crs`` is already EPSG:4326.
+        band_key: Integer or slice indexer for the band dimension.
+        n_bands: Total number of bands.
 
     Returns:
-        A :class:`_SpatialWindow` describing the chunk geometry.
+        ``(band_indices, squeeze_band)`` where ``squeeze_band`` is ``True``
+        when ``band_key`` was a scalar integer.
 
     """
-    if isinstance(y_key, (int, np.integer)):
-        yi = int(y_key)
-        y_key = slice(yi, yi + 1)
-        squeeze_y = True
-    else:
-        squeeze_y = False
-
-    if isinstance(x_key, (int, np.integer)):
-        xi = int(x_key)
-        x_key = slice(xi, xi + 1)
-        squeeze_x = True
-    else:
-        squeeze_x = False
-
-    y_start_logical = y_key.start if y_key.start is not None else 0
-    y_stop_logical = y_key.stop if y_key.stop is not None else dst_height
-    x_start = x_key.start if x_key.start is not None else 0
-    x_stop = x_key.stop if x_key.stop is not None else dst_width
-
-    # logical index 0 = southernmost = physical row (dst_height - 1)
-    y_start_physical = dst_height - y_stop_logical
-    y_stop_physical = dst_height - y_start_logical
-
-    chunk_height = y_stop_physical - y_start_physical
-    chunk_width = x_stop - x_start
-
-    chunk_affine = dst_affine * Affine.translation(x_start, y_start_physical)
-
-    minx = chunk_affine.c
-    maxy = chunk_affine.f
-    maxx = minx + chunk_width * chunk_affine.a
-    miny = maxy + chunk_height * chunk_affine.e  # e < 0
-
-    if dst_to_4326 is None:
-        chunk_bbox_4326 = [minx, miny, maxx, maxy]
-    else:
-        xs, ys = dst_to_4326.transform(
-            [minx, maxx, minx, maxx],
-            [maxy, maxy, miny, miny],
-        )
-        chunk_bbox_4326 = [
-            float(min(xs)),
-            float(min(ys)),
-            float(max(xs)),
-            float(max(ys)),
-        ]
-
-    return _SpatialWindow(
-        chunk_affine=chunk_affine,
-        chunk_bbox_4326=chunk_bbox_4326,
-        chunk_height=chunk_height,
-        chunk_width=chunk_width,
-        x_start=x_start,
-        squeeze_y=squeeze_y,
-        squeeze_x=squeeze_x,
-    )
+    if isinstance(band_key, (int, np.integer)):
+        return [int(band_key)], True
+    start = band_key.start if band_key.start is not None else 0
+    stop = band_key.stop if band_key.stop is not None else n_bands
+    step = band_key.step if band_key.step is not None else 1
+    return list(range(start, stop, step)), False
 
 
 def _search_items(
-    client: DuckdbClient,
-    parquet_path: str,
-    bbox: list[float],
+    plan: _ChunkReadPlan,
     date: str,
-    sortby: str | list[str | dict[str, str]] | None,
-    filter_expr: str | dict[str, Any] | None,
-    ids: list[str] | None,
-    filter_fields: set[str],
-    label: str,
 ) -> list[Any]:
     """Query the STAC parquet for items overlapping a chunk.
 
     Args:
-        client: ``DuckdbClient`` instance.
-        parquet_path: Path to the geoparquet file or hive-partitioned directory.
-        bbox: ``[minx, miny, maxx, maxy]`` bounding box in EPSG:4326.
+        plan: Read plan carrying all parameters for this chunk.
         date: Acquisition date string (``"YYYY-MM-DD"``).
-        sortby: Optional sort keys forwarded to ``client.search``.
-        filter_expr: Optional CQL2 filter forwarded to ``client.search``.
-        ids: Optional STAC item IDs forwarded to ``client.search``.
-        filter_fields: Field names extracted from ``filter_expr`` (added to
-            the ``include`` list so DuckDB returns them).
-        label: Short identifier used in debug log messages (e.g. the band name
-            or a list of band names).
 
     Returns:
         List of STAC items returned by DuckDB.
 
     """
+    label = f"bands={plan.selected_bands!r}"
     t0 = time.perf_counter()
-    items = client.search(
-        parquet_path,
-        bbox=bbox,
+    items = plan.duckdb_client.search(
+        plan.parquet_path,
+        bbox=plan.chunk_bbox_4326,
         datetime=date,
-        sortby=sortby,
-        filter=filter_expr,
-        ids=ids,
+        sortby=plan.sortby,
+        filter=plan.filter_expr,
+        ids=plan.ids,
         include=list(
-            {"id", "assets"}.union(filter_fields).union(_sortby_fields(sortby))
+            {"id", "assets"} | plan.filter_fields | _sortby_fields(plan.sortby),
         ),
     )
     logger.debug(
@@ -355,17 +282,7 @@ async def _run_one_date(
     date = plan.dates[t_idx]
 
     with plan.duckdb_lock:
-        items = _search_items(
-            plan.duckdb_client,
-            plan.parquet_path,
-            plan.chunk_bbox_4326,
-            date,
-            plan.sortby,
-            plan.filter_expr,
-            plan.ids,
-            plan.filter_fields,
-            label=f"bands={plan.selected_bands!r}",
-        )
+        items = _search_items(plan, date)
 
     if not items:
         return None
@@ -493,7 +410,10 @@ class MultiBandStacBackendArray(BackendArray):
     shape: tuple[int, ...] = field(init=False)
     _dst_to_4326: Transformer | None = field(init=False, repr=False, compare=False)
     _duckdb_lock: threading.Lock = field(
-        init=False, repr=False, compare=False, default_factory=threading.Lock
+        init=False,
+        repr=False,
+        compare=False,
+        default_factory=threading.Lock,
     )
 
     def __post_init__(self) -> None:
@@ -504,12 +424,96 @@ class MultiBandStacBackendArray(BackendArray):
             self._dst_to_4326: Transformer | None = None
         else:
             self._dst_to_4326 = Transformer.from_crs(
-                self.dst_crs, epsg_4326, always_xy=True
+                self.dst_crs,
+                epsg_4326,
+                always_xy=True,
             )
+
+    @property
+    def duckdb_lock(self) -> threading.Lock:
+        """Lock serialising access to ``duckdb_client``."""
+        return self._duckdb_lock
 
     def __repr__(self) -> str:
         """Return a compact string representation."""
         return f"MultiBandStacBackendArray(bands={self.bands!r}, shape={self.shape})"
+
+    def _resolve_spatial_window(
+        self,
+        y_key: int | np.integer | slice,
+        x_key: int | np.integer | slice,
+    ) -> _SpatialWindow:
+        """Resolve spatial indexers to a concrete chunk window.
+
+        Converts logical ascending y indices (south-to-north, as exposed to
+        xarray) to physical top-down row offsets (north-to-south, as stored in
+        the COG), then computes the chunk affine transform and EPSG:4326
+        bounding box.
+
+        Args:
+            y_key: Integer or slice indexer for the y dimension.
+            x_key: Integer or slice indexer for the x dimension.
+
+        Returns:
+            A :class:`_SpatialWindow` describing the chunk geometry.
+
+        """
+        if isinstance(y_key, (int, np.integer)):
+            yi = int(y_key)
+            y_key = slice(yi, yi + 1)
+            squeeze_y = True
+        else:
+            squeeze_y = False
+
+        if isinstance(x_key, (int, np.integer)):
+            xi = int(x_key)
+            x_key = slice(xi, xi + 1)
+            squeeze_x = True
+        else:
+            squeeze_x = False
+
+        y_start_logical = y_key.start if y_key.start is not None else 0
+        y_stop_logical = y_key.stop if y_key.stop is not None else self.dst_height
+        x_start = x_key.start if x_key.start is not None else 0
+        x_stop = x_key.stop if x_key.stop is not None else self.dst_width
+
+        # logical index 0 = southernmost = physical row (dst_height - 1)
+        y_start_physical = self.dst_height - y_stop_logical
+        y_stop_physical = self.dst_height - y_start_logical
+
+        chunk_height = y_stop_physical - y_start_physical
+        chunk_width = x_stop - x_start
+
+        chunk_affine = self.dst_affine * Affine.translation(x_start, y_start_physical)
+
+        minx = chunk_affine.c
+        maxy = chunk_affine.f
+        maxx = minx + chunk_width * chunk_affine.a
+        miny = maxy + chunk_height * chunk_affine.e  # e < 0
+
+        if self._dst_to_4326 is None:
+            chunk_bbox_4326 = [minx, miny, maxx, maxy]
+        else:
+            xs, ys = self._dst_to_4326.transform(
+                [minx, maxx, minx, maxx],
+                [maxy, maxy, miny, miny],
+            )
+            chunk_bbox_4326 = [
+                float(min(xs)),
+                float(min(ys)),
+                float(max(xs)),
+                float(max(ys)),
+            ]
+
+        return _SpatialWindow(
+            chunk_affine=chunk_affine,
+            chunk_bbox_4326=chunk_bbox_4326,
+            chunk_height=chunk_height,
+            chunk_width=chunk_width,
+            x_start=x_start,
+            squeeze_y=squeeze_y,
+            squeeze_x=squeeze_x,
+        )
 
     def __getitem__(self, key: indexing.ExplicitIndexer) -> np.ndarray:
         """Return the data for the requested index.
@@ -546,30 +550,11 @@ class MultiBandStacBackendArray(BackendArray):
         """
         band_key, time_key, y_key, x_key = key
 
-        # -- Band dimension --------------------------------------------------
-        n_bands = len(self.bands)
-        if isinstance(band_key, (int, np.integer)):
-            band_indices: list[int] = [int(band_key)]
-            squeeze_band = True
-        else:
-            start = band_key.start if band_key.start is not None else 0
-            stop = band_key.stop if band_key.stop is not None else n_bands
-            step = band_key.step if band_key.step is not None else 1
-            band_indices = list(range(start, stop, step))
-            squeeze_band = False
-
+        band_indices, squeeze_band = _resolve_band_indices(band_key, len(self.bands))
         selected_bands = [self.bands[b] for b in band_indices]
 
         time_indices, squeeze_time = _resolve_time_indices(time_key, len(self.dates))
-        win = _resolve_spatial_window(
-            y_key,
-            x_key,
-            self.dst_height,
-            self.dst_width,
-            self.dst_affine,
-            self.dst_crs,
-            self._dst_to_4326,
-        )
+        win = self._resolve_spatial_window(y_key, x_key)
 
         fill = self.nodata if self.nodata is not None else 0
 
@@ -614,7 +599,7 @@ class MultiBandStacBackendArray(BackendArray):
                 result = np.full(out_shape, fill, dtype=self.dtype)
             for bi, band in enumerate(selected_bands):
                 arr = chunk_data[band]
-                slice_ = arr[0] if arr.ndim == 3 else arr
+                slice_ = arr.reshape(arr.shape[-2:])
                 result[bi, i] = slice_.astype(self.dtype, copy=False)
 
         if result is None:
@@ -625,7 +610,7 @@ class MultiBandStacBackendArray(BackendArray):
 
         # result shape: (n_selected_bands, n_time, chunk_height, chunk_width)
         # Apply squeezes in axis order: time (axis 1), band (axis 0), y (-2), x (-1).
-        out: np.ndarray = result  # type: ignore[assignment]
+        out: np.ndarray = result
         if squeeze_time:
             out = out[:, 0, :, :]
         if squeeze_band:

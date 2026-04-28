@@ -15,7 +15,6 @@ from lazycogs._storage_ext import (
 )
 from lazycogs._store import resolve, store_for
 
-
 # ---------------------------------------------------------------------------
 # resolve
 # ---------------------------------------------------------------------------
@@ -163,7 +162,7 @@ def test_storage_extension_version_absent():
     assert _storage_extension_version([]) is None
     assert (
         _storage_extension_version(
-            ["https://stac-extensions.github.io/eo/v1.0.0/schema.json"]
+            ["https://stac-extensions.github.io/eo/v1.0.0/schema.json"],
         )
         is None
     )
@@ -268,7 +267,7 @@ def test_v2_region_and_requester_pays_mapped():
             "platform": "s3://",
             "region": "us-west-2",
             "requester_pays": True,
-        }
+        },
     }
     asset = _v2_asset(["primary"])
     item = _v2_item(schemes, ["primary"])
@@ -284,7 +283,7 @@ def test_v2_non_s3_type_region_not_mapped():
             "type": "ms-azure",
             "platform": "https://account.blob.core.windows.net/",
             "region": "westus",
-        }
+        },
     }
     asset = _v2_asset(["az"])
     item = _v2_item(schemes, ["az"])
@@ -297,7 +296,7 @@ def test_v2_custom_s3_endpoint_mapped():
         "minio": {
             "type": "custom-s3",
             "platform": "https://minio.example.com",
-        }
+        },
     }
     asset = _v2_asset(["minio"])
     item = _v2_item(schemes, ["minio"])
@@ -311,7 +310,7 @@ def test_v2_custom_s3_template_platform_not_mapped():
         "aws": {
             "type": "custom-s3",
             "platform": "https://s3.{region}.amazonaws.com",
-        }
+        },
     }
     asset = _v2_asset(["aws"])
     item = _v2_item(schemes, ["aws"])
@@ -366,7 +365,7 @@ def test_dispatch_no_extension_returns_empty():
 def test_dispatch_unknown_version_returns_empty():
     item = {
         "stac_extensions": [
-            "https://stac-extensions.github.io/storage/v99.0.0/schema.json"
+            "https://stac-extensions.github.io/storage/v99.0.0/schema.json",
         ],
         "properties": {},
         "assets": {},
@@ -387,7 +386,7 @@ _S3_ITEM = {
             "href": "s3://sentinel-cogs/sentinel-s2-l2a/B04.tif",
             "type": "image/tiff; application=geotiff; profile=cloud-optimized",
             "roles": ["data"],
-        }
+        },
     },
 }
 
@@ -471,7 +470,7 @@ def test_store_for_v1_extension_infers_region():
             "data": {
                 "href": "s3://my-bucket/file.tif",
                 "roles": ["data"],
-            }
+            },
         },
     }
     with patch("rustac.DuckdbClient.search", return_value=[item]):
@@ -491,7 +490,7 @@ def test_store_for_v2_extension_infers_region():
                     "type": "aws-s3",
                     "platform": "s3://",
                     "region": "eu-west-1",
-                }
+                },
             },
             "datetime": "2023-06-01T00:00:00Z",
         },
@@ -500,7 +499,7 @@ def test_store_for_v2_extension_infers_region():
                 "href": "s3://my-bucket/file.tif",
                 "roles": ["data"],
                 "storage:refs": ["primary"],
-            }
+            },
         },
     }
     with patch("rustac.DuckdbClient.search", return_value=[item]):
@@ -521,7 +520,7 @@ def test_store_for_malformed_extension_does_not_raise():
                 "href": "s3://bucket/file.tif",
                 "roles": ["data"],
                 "storage:refs": ["primary"],
-            }
+            },
         },
     }
     with patch("rustac.DuckdbClient.search", return_value=[item]):
@@ -546,7 +545,7 @@ def test_store_for_https_url_region_in_hostname_no_duplicate():
             "data": {
                 "href": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/file.tif",
                 "roles": ["data"],
-            }
+            },
         },
     }
     with patch("rustac.DuckdbClient.search", return_value=[item]):

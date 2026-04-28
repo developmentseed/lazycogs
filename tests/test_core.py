@@ -1,6 +1,7 @@
 """Tests for the open() / open_async() entry points."""
 
 from __future__ import annotations
+
 from unittest.mock import patch
 
 import numpy as np
@@ -10,10 +11,10 @@ from rustac import DuckdbClient
 
 import lazycogs
 from lazycogs._core import _build_time_steps, _smoketest_store
-from lazycogs._temporal import _DayGrouper, _MonthGrouper, _FixedDayGrouper
+from lazycogs._temporal import _DayGrouper, _FixedDayGrouper, _MonthGrouper
 
 
-def _items_to_arrow(items: list[dict]) -> "rustac.DuckdbClient":
+def _items_to_arrow(items: list[dict]) -> rustac.DuckdbClient:
     """Convert simplified fake items to an Arrow table via rustac.to_arrow.
 
     Accepts the same simplified item dicts used in existing tests
@@ -37,7 +38,7 @@ def _items_to_arrow(items: list[dict]) -> "rustac.DuckdbClient":
                 "properties": props,
                 "links": [],
                 "assets": {},
-            }
+            },
         )
     return rustac.to_arrow(full_items)
 
@@ -218,8 +219,8 @@ def test_build_time_steps_uses_start_datetime_fallback():
                 "datetime": None,
                 "start_datetime": "2023-03-10T00:00:00Z",
                 "end_datetime": "2023-03-10T23:59:59Z",
-            }
-        }
+            },
+        },
     ]
     table = _items_to_arrow(items)
     with patch("rustac.DuckdbClient.search_to_arrow", return_value=table):
@@ -294,7 +295,7 @@ _SMOKETEST_ITEM = {
             "href": "s3://my-bucket/B04.tif",
             "type": "image/tiff; application=geotiff; profile=cloud-optimized",
             "roles": ["data"],
-        }
+        },
     },
 }
 

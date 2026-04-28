@@ -16,7 +16,6 @@ from lazycogs._temporal import (
     grouper_from_period,
 )
 
-
 # ---------------------------------------------------------------------------
 # _DayGrouper
 # ---------------------------------------------------------------------------
@@ -213,7 +212,7 @@ class TestFixedDayGrouper:
         dt = "2023-01-15T00:00Z"
         assert g1.group_key(dt) == g2.group_key(dt)
         assert g1.datetime_filter(g1.group_key(dt)) == g2.datetime_filter(
-            g2.group_key(dt)
+            g2.group_key(dt),
         )
 
     def test_p5d_sort_order(self):

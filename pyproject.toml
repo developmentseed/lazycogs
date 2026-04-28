@@ -51,6 +51,7 @@ dev = [
     "pytest-benchmark>=5.2.3",
     "rasterio>=1.5.0",
     "pre-commit>=4.6.0",
+    "ruff>=0.15.12",
 ]
 docs = [
     "mkdocs-jupyter>=0.26.2",
@@ -61,11 +62,13 @@ docs = [
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = [
+    "A002",   # filter/id arg names are intentional (match STAC/CQL2 API)
     "D203",   # incompatible with D211
     "D213",   # incompatible with D212
     "EM101",  # raw string in exception
     "EM102",  # f-string in exception
     "FIX002", # todo statements
+    "PLR0913", # many args are intentional; documented rather than collapsed to **kwargs
     "PYI051", # literal strings redundant with str in type union
     "TD002",  # todo without author name
     "TRY003", # define exceptions in the exception class
@@ -79,6 +82,9 @@ ignore = [
     "S101",    # assert
     "SLF001",  # private member access
     "D",       # docstring
+]
+"docs/notebooks/*" = [
+    "T201",  # print statements
 ]
 
 [tool.pytest.ini_options]

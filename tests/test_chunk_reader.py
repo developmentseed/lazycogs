@@ -18,7 +18,6 @@ from lazycogs._chunk_reader import (
 )
 from lazycogs._mosaic_methods import FirstMethod
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -194,7 +193,7 @@ def test_async_mosaic_chunk_limits_concurrent_reads():
                 chunk_height=chunk_height,
                 nodata=None,
                 max_concurrent_reads=max_concurrent,
-            )
+            ),
         )
 
     assert peak_concurrent[0] <= max_concurrent
@@ -226,7 +225,7 @@ def test_drain_in_order_preserves_source_order():
             call_order.append(idx)
 
         drain = asyncio.ensure_future(
-            _drain_in_order(tasks, on_result, lambda: False, lambda i, e: None)
+            _drain_in_order(tasks, on_result, lambda: False, lambda i, e: None),
         )
         await asyncio.sleep(0)  # let fast() complete first (task index 1)
         event.set()  # unblock slow() (task index 0)
@@ -295,7 +294,8 @@ def test_apply_bands_with_warp_cache_shared_geometry():
         return result
 
     with patch(
-        "lazycogs._chunk_reader.compute_warp_map", side_effect=_spy_compute_warp_map
+        "lazycogs._chunk_reader.compute_warp_map",
+        side_effect=_spy_compute_warp_map,
     ):
         results = _apply_bands_with_warp_cache(
             [("B01", raster_a, crs, None), ("B02", raster_b, crs, None)],
@@ -334,7 +334,8 @@ def test_apply_bands_with_warp_cache_different_geometry():
         return result
 
     with patch(
-        "lazycogs._chunk_reader.compute_warp_map", side_effect=_spy_compute_warp_map
+        "lazycogs._chunk_reader.compute_warp_map",
+        side_effect=_spy_compute_warp_map,
     ):
         results = _apply_bands_with_warp_cache(
             [("B01", raster_a, crs, None), ("B02", raster_b, crs, None)],
@@ -369,7 +370,8 @@ def test_apply_bands_with_warp_cache_shared_across_calls():
         return result
 
     with patch(
-        "lazycogs._chunk_reader.compute_warp_map", side_effect=_spy_compute_warp_map
+        "lazycogs._chunk_reader.compute_warp_map",
+        side_effect=_spy_compute_warp_map,
     ):
         _apply_bands_with_warp_cache(
             [("B01", raster, crs, None)],
@@ -414,7 +416,8 @@ def test_async_mosaic_chunk_returns_all_bands():
     items = [{"id": "item-0", "assets": {}}]
 
     with patch(
-        "lazycogs._chunk_reader._read_item_band", side_effect=_fake_read_item_band
+        "lazycogs._chunk_reader._read_item_band",
+        side_effect=_fake_read_item_band,
     ):
         result = asyncio.run(
             async_mosaic_chunk(
@@ -424,7 +427,7 @@ def test_async_mosaic_chunk_returns_all_bands():
                 dst_crs=dst_crs,
                 chunk_width=chunk_width,
                 chunk_height=chunk_height,
-            )
+            ),
         )
 
     assert set(result.keys()) == set(bands)
@@ -455,7 +458,8 @@ def test_async_mosaic_chunk_early_exit():
     items = [{"id": f"item-{i}", "assets": {}} for i in range(n_items)]
 
     with patch(
-        "lazycogs._chunk_reader._read_item_band", side_effect=_fake_read_item_band
+        "lazycogs._chunk_reader._read_item_band",
+        side_effect=_fake_read_item_band,
     ):
         asyncio.run(
             async_mosaic_chunk(
@@ -467,7 +471,7 @@ def test_async_mosaic_chunk_early_exit():
                 chunk_height=chunk_height,
                 mosaic_method_cls=FirstMethod,
                 max_concurrent_reads=5,
-            )
+            ),
         )
 
     # All tasks are launched up front, but the semaphore caps in-flight reads

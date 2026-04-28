@@ -58,7 +58,9 @@ def test_full_compute(benchmark, benchmark_parquet: str) -> None:
 @pytest.mark.benchmark
 @pytest.mark.parametrize("method", [FirstMethod, MedianMethod], ids=["first", "median"])
 def test_mosaic_method(
-    benchmark, benchmark_parquet: str, method: type[MosaicMethodBase]
+    benchmark,
+    benchmark_parquet: str,
+    method: type[MosaicMethodBase],
 ) -> None:
     """Compare mosaic strategy cost end-to-end."""
 
@@ -79,7 +81,9 @@ def test_mosaic_method(
 @pytest.mark.benchmark
 @pytest.mark.parametrize("n_workers", [1, 4])
 def test_reproject_workers(
-    benchmark, expanded_benchmark_parquet: str, n_workers: int
+    benchmark,
+    expanded_benchmark_parquet: str,
+    n_workers: int,
 ) -> None:
     """Measure throughput as reprojection thread count varies.
 
@@ -137,7 +141,9 @@ def test_native_crs_resolution(benchmark, benchmark_parquet: str) -> None:
     ids=["no_dask", "dask_time_1"],
 )
 def test_time_step_parallelism(
-    benchmark, expanded_benchmark_parquet: str, chunks: dict | None
+    benchmark,
+    expanded_benchmark_parquet: str,
+    chunks: dict | None,
 ) -> None:
     """Compare native time-step thread pool vs Dask across 24 time steps.
 
@@ -168,7 +174,9 @@ def test_time_step_parallelism(
     ids=["single_band", "multi_band"],
 )
 def test_band_access_pattern(
-    benchmark, expanded_benchmark_parquet: str, bands: list[str]
+    benchmark,
+    expanded_benchmark_parquet: str,
+    bands: list[str],
 ) -> None:
     """Compare single-band vs multi-band compute cost.
 

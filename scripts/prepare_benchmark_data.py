@@ -142,7 +142,7 @@ async def main(overwrite: bool = False) -> None:
         )
 
     logging.info(
-        "Run benchmarks with: uv run pytest tests/benchmarks/ --benchmark-enable"
+        "Run benchmarks with: uv run pytest tests/benchmarks/ --benchmark-enable",
     )
 
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 
-_MAX_WORKERS: int | None = None
+_config: dict[str, int | None] = {"max_workers": None}
 
 
 def _default_workers() -> int:
@@ -25,7 +25,8 @@ def get_max_workers() -> int:
         Number of reprojection threads each event loop will use.
 
     """
-    return _MAX_WORKERS if _MAX_WORKERS is not None else _default_workers()
+    val = _config["max_workers"]
+    return val if val is not None else _default_workers()
 
 
 def set_reproject_workers(n: int) -> None:
@@ -35,7 +36,7 @@ def set_reproject_workers(n: int) -> None:
     ``ThreadPoolExecutor`` bounded to ``n`` workers. Dask tasks do not compete
     for a shared pool — each task gets ``n`` independent reprojection threads.
     Total reprojection threads at any moment is at most
-    ``n × dask_worker_count``.
+    ``n x dask_worker_count``.
 
     Reprojection is memory-bandwidth-bound rather than compute-bound, so values
     above 4 typically offer no benefit and can hurt throughput due to memory
@@ -51,7 +52,6 @@ def set_reproject_workers(n: int) -> None:
         ValueError: If ``n`` is less than 1.
 
     """
-    global _MAX_WORKERS
     if n < 1:
         raise ValueError(f"n must be >= 1, got {n!r}")
-    _MAX_WORKERS = n
+    _config["max_workers"] = n

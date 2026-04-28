@@ -6,20 +6,25 @@ import asyncio
 import logging
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Iterator
+from typing import TYPE_CHECKING
 
 import numpy as np
 import xarray as xr
 from affine import Affine
+from pandas import DataFrame
 from pyproj import CRS, Transformer
 
 from lazycogs._backend import MultiBandStacBackendArray, _run_coroutine
 from lazycogs._chunk_reader import _ChunkContext, _open_and_window
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from obstore.store import ObjectStore
 
 logger = logging.getLogger(__name__)
+
+_COG_MULTI_THRESHOLD = 2
 
 
 @dataclass
@@ -174,10 +179,12 @@ class ExplainPlan:
         return [
             "=== ExplainPlan ===",
             f"Parquet:    {self.href}",
-            f"CRS:        {self.crs}  |  Resolution: {self.resolution} units/px  |  Grid: {self.dst_width} x {self.dst_height} px",
+            f"CRS:        {self.crs}  |  Resolution: {self.resolution} units/px"
+            f"  |  Grid: {self.dst_width} x {self.dst_height} px",
             f"Bands ({len(self.bands)}):  {', '.join(self.bands)}",
             f"Time steps: {len(self.time_coords)} ({self._time_range()})",
-            f"Chunks:     {self.chunk_width} x {self.chunk_height} px -> {n_x}x{n_y} spatial tiles",
+            f"Chunks:     {self.chunk_width} x {self.chunk_height} px"
+            f" -> {n_x}x{n_y} spatial tiles",
         ]
 
     def _distribution_lines(self) -> list[str]:
@@ -187,26 +194,28 @@ class ExplainPlan:
         total = len(self.chunk_reads) or 1
         zero = counts.get(0, 0)
         one = counts.get(1, 0)
-        two_plus = sum(v for k, v in counts.items() if k >= 2)
+        two_plus = sum(v for k, v in counts.items() if k >= _COG_MULTI_THRESHOLD)
 
         def pct(n: int) -> str:
             return f"({100 * n / total:.1f}%)"
 
         return [
             f"Total chunk reads:     {self.total_chunk_reads} "
-            f"({len(self.bands)} band(s) x {len(self.time_coords)} time step(s) x {n_x * n_y} spatial tile(s))",
+            f"({len(self.bands)} band(s) x {len(self.time_coords)} time step(s)"
+            f" x {n_x * n_y} spatial tile(s))",
             f"Total COG reads:       {self.total_cog_reads}",
             f"Chunks with 0 COGs:    {zero:>4} {pct(zero)}",
             f"Chunks with 1 COG:     {one:>4} {pct(one)}",
             f"Chunks with 2+ COGs:   {two_plus:>4} {pct(two_plus)}",
-            f"Max COGs per chunk:    {max((c.n_cog_reads for c in self.chunk_reads), default=0)}",
+            f"Max COGs per chunk:    "
+            f"{max((c.n_cog_reads for c in self.chunk_reads), default=0)}",
         ]
 
     def _header_detail_lines(self) -> list[str]:
         """Return overview/window stats when ``fetch_headers`` is true."""
         if not self.fetch_headers:
             return [
-                "(Pass fetch_headers=True to see overview levels and pixel windows.)"
+                "(Pass fetch_headers=True to see overview levels and pixel windows.)",
             ]
         all_reads = [r for c in self.chunk_reads for r in c.cog_reads]
         if not all_reads:
@@ -221,7 +230,8 @@ class ExplainPlan:
         avg_w = sum(widths) / len(widths) if widths else 0
         avg_h = sum(heights) / len(heights) if heights else 0
         return [
-            f"Overview levels:       {'  '.join(f'{k}: {v}' for k, v in sorted(ov_counts.items()))}",
+            f"Overview levels:       "
+            f"{'  '.join(f'{k}: {v}' for k, v in sorted(ov_counts.items()))}",
             f"Avg read window:       {avg_w:.0f} x {avg_h:.0f} px",
             "(Use .to_dataframe() for per-item overview and window details.)",
         ]
@@ -234,10 +244,10 @@ class ExplainPlan:
                 "",
                 *self._distribution_lines(),
                 *self._header_detail_lines(),
-            ]
+            ],
         )
 
-    def to_dataframe(self):
+    def to_dataframe(self) -> DataFrame:
         """Return a DataFrame with one row per (chunk x item) combination.
 
         Empty chunks contribute one row with item fields set to ``None``.
@@ -252,13 +262,6 @@ class ExplainPlan:
             ImportError: If ``pandas`` is not installed.
 
         """
-        try:
-            import pandas as pd
-        except ImportError as exc:
-            raise ImportError(
-                "pandas is required for to_dataframe(); install it with: uv add pandas"
-            ) from exc
-
         rows = []
         for chunk in self.chunk_reads:
             base = {
@@ -273,21 +276,21 @@ class ExplainPlan:
                 "n_cog_reads": chunk.n_cog_reads,
             }
             if chunk.cog_reads:
-                for item in chunk.cog_reads:
-                    rows.append(
-                        {
-                            **base,
-                            "item_id": item.item_id,
-                            "asset_key": item.asset_key,
-                            "href": item.href,
-                            "overview_level": item.overview_level,
-                            "overview_resolution": item.overview_resolution,
-                            "window_col_off": item.window_col_off,
-                            "window_row_off": item.window_row_off,
-                            "window_width": item.window_width,
-                            "window_height": item.window_height,
-                        }
-                    )
+                rows.extend(
+                    {
+                        **base,
+                        "item_id": item.item_id,
+                        "asset_key": item.asset_key,
+                        "href": item.href,
+                        "overview_level": item.overview_level,
+                        "overview_resolution": item.overview_resolution,
+                        "window_col_off": item.window_col_off,
+                        "window_row_off": item.window_row_off,
+                        "window_width": item.window_width,
+                        "window_height": item.window_height,
+                    }
+                    for item in chunk.cog_reads
+                )
             else:
                 rows.append(
                     {
@@ -301,9 +304,9 @@ class ExplainPlan:
                         "window_row_off": None,
                         "window_width": None,
                         "window_height": None,
-                    }
+                    },
                 )
-        return pd.DataFrame(rows)
+        return DataFrame(rows)
 
 
 # ---------------------------------------------------------------------------
@@ -401,7 +404,8 @@ def _infer_chunk_sizes(da: xr.DataArray) -> tuple[int, int]:
 
 
 def _roi_pixel_offsets(
-    da: xr.DataArray, backend: MultiBandStacBackendArray
+    da: xr.DataArray,
+    backend: MultiBandStacBackendArray,
 ) -> tuple[int, int, int, int]:
     """Map the DataArray's coordinate extent to pixel offsets in the full grid.
 
@@ -420,15 +424,10 @@ def _roi_pixel_offsets(
     resolution = backend.dst_affine.a
     affine = backend.dst_affine
 
-    # Pixel center of column `col`: affine.c + (col + 0.5) * resolution
-    # Invert: col = (x_center - affine.c) / resolution - 0.5
-    x_start = int(round((float(da.x.values[0]) - affine.c) / resolution - 0.5))
+    x_start = round((float(da.x.to_numpy()[0]) - affine.c) / resolution - 0.5)
 
-    # Physical row center (top-down): affine.f - (row + 0.5) * resolution
-    # Invert: row = (affine.f - y_center) / resolution - 0.5
-    # da.y is ascending, so da.y.values[-1] is the northernmost (topmost) value
-    y_start_physical = int(
-        round((affine.f - float(da.y.values[-1])) / resolution - 0.5)
+    y_start_physical = round(
+        (affine.f - float(da.y.to_numpy()[-1])) / resolution - 0.5,
     )
 
     return (
@@ -498,14 +497,15 @@ async def _inspect_item_async(
 async def _explain_async(
     da: xr.DataArray,
     backend: MultiBandStacBackendArray,
+    *,
     fetch_headers: bool,
 ) -> ExplainPlan:
     """Run DuckDB queries for all (time, spatial chunk) combinations.
 
     Issues one DuckDB query per ``(time step, spatial tile)`` — not one per
     ``(band, time step, spatial tile)`` — because the query result is
-    band-independent.  All ``(time × tile)`` queries are dispatched
-    concurrently via :func:`asyncio.gather`; the ``backend._duckdb_lock``
+    band-independent.  All ``(time x tile)`` queries are dispatched
+    concurrently via :func:`asyncio.gather`; the ``backend.duckdb_lock``
     serialises actual DuckDB access.  Each query result is then fanned across
     all active bands to produce one :class:`ChunkRead` per
     ``(band, time, tile)`` combination.
@@ -523,13 +523,13 @@ async def _explain_async(
     if "y" not in da.sizes or "x" not in da.sizes:
         raise ValueError(
             "DataArray must have 'y' and 'x' dimensions for explain(). "
-            "The array may have been reduced to a single pixel."
+            "The array may have been reduced to a single pixel.",
         )
 
     # Filter to bands present in the current DataArray.
     if "band" in da.coords:
         current_bands: set[str] = set(
-            np.atleast_1d(da.coords["band"].values).astype(str)
+            np.atleast_1d(da.coords["band"].values).astype(str),
         )
         active_bands = [b for b in backend.bands if b in current_bands]
     else:
@@ -542,17 +542,20 @@ async def _explain_async(
 
     # Identify which time steps to explain based on current DataArray coords.
     full_time_coords: np.ndarray = np.asarray(
-        da.attrs["_stac_time_coords"], dtype="datetime64[D]"
+        da.attrs["_stac_time_coords"],
+        dtype="datetime64[D]",
     )
     full_time_filters: list[str] = backend.dates
 
     if "time" in da.coords:
         current_times: set[np.datetime64] = set(
-            np.atleast_1d(da.coords["time"].values).astype("datetime64[D]")
+            np.atleast_1d(da.coords["time"].values).astype("datetime64[D]"),
         )
         time_items = [
             (i, f, tc)
-            for i, (f, tc) in enumerate(zip(full_time_filters, full_time_coords))
+            for i, (f, tc) in enumerate(
+                zip(full_time_filters, full_time_coords, strict=False),
+            )
             if tc.astype("datetime64[D]") in current_times
         ]
     else:
@@ -565,12 +568,13 @@ async def _explain_async(
     x_start, y_start_physical, roi_width, roi_height = _roi_pixel_offsets(da, backend)
     roi_affine = backend.dst_affine * Affine.translation(x_start, y_start_physical)
     spatial_chunks = list(
-        _iter_spatial_chunks(roi_affine, roi_width, roi_height, chunk_w, chunk_h)
+        _iter_spatial_chunks(roi_affine, roi_width, roi_height, chunk_w, chunk_h),
     )
 
     n_queries = len(time_items) * len(spatial_chunks)
     logger.debug(
-        "explain: %d DuckDB queries (%d time step(s) x %d spatial tile(s)) for %d band(s)",
+        "explain: %d DuckDB queries "
+        "(%d time step(s) x %d spatial tile(s)) for %d band(s)",
         n_queries,
         len(time_items),
         len(spatial_chunks),
@@ -589,9 +593,12 @@ async def _explain_async(
     ) -> list[ChunkRead]:
         """Query once for this (time, tile) and fan results across all bands."""
         chunk_bbox_4326 = _compute_chunk_bbox_4326(
-            tile_affine, actual_w, actual_h, dst_crs
+            tile_affine,
+            actual_w,
+            actual_h,
+            dst_crs,
         )
-        with backend._duckdb_lock:
+        with backend.duckdb_lock:
             items = backend.duckdb_client.search(
                 backend.parquet_path,
                 bbox=chunk_bbox_4326,
@@ -624,7 +631,7 @@ async def _explain_async(
                             backend.store,
                         )
                         for item in items
-                    ]
+                    ],
                 )
                 cog_reads = [r for r in raw_reads if r is not None]
             else:
@@ -648,7 +655,7 @@ async def _explain_async(
                     chunk_width=actual_w,
                     chunk_height=actual_h,
                     cog_reads=cog_reads,
-                )
+                ),
             )
         return tile_reads
 
@@ -666,7 +673,7 @@ async def _explain_async(
             )
             for t_idx, date_filter, time_coord in time_items
             for row, col, tile_affine, actual_w, actual_h in spatial_chunks
-        ]
+        ],
     )
     chunk_reads = [cr for tile_reads in tile_results for cr in tile_reads]
 
@@ -709,7 +716,7 @@ class StacCogAccessor:
         """
         self._da = da
 
-    def explain(self, fetch_headers: bool = False) -> ExplainPlan:
+    def explain(self, *, fetch_headers: bool = False) -> ExplainPlan:
         """Return a dry-run read plan without fetching any pixel data.
 
         Runs the same DuckDB spatial queries that would fire during
@@ -738,6 +745,8 @@ class StacCogAccessor:
             raise ValueError(
                 "This DataArray does not have stac_cog explain metadata. "
                 "Ensure it was created by lazycogs.open() or "
-                "lazycogs.open_async()."
+                "lazycogs.open_async().",
             )
-        return _run_coroutine(_explain_async(self._da, backend, fetch_headers))
+        return _run_coroutine(
+            _explain_async(self._da, backend, fetch_headers=fetch_headers),
+        )

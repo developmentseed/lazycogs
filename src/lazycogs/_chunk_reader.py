@@ -5,15 +5,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-import numpy.ma as ma
-from affine import Affine
 from async_geotiff import GeoTIFF, Overview, RasterArray, Window
-from pyproj import CRS, Transformer
+from numpy import ma
 
 from lazycogs._mosaic_methods import FirstMethod, MosaicMethodBase
 from lazycogs._reproject import (
@@ -25,7 +22,11 @@ from lazycogs._reproject import (
 from lazycogs._store import resolve as _resolve_store
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from affine import Affine
     from obstore.store import ObjectStore
+    from pyproj import CRS, Transformer
 
 logger = logging.getLogger(__name__)
 
@@ -44,17 +45,25 @@ class _ChunkContext:
     chunk_width: int
     chunk_height: int
     nodata: float | None
-    store: "ObjectStore | None"
-    path_fn: "Callable[[str], str] | None"
+    store: ObjectStore | None
+    path_fn: Callable[[str], str] | None
     warp_cache: dict[tuple[tuple[float, ...], CRS], WarpMap] | None
 
 
 def _log_batch_failure(
-    label: str, key: object, item_id: str, err: BaseException
+    label: str,
+    key: object,
+    item_id: str,
+    err: BaseException,
 ) -> None:
     """Log a warning for an item that failed inside an asyncio.gather batch."""
     logger.warning(
-        "Failed to read %s %r from item %s: %s", label, key, item_id, err, exc_info=err
+        "Failed to read %s %r from item %s: %s",
+        label,
+        key,
+        item_id,
+        err,
+        exc_info=err,
     )
 
 
@@ -233,7 +242,11 @@ async def _open_and_window(
     logger.debug("GeoTIFF.open %s took %.3fs", path, time.perf_counter() - t0)
 
     target_res_native, t = _target_res_and_transformer(
-        ctx.chunk_affine, ctx.chunk_width, ctx.chunk_height, ctx.dst_crs, geotiff.crs
+        ctx.chunk_affine,
+        ctx.chunk_width,
+        ctx.chunk_height,
+        ctx.dst_crs,
+        geotiff.crs,
     )
     overview = _select_overview(geotiff, target_res_native)
     if overview is not None:
@@ -246,7 +259,10 @@ async def _open_and_window(
         )
     reader: GeoTIFF | Overview = overview if overview is not None else geotiff
     bbox_native = _chunk_bbox_native(
-        ctx.chunk_affine, ctx.chunk_width, ctx.chunk_height, t
+        ctx.chunk_affine,
+        ctx.chunk_width,
+        ctx.chunk_height,
+        t,
     )
     window = _native_window(reader, bbox_native, reader.width, reader.height)
     return geotiff, reader, window, path
@@ -364,7 +380,7 @@ async def _read_item_band(
         return band, geotiff, band_store
 
     open_results = await asyncio.gather(
-        *[_open_band(b, h) for b, h in band_hrefs.items()]
+        *[_open_band(b, h) for b, h in band_hrefs.items()],
     )
 
     # Per-band: select overview, compute window.
@@ -377,19 +393,26 @@ async def _read_item_band(
         effective_nodata = ctx.nodata if ctx.nodata is not None else geotiff.nodata
         src_crs = geotiff.crs
         target_res_native, t = _target_res_and_transformer(
-            ctx.chunk_affine, ctx.chunk_width, ctx.chunk_height, ctx.dst_crs, src_crs
+            ctx.chunk_affine,
+            ctx.chunk_width,
+            ctx.chunk_height,
+            ctx.dst_crs,
+            src_crs,
         )
         overview = _select_overview(geotiff, target_res_native)
         reader = overview if overview is not None else geotiff
         bbox_native = _chunk_bbox_native(
-            ctx.chunk_affine, ctx.chunk_width, ctx.chunk_height, t
+            ctx.chunk_affine,
+            ctx.chunk_width,
+            ctx.chunk_height,
+            t,
         )
         window = _native_window(reader, bbox_native, reader.width, reader.height)
         if window is None:
             continue
 
         band_read_plan.append(
-            (band, geotiff, reader, window, effective_nodata, src_crs)
+            (band, geotiff, reader, window, effective_nodata, src_crs),
         )
 
     if not band_read_plan:
@@ -397,12 +420,14 @@ async def _read_item_band(
 
     # Read all windows concurrently.
     async def _read_band(
-        band: str, reader: GeoTIFF | Overview, window: Window
+        band: str,
+        reader: GeoTIFF | Overview,
+        window: Window,
     ) -> tuple[str, RasterArray]:
         return band, await reader.read(window=window)
 
     read_results = await asyncio.gather(
-        *[_read_band(b, r, w) for b, _, r, w, _, _ in band_read_plan]
+        *[_read_band(b, r, w) for b, _, r, w, _, _ in band_read_plan],
     )
 
     effective_nodatas = {b: n for b, _, _, _, n, _ in band_read_plan}
@@ -415,7 +440,7 @@ async def _read_item_band(
 
     # Compute warp maps and apply, sharing maps across bands with identical geometry.
     loop = asyncio.get_running_loop()
-    results = await loop.run_in_executor(
+    return await loop.run_in_executor(
         None,
         lambda: _apply_bands_with_warp_cache(
             band_rasters,
@@ -426,7 +451,6 @@ async def _read_item_band(
             ctx.warp_cache,
         ),
     )
-    return results
 
 
 async def _drain_in_order(
@@ -462,13 +486,14 @@ async def _drain_in_order(
     try:
         while pending:
             done, pending = await asyncio.wait(
-                pending, return_when=asyncio.FIRST_COMPLETED
+                pending,
+                return_when=asyncio.FIRST_COMPLETED,
             )
             for fut in done:
                 idx = task_index[id(fut)]
                 try:
                     completed[idx] = fut.result()
-                except BaseException as exc:
+                except Exception as exc:  # noqa: BLE001
                     on_error(idx, exc)
                     completed[idx] = None
 
@@ -562,7 +587,8 @@ async def async_mosaic_chunk(
     ]
 
     def _feed(
-        idx: int, result: dict[str, tuple[np.ndarray, float | None]] | None
+        _idx: int,
+        result: dict[str, tuple[np.ndarray, float | None]] | None,
     ) -> None:
         if result is None:
             return
@@ -580,11 +606,12 @@ async def async_mosaic_chunk(
     fill = nodata if nodata is not None else 0
     output: dict[str, np.ndarray] = {}
     for band in bands:
-        method = mosaic_methods[band]
-        if method._mosaic is None:
+        try:
+            output[band] = mosaic_methods[band].data
+        except ValueError:
             output[band] = np.full(
-                (1, chunk_height, chunk_width), fill, dtype=np.float32
+                (1, chunk_height, chunk_width),
+                fill,
+                dtype=np.float32,
             )
-        else:
-            output[band] = method.data
     return output

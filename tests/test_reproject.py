@@ -51,7 +51,14 @@ def test_out_of_bounds_pixels_get_nodata(wgs84):
     # Destination covers x=0..3, entirely outside source
     dst_transform = _make_transform(0.0, 3.0, 1.0)
     out = reproject_array(
-        data, src_transform, wgs84, dst_transform, wgs84, 3, 3, nodata=-9999.0
+        data,
+        src_transform,
+        wgs84,
+        dst_transform,
+        wgs84,
+        3,
+        3,
+        nodata=-9999.0,
     )
     np.testing.assert_array_equal(out, -9999.0)
 
@@ -78,7 +85,7 @@ def test_multiband_preserved(wgs84):
     """All bands are reprojected independently."""
     transform = _make_transform(0.0, 2.0, 1.0)
     data = np.stack(
-        [np.ones((2, 2), dtype=np.float32) * b for b in range(4)]
+        [np.ones((2, 2), dtype=np.float32) * b for b in range(4)],
     )  # shape (4, 2, 2)
     out = reproject_array(data, transform, wgs84, transform, wgs84, 2, 2)
     assert out.shape == (4, 2, 2)
@@ -101,7 +108,14 @@ def test_cross_crs_reproject(wgs84, utm32n):
     wgs84_transform = _make_transform(9.0, 50.1, 0.01)
 
     out = reproject_array(
-        data, utm_transform, utm32n, wgs84_transform, wgs84, 5, 5, nodata=0.0
+        data,
+        utm_transform,
+        utm32n,
+        wgs84_transform,
+        wgs84,
+        5,
+        5,
+        nodata=0.0,
     )
     # Any pixel that mapped back to a valid source location should be 42.
     valid_pixels = out[out != 0.0]
@@ -118,7 +132,14 @@ def test_partial_overlap_nodata(wgs84):
     # Destination covers x=2..6 — right half overlaps, left half does not
     dst_transform = _make_transform(2.0, 1.0, 1.0)
     out = reproject_array(
-        data, src_transform, wgs84, dst_transform, wgs84, 4, 1, nodata=-1.0
+        data,
+        src_transform,
+        wgs84,
+        dst_transform,
+        wgs84,
+        4,
+        1,
+        nodata=-1.0,
     )
     # x=2 and x=3 overlap source (values 7); x=4 and x=5 are outside
     np.testing.assert_array_equal(out[0, 0, :2], 7.0)
@@ -148,7 +169,14 @@ def test_apply_warp_map_matches_reproject_array(wgs84):
     wm = compute_warp_map(src_transform, wgs84, dst_transform, wgs84, 3, 3)
     out_warp = apply_warp_map(data, wm, nodata=0.0)
     out_reproject = reproject_array(
-        data, src_transform, wgs84, dst_transform, wgs84, 3, 3, nodata=0.0
+        data,
+        src_transform,
+        wgs84,
+        dst_transform,
+        wgs84,
+        3,
+        3,
+        nodata=0.0,
     )
     np.testing.assert_array_equal(out_warp, out_reproject)
 
@@ -165,10 +193,12 @@ def test_apply_warp_map_reused_across_bands(wgs84):
     out_b = apply_warp_map(band_b, wm)
 
     np.testing.assert_array_equal(
-        out_a, reproject_array(band_a, transform, wgs84, transform, wgs84, 2, 2)
+        out_a,
+        reproject_array(band_a, transform, wgs84, transform, wgs84, 2, 2),
     )
     np.testing.assert_array_equal(
-        out_b, reproject_array(band_b, transform, wgs84, transform, wgs84, 2, 2)
+        out_b,
+        reproject_array(band_b, transform, wgs84, transform, wgs84, 2, 2),
     )
 
 

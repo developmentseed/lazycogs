@@ -5,9 +5,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Self
 
 import numpy as np
 import xarray as xr
@@ -19,9 +18,13 @@ from lazycogs._backend import MultiBandStacBackendArray
 from lazycogs._cql2 import _extract_filter_fields, _sortby_fields
 from lazycogs._grid import compute_output_grid
 from lazycogs._mosaic_methods import FirstMethod, MosaicMethodBase
+from lazycogs._store import resolve
 from lazycogs._temporal import _TemporalGrouper, grouper_from_period
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from arro3.core import Table
     from obstore.store import ObjectStore
 
 logger = logging.getLogger(__name__)
@@ -45,16 +48,16 @@ class _OpenParams:
     dtype: str | np.dtype | None
     mosaic_method: type[MosaicMethodBase] | None
     time_period: str
-    store: "ObjectStore | None"
+    store: ObjectStore | None
     max_concurrent_reads: int
-    path_from_href: "Callable[[str], str] | None"
-    duckdb_client: "DuckdbClient | None"
+    path_from_href: Callable[[str], str] | None
+    duckdb_client: DuckdbClient | None
 
 
 class _CompactDateArray(np.ndarray):
     """Numpy datetime64 array subclass with a compact display for xarray HTML repr."""
 
-    def __new__(cls, values: np.ndarray) -> "_CompactDateArray":
+    def __new__(cls, values: np.ndarray) -> Self:
         return np.asarray(values, dtype="datetime64[D]").view(cls)
 
     def __str__(self) -> str:
@@ -91,6 +94,7 @@ def _discover_bands(
         datetime: RFC 3339 datetime or range to filter items.
         filter: CQL2 filter expression (text string or JSON dict).
         ids: List of STAC item IDs to restrict results to.
+        sortby: Sort keys forwarded to the DuckDB query.
 
     Returns:
         Ordered list of asset key strings.
@@ -123,7 +127,7 @@ def _discover_bands(
         else:
             other_bands.append(key)
 
-    return data_bands if data_bands else other_bands or list(assets)
+    return data_bands or other_bands or list(assets)
 
 
 def _smoketest_store(
@@ -135,8 +139,8 @@ def _smoketest_store(
     filter: str | dict[str, Any] | None = None,
     ids: list[str] | None = None,
     bands: list[str] | None = None,
-    store: "ObjectStore | None" = None,
-    path_from_href: "Callable[[str], str] | None" = None,
+    store: ObjectStore | None = None,
+    path_from_href: Callable[[str], str] | None = None,
 ) -> None:
     """Verify the object store can access a sample asset from the parquet.
 
@@ -145,8 +149,6 @@ def _smoketest_store(
     the store cannot reach the asset so misconfiguration is caught at
     :func:`open` time rather than deferred to the first chunk read.
     """
-    from lazycogs._store import resolve
-
     items = duckdb_client.search(
         parquet_path,
         max_items=1,
@@ -189,13 +191,13 @@ def _smoketest_store(
         raise RuntimeError(
             f"Object store cannot access {href!r}: {e}. "
             "Pass a configured store= argument to lazycogs.open() to authenticate. "
-            "See the cloud storage guide for examples."
+            "See the cloud storage guide for examples.",
         ) from e
 
     logger.debug("Storage smoketest passed for %r", href)
 
 
-def _arrow_col(table, name: str) -> list:
+def _arrow_col(table: Table, name: str) -> list:
     """Return a column from an Arrow table as a Python list, or all-None if absent."""
     if name in table.schema.names:
         return table.column(name).to_pylist()
@@ -226,6 +228,7 @@ def _build_time_steps(
         datetime: RFC 3339 datetime or range to pre-filter items.
         filter: CQL2 filter expression (text string or JSON dict).
         ids: List of STAC item IDs to restrict results to.
+        sortby: Sort keys forwarded to the DuckDB query.
         temporal_grouper: Grouper that maps item datetimes to group labels,
             datetime filter strings, and coordinate values.
 
@@ -247,8 +250,8 @@ def _build_time_steps(
         ids=ids,
         include=list(
             {"datetime", "start_datetime"}.union(filter_fields).union(
-                _sortby_fields(sortby)
-            )
+                _sortby_fields(sortby),
+            ),
         ),
     )
 
@@ -259,6 +262,7 @@ def _build_time_steps(
         for dt_val, start_val in zip(
             _arrow_col(table, "datetime"),
             _arrow_col(table, "start_datetime"),
+            strict=False,
         ):
             val = dt_val if dt_val is not None else start_val
             if val is None:
@@ -334,7 +338,8 @@ def _build_dataarray(
 
     """
     dst_affine, dst_width, dst_height, x_coords, y_coords = compute_output_grid(
-        bbox=bbox, crs=dst_crs, resolution=resolution
+        bbox=bbox,
+        resolution=resolution,
     )
 
     multi = MultiBandStacBackendArray(
@@ -400,9 +405,10 @@ def _open_impl(params: _OpenParams) -> xr.DataArray:
             params.href.endswith(".parquet") or params.href.endswith(".geoparquet")
         ):
             raise ValueError(
-                f"href must be a .parquet or .geoparquet file path, got: {params.href!r}. "
+                f"href must be a .parquet or .geoparquet file path, "
+                f"got: {params.href!r}. "
                 "To search a STAC API, use rustac.search_to() first. "
-                "To query a hive-partitioned directory, pass a duckdb_client."
+                "To query a hive-partitioned directory, pass a duckdb_client.",
             )
 
     # Validate time_period early before any I/O so bad values fail fast.
@@ -472,7 +478,7 @@ def _open_impl(params: _OpenParams) -> xr.DataArray:
     if not filter_strings:
         raise ValueError(
             f"No STAC items matched the query in {params.href!r} "
-            f"(bbox={bbox_4326}, datetime={params.datetime})."
+            f"(bbox={bbox_4326}, datetime={params.datetime}).",
         )
 
     logger.info(
@@ -511,7 +517,7 @@ def _open_impl(params: _OpenParams) -> xr.DataArray:
     )
 
 
-async def open_async(  # noqa: A001
+async def open_async(
     href: str,
     *,
     datetime: str | None = None,
@@ -602,11 +608,17 @@ async def open_async(  # noqa: A001
                 store = S3Store(bucket="lp-prod-protected", ...)
 
                 def strip_bucket(href: str) -> str:
-                    # href: https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/path/to/file.tif
-                    # store is rooted at the bucket, so the path is just path/to/file.tif
-                    return urlparse(href).path.lstrip("/").removeprefix("lp-prod-protected/")
+                    # href: https://data.lpdaac.earthdatacloud.nasa.gov/
+                    #   lp-prod-protected/path/to/file.tif
+                    # store is rooted at the bucket, so the path is
+                    # just path/to/file.tif
+                    return (
+                        urlparse(href).path.lstrip("/").removeprefix("lp-prod-protected/")
+                    )
 
-                da = lazycogs.open("items.parquet", ..., store=store, path_from_href=strip_bucket)
+                da = lazycogs.open(
+                    "items.parquet", ..., store=store, path_from_href=strip_bucket
+                )
 
         duckdb_client: Optional ``DuckdbClient`` instance.  When
             ``None`` (default), a plain ``DuckdbClient()`` is used,
@@ -767,5 +779,5 @@ def open(  # noqa: A001
             max_concurrent_reads=max_concurrent_reads,
             path_from_href=path_from_href,
             duckdb_client=duckdb_client,
-        )
+        ),
     )

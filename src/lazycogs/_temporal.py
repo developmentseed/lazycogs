@@ -231,5 +231,5 @@ def grouper_from_period(time_period: str) -> _TemporalGrouper:
 
     raise ValueError(
         f"Unsupported time_period {time_period!r}. "
-        "Supported values: 'P1D', 'PnD' (n>1), 'P1W', 'P1M', 'P1Y'."
+        "Supported values: 'P1D', 'PnD' (n>1), 'P1W', 'P1M', 'P1Y'.",
     )
