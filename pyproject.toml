@@ -58,8 +58,28 @@ docs = [
     "mkdocstrings[python]>=1.0.3",
 ]
 
-[tool.ruff]
-exclude = []
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "D203",   # incompatible with D211
+    "D213",   # incompatible with D212
+    "EM101",  # raw string in exception
+    "EM102",  # f-string in exception
+    "FIX002", # todo statements
+    "PYI051", # literal strings redundant with str in type union
+    "TD002",  # todo without author name
+    "TRY003", # define exceptions in the exception class
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+    "ANN001",  # annotation in function argument
+    "ANN201",  # return type annotation
+    "PLR2004", # Magic value used in comparison
+    "S101",    # assert
+    "SLF001",  # private member access
+    "D",       # docstring
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
