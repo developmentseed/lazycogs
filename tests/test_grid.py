@@ -8,14 +8,14 @@ from lazycogs._grid import compute_output_grid
 
 def test_basic_dimensions():
     """Width and height are derived from bbox / resolution."""
-    transform, w, h, x, y = compute_output_grid((0.0, 0.0, 10.0, 5.0), 1.0)
+    _transform, w, h, _x, _y = compute_output_grid((0.0, 0.0, 10.0, 5.0), 1.0)
     assert w == 10
     assert h == 5
 
 
 def test_affine_origin():
     """Transform origin is the top-left corner of the top-left pixel."""
-    transform, w, h, x, y = compute_output_grid((10.0, 20.0, 30.0, 40.0), 1.0)
+    transform, _w, _h, _x, _y = compute_output_grid((10.0, 20.0, 30.0, 40.0), 1.0)
     assert transform.c == pytest.approx(10.0)
     assert transform.f == pytest.approx(40.0)
     assert transform.a == pytest.approx(1.0)
@@ -24,7 +24,7 @@ def test_affine_origin():
 
 def test_pixel_centres():
     """x/y coordinate arrays hold pixel centres, not edges."""
-    transform, w, h, x, y = compute_output_grid((0.0, 0.0, 4.0, 2.0), 1.0)
+    _transform, _w, _h, x, y = compute_output_grid((0.0, 0.0, 4.0, 2.0), 1.0)
     np.testing.assert_allclose(x, [0.5, 1.5, 2.5, 3.5])
     np.testing.assert_allclose(y, [0.5, 1.5])
 
@@ -43,14 +43,14 @@ def test_y_coords_increase():
 
 def test_coord_array_lengths():
     """x and y arrays have lengths matching width and height."""
-    transform, w, h, x, y = compute_output_grid((0.0, 0.0, 10.0, 5.0), 1.0)
+    _transform, w, h, x, y = compute_output_grid((0.0, 0.0, 10.0, 5.0), 1.0)
     assert len(x) == w
     assert len(y) == h
 
 
 def test_small_bbox_rounds_to_one_pixel():
-    """A bbox smaller than one resolution step yields a 1×1 grid."""
-    transform, w, h, x, y = compute_output_grid((0.0, 0.0, 0.1, 0.1), 1.0)
+    """A bbox smaller than one resolution step yields a 1x1 grid."""
+    _transform, w, h, _x, _y = compute_output_grid((0.0, 0.0, 0.1, 0.1), 1.0)
     assert w == 1
     assert h == 1
 
@@ -70,7 +70,7 @@ def test_first_and_last_pixel_centres_span_bbox():
     """First and last pixel centres lie half-pixel inside the bbox edges."""
     res = 2.0
     minx, miny, maxx, maxy = 0.0, 0.0, 10.0, 6.0
-    _, w, h, x, y = compute_output_grid((minx, miny, maxx, maxy), res)
+    _, _w, _h, x, y = compute_output_grid((minx, miny, maxx, maxy), res)
     assert x[0] == pytest.approx(minx + res / 2)
     assert x[-1] == pytest.approx(maxx - res / 2)
     assert y[0] == pytest.approx(miny + res / 2)

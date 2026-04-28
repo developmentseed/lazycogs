@@ -34,7 +34,7 @@ def _masked(data: list, mask: list) -> ma.MaskedArray:
 def test_data_raises_before_feed(cls):
     """`data` raises before any tile is fed."""
     m = cls()
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="No data has been fed"):
         _ = m.data
 
 

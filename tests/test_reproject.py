@@ -104,7 +104,7 @@ def test_cross_crs_reproject(wgs84, utm32n):
     data = np.full((1, 10, 10), 42.0, dtype=np.float32)
 
     # Destination grid in WGS84, centred over the UTM source extent
-    # (which maps to roughly lon 9.0–9.14, lat 50.01–50.10)
+    # (which maps to roughly lon 9.0-9.14, lat 50.01-50.10)
     wgs84_transform = _make_transform(9.0, 50.1, 0.01)
 
     out = reproject_array(
@@ -125,7 +125,7 @@ def test_cross_crs_reproject(wgs84, utm32n):
 
 def test_partial_overlap_nodata(wgs84):
     """Pixels that fall outside the source extent use nodata; overlapping ones copy."""
-    # 4×1 source strip along x=0..4
+    # 4x1 source strip along x=0..4
     src_transform = _make_transform(0.0, 1.0, 1.0)
     data = np.full((1, 1, 4), 7.0, dtype=np.float32)
 
@@ -161,7 +161,7 @@ def test_compute_warp_map_returns_correct_shape(wgs84):
 
 
 def test_apply_warp_map_matches_reproject_array(wgs84):
-    """apply_warp_map with a precomputed map gives the same result as reproject_array."""
+    """apply_warp_map with a precomputed map matches reproject_array."""
     src_transform = _make_transform(0.0, 3.0, 1.0)
     dst_transform = _make_transform(0.0, 3.0, 1.0)
     data = np.arange(9, dtype=np.float32).reshape(1, 3, 3)
@@ -182,7 +182,7 @@ def test_apply_warp_map_matches_reproject_array(wgs84):
 
 
 def test_apply_warp_map_reused_across_bands(wgs84):
-    """A single WarpMap applied to two bands gives the same result as reproject_array per band."""
+    """A single WarpMap applied to two bands matches reproject_array per band."""
     transform = _make_transform(0.0, 2.0, 1.0)
     band_a = np.full((1, 2, 2), 1.0, dtype=np.float32)
     band_b = np.full((1, 2, 2), 2.0, dtype=np.float32)
@@ -204,17 +204,17 @@ def test_apply_warp_map_reused_across_bands(wgs84):
 
 def test_apply_warp_map_different_src_dimensions(wgs84):
     """apply_warp_map derives valid mask from actual data shape, not stored metadata."""
-    # Compute warp map for a 4×4 source extent.
+    # Compute warp map for a 4x4 source extent.
     src_transform = _make_transform(0.0, 4.0, 1.0)
     dst_transform = _make_transform(0.0, 4.0, 1.0)
     wm = compute_warp_map(src_transform, wgs84, dst_transform, wgs84, 4, 4)
 
-    # Apply to a 3×3 source array — pixels that map to row/col >= 3 should use nodata.
+    # Apply to a 3x3 source array — pixels that map to row/col >= 3 should use nodata.
     data_small = np.ones((1, 3, 3), dtype=np.float32)
     out = apply_warp_map(data_small, wm, nodata=-1.0)
 
-    # Top-left 3×3 destination pixels map into the valid 3×3 source.
+    # Top-left 3x3 destination pixels map into the valid 3x3 source.
     np.testing.assert_array_equal(out[0, :3, :3], 1.0)
-    # Bottom row and right column of destination map outside the 3×3 source.
+    # Bottom row and right column of destination map outside the 3x3 source.
     np.testing.assert_array_equal(out[0, 3, :], -1.0)
     np.testing.assert_array_equal(out[0, :, 3], -1.0)

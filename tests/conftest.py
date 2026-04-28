@@ -19,7 +19,7 @@ def synthetic_cog(tmp_path_factory) -> Path:
     """Write a small synthetic COG with four overview levels to a temp file.
 
     Properties:
-    - Native resolution: 10 m, 320 × 320 pixels
+    - Native resolution: 10 m, 320 x 320 pixels
     - CRS: UTM zone 32N (EPSG:32632)
     - Origin: 500 000 E, 5 600 000 N
     - Overview shrink factors: [2, 4, 8, 16] → resolutions 20, 40, 80, 160 m

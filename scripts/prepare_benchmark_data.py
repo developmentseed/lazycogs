@@ -29,6 +29,8 @@ from urllib.parse import urlparse
 import rustac
 from obstore.store import from_url
 
+logger = logging.getLogger(__name__)
+
 STAC_HREF = "https://earth-search.aws.element84.com/v1"
 COLLECTIONS = ["sentinel-2-c1-l2a"]
 # Small region over western Colorado, in EPSG:4326 for STAC query
@@ -54,10 +56,10 @@ def _download(href: str, dest: Path) -> None:
     path = parsed.path.lstrip("/")
     kwargs = {"skip_signature": True}
     store = from_url(root_url, **kwargs)
-    logging.info("Downloading %s", href)
+    logger.info("Downloading %s", href)
     result = store.get(path)
     dest.write_bytes(result.bytes())
-    logging.info("Wrote %s (%.1f MB)", dest, dest.stat().st_size / 1_048_576)
+    logger.info("Wrote %s (%.1f MB)", dest, dest.stat().st_size / 1_048_576)
 
 
 def _expand_items(source_items: list[dict], dates: list[str]) -> list[dict]:
@@ -88,7 +90,7 @@ def _expand_items(source_items: list[dict], dates: list[str]) -> list[dict]:
     return expanded
 
 
-async def main(overwrite: bool = False) -> None:
+async def main(*, overwrite: bool = False) -> None:
     """Run the benchmark data preparation pipeline."""
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     DATA_DIR.mkdir(exist_ok=True)
@@ -96,7 +98,7 @@ async def main(overwrite: bool = False) -> None:
 
     raw_parquet = DATA_DIR / "raw_items.parquet"
     if overwrite or not raw_parquet.exists():
-        logging.info("Querying STAC API (%s)...", STAC_HREF)
+        logger.info("Querying STAC API (%s)...", STAC_HREF)
         await rustac.search_to(
             str(raw_parquet),
             href=STAC_HREF,
@@ -107,7 +109,7 @@ async def main(overwrite: bool = False) -> None:
         )
 
     items: list[dict] = rustac.search_sync(str(raw_parquet), use_duckdb=True)
-    logging.info("Found %d items", len(items))
+    logger.info("Found %d items", len(items))
 
     local_items = []
     for item in items:
@@ -115,7 +117,7 @@ async def main(overwrite: bool = False) -> None:
         local_assets = {}
         for band in BANDS:
             if band not in item.get("assets", {}):
-                logging.warning("Item %s has no asset %r; skipping.", item_id, band)
+                logger.warning("Item %s has no asset %r; skipping.", item_id, band)
                 continue
             href = item["assets"][band]["href"]
             local_path = cog_dir / item_id / f"{band}.tif"
@@ -129,19 +131,19 @@ async def main(overwrite: bool = False) -> None:
 
     out_parquet = DATA_DIR / "benchmark_items.parquet"
     rustac.write_sync(str(out_parquet), local_items)
-    logging.info("Wrote benchmark parquet: %s", out_parquet)
+    logger.info("Wrote benchmark parquet: %s", out_parquet)
 
     expanded_parquet = DATA_DIR / "expanded_benchmark_items.parquet"
     if overwrite or not expanded_parquet.exists():
         expanded = _expand_items(local_items, SYNTHETIC_DATES)
         rustac.write_sync(str(expanded_parquet), expanded)
-        logging.info(
+        logger.info(
             "Wrote expanded benchmark parquet (%d time steps): %s",
             len(SYNTHETIC_DATES),
             expanded_parquet,
         )
 
-    logging.info(
+    logger.info(
         "Run benchmarks with: uv run pytest tests/benchmarks/ --benchmark-enable",
     )
 

@@ -77,13 +77,29 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = [
     "ANN001",  # annotation in function argument
+    "ANN002",  # *args annotation in test stubs
+    "ANN003",  # **kwargs annotation in test stubs
     "ANN201",  # return type annotation
+    "ANN202",  # return type for private test helpers
+    "ARG001",  # test stubs intentionally have unused args for signature compatibility
+    "ARG005",  # unused lambda args in test stubs
+    "BLE001",  # catching broad Exception acceptable in tests
+    "ERA001",  # section-separator comments are not commented-out code
+    "FBT002",  # boolean defaults in fixtures are fine
+    "INP001",  # pytest does not require __init__.py in tests/
+    "PLC0415", # lazy imports inside test functions (deliberate isolation)
     "PLR2004", # Magic value used in comparison
     "S101",    # assert
+    "S108",    # /tmp/ dummy paths in test fixtures are not a real security issue
+    "S110",    # try/except/pass in test stubs
     "SLF001",  # private member access
+    "T201",    # print in integration tests is intentional benchmark output
+    "TC003",   # type-checking import blocks not needed in tests
     "D",       # docstring
 ]
 "docs/notebooks/*" = [
+    "ANN",   # type annotations not required in notebook cells
+    "D",     # docstrings not required in notebook utility functions
     "T201",  # print statements
 ]
 

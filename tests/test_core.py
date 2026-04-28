@@ -71,7 +71,7 @@ def test_open_accepts_parquet_extension_passes_validation(tmp_path):
     path_obj = tmp_path / "items.parquet"
     path_obj.write_bytes(b"")  # empty file — rustac will error, but not on extension
 
-    with pytest.raises(Exception) as exc_info:
+    with pytest.raises(Exception) as exc_info:  # noqa: PT011
         lazycogs.open(
             path,
             bbox=(-93.5, 44.5, -93.0, 45.0),
@@ -152,7 +152,7 @@ def test_build_time_steps_month_two_months():
     """Items in two different months produce two time steps."""
     table = _items_to_arrow(_FAKE_ITEMS_TWO_MONTHS)
     with patch("rustac.DuckdbClient.search_to_arrow", return_value=table):
-        filter_strings, time_coords = _build_time_steps(
+        filter_strings, _ = _build_time_steps(
             "fake.parquet",
             duckdb_client=DuckdbClient(),
             temporal_grouper=_MonthGrouper(),
@@ -171,7 +171,7 @@ def test_build_time_steps_p16d_same_bucket():
     ]
     table = _items_to_arrow(items)
     with patch("rustac.DuckdbClient.search_to_arrow", return_value=table):
-        filter_strings, time_coords = _build_time_steps(
+        filter_strings, _ = _build_time_steps(
             "fake.parquet",
             duckdb_client=DuckdbClient(),
             temporal_grouper=_FixedDayGrouper(16),
@@ -257,7 +257,7 @@ def test_open_invalid_time_period_raises():
 
 
 def test_open_works_inside_running_event_loop(tmp_path):
-    """open() does not raise RuntimeError when called from within a running event loop."""
+    """open() does not raise RuntimeError when called inside a running event loop."""
     import asyncio
 
     path = str(tmp_path / "items.parquet")
@@ -322,14 +322,16 @@ def test_smoketest_raises_runtime_error_on_head_failure():
 
     store = MemoryStore()  # empty — head() will raise
 
-    with patch("rustac.DuckdbClient.search", return_value=[_SMOKETEST_ITEM]):
-        with pytest.raises(RuntimeError, match="cannot access"):
-            _smoketest_store(
-                "items.parquet",
-                duckdb_client=DuckdbClient(),
-                store=store,
-                path_from_href=lambda href: href.split("/", 3)[-1],
-            )
+    with (
+        patch("rustac.DuckdbClient.search", return_value=[_SMOKETEST_ITEM]),
+        pytest.raises(RuntimeError, match="cannot access"),
+    ):
+        _smoketest_store(
+            "items.parquet",
+            duckdb_client=DuckdbClient(),
+            store=store,
+            path_from_href=lambda href: href.split("/", 3)[-1],
+        )
 
 
 def test_smoketest_no_op_when_no_items():

@@ -461,7 +461,7 @@ def _fake_items(band: str, n: int) -> list[dict]:
 def test_accessor_raises_on_non_stac_da():
     """explain() raises ValueError when the DataArray has no explain metadata."""
     da = xr.DataArray(np.zeros((3, 3)))
-    with pytest.raises(ValueError, match="lazycogs.open"):
+    with pytest.raises(ValueError, match=r"lazycogs\.open"):
         da.lazycogs.explain()
 
 

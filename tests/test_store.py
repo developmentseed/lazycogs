@@ -21,7 +21,7 @@ from lazycogs._store import resolve, store_for
 
 
 @pytest.mark.parametrize(
-    "href, expected_path",
+    ("href", "expected_path"),
     [
         ("s3://my-bucket/path/to/file.tif", "path/to/file.tif"),
         ("s3a://my-bucket/deep/path/file.tif", "deep/path/file.tif"),
@@ -54,7 +54,7 @@ def test_store_is_not_none(href):
 
 def test_unsupported_scheme_raises():
     """obstore's from_url rejects unknown schemes."""
-    with pytest.raises(Exception, match="(?i)scheme|url"):
+    with pytest.raises(Exception, match=r"(?i)scheme|url"):
         resolve("ftp://server/file.tif")
 
 
@@ -107,7 +107,8 @@ def test_path_fn_overrides_default_extraction():
 
 
 def test_path_fn_with_store_returns_both():
-    """When store and path_fn are both supplied, path_fn drives extraction and store is returned unchanged."""
+    """When store and path_fn are both supplied, path_fn drives extraction and the
+    store is returned unchanged."""
     user_store = MemoryStore()
 
     def path_fn(href: str) -> str:
@@ -138,7 +139,7 @@ def test_path_fn_not_called_without_it():
 
 
 @pytest.mark.parametrize(
-    "url, expected",
+    ("url", "expected"),
     [
         (
             "https://stac-extensions.github.io/storage/v1.0.0/schema.json",
@@ -399,15 +400,19 @@ def test_store_for_returns_store():
 
 
 def test_store_for_no_items_raises():
-    with patch("rustac.DuckdbClient.search", return_value=[]):
-        with pytest.raises(ValueError, match="No STAC items"):
-            store_for("items.parquet")
+    with (
+        patch("rustac.DuckdbClient.search", return_value=[]),
+        pytest.raises(ValueError, match="No STAC items"),
+    ):
+        store_for("items.parquet")
 
 
 def test_store_for_missing_asset_raises():
-    with patch("rustac.DuckdbClient.search", return_value=[_S3_ITEM]):
-        with pytest.raises(KeyError, match="B99"):
-            store_for("items.parquet", asset="B99")
+    with (
+        patch("rustac.DuckdbClient.search", return_value=[_S3_ITEM]),
+        pytest.raises(KeyError, match="B99"),
+    ):
+        store_for("items.parquet", asset="B99")
 
 
 def test_store_for_asset_kwarg_selects_asset():
@@ -563,9 +568,11 @@ def test_store_for_no_skip_signature_by_default():
 
         return real_from_url(url, **kwargs)
 
-    with patch("rustac.DuckdbClient.search", return_value=[_S3_ITEM]):
-        with patch("lazycogs._store.from_url", side_effect=capture_from_url):
-            store_for("items.parquet", skip_signature=True)
+    with (
+        patch("rustac.DuckdbClient.search", return_value=[_S3_ITEM]),
+        patch("lazycogs._store.from_url", side_effect=capture_from_url),
+    ):
+        store_for("items.parquet", skip_signature=True)
 
     assert call_kwargs.get("skip_signature") is True
 
@@ -580,8 +587,10 @@ def test_store_for_caller_kwargs_forwarded():
 
         return real_from_url(url, **kwargs)
 
-    with patch("rustac.DuckdbClient.search", return_value=[_S3_ITEM]):
-        with patch("lazycogs._store.from_url", side_effect=capture_from_url):
-            store_for("items.parquet", skip_signature=True)
+    with (
+        patch("rustac.DuckdbClient.search", return_value=[_S3_ITEM]),
+        patch("lazycogs._store.from_url", side_effect=capture_from_url),
+    ):
+        store_for("items.parquet", skip_signature=True)
 
     assert "skip_signature" in call_kwargs

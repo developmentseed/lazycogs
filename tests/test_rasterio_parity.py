@@ -208,16 +208,18 @@ def _assert_parity(
     diff = lazycogs_out.astype(np.int32) - rasterio_out.astype(np.int32)
     n_diff = int(np.count_nonzero(diff))
     actual_max = int(np.abs(diff).max()) if n_diff else 0
-    assert n_diff <= max_differing_pixels and actual_max <= max_abs_diff, (
+    msg = (
         f"{label}: {n_diff}/{lazycogs_out.size} pixels differ "
         f"(allowed ≤{max_differing_pixels}); "
         f"max abs diff = {actual_max} (allowed ≤{max_abs_diff})"
     )
+    assert n_diff <= max_differing_pixels, msg
+    assert actual_max <= max_abs_diff, msg
 
 
 @pytest.mark.parametrize("resolution", _RESOLUTIONS)
 def test_parity_same_crs(synthetic_cog: Path, resolution: int) -> None:
-    """lazycogs matches rasterio/nearest for same-CRS reads at all overview boundaries."""
+    """lazycogs matches rasterio for same-CRS reads at all overview levels."""
     dst_crs = CRS.from_epsg(32632)
     affine = _chunk_affine(resolution, _CENTER_UTM_X, _CENTER_UTM_Y)
 
@@ -263,5 +265,5 @@ def test_parity_cross_crs(synthetic_cog: Path, resolution: int) -> None:
         rio_out,
         f"cross_crs res={resolution}m",
         max_differing_pixels=3,
-        max_abs_diff=2048 * 16 + 1,  # 1 row in the coarsest (16×) overview
+        max_abs_diff=2048 * 16 + 1,  # 1 row in the coarsest (16x) overview
     )

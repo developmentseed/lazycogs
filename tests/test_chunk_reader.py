@@ -1,4 +1,4 @@
-"""Tests for _chunk_reader helpers: _select_overview, _native_window, and mosaic functions."""
+"""Tests for _chunk_reader helpers: _select_overview, _native_window, and mosaics."""
 
 from __future__ import annotations
 
@@ -116,7 +116,7 @@ def test_native_window_full_coverage():
 
 def test_native_window_sub_region():
     """A bbox covering the bottom-right quadrant returns the correct window."""
-    # 8×8 image, 1 m resolution, origin top-left at (0, 8)
+    # 8x8 image, 1 m resolution, origin top-left at (0, 8)
     transform = Affine(1.0, 0.0, 0.0, 0.0, -1.0, 8.0)
     reader = _mock_reader(transform)
     # Bottom-right quadrant: x=[4,8], y=[0,4]
@@ -139,7 +139,7 @@ def test_native_window_bbox_outside_returns_none():
 
 def test_native_window_clamped_to_image_bounds():
     """A bbox that extends beyond image edges is clamped to valid pixels."""
-    # 4×4 image
+    # 4x4 image
     transform = Affine(1.0, 0.0, 0.0, 0.0, -1.0, 4.0)
     reader = _mock_reader(transform)
     # Bbox extends 2 pixels beyond the right and bottom edges
@@ -351,7 +351,7 @@ def test_apply_bands_with_warp_cache_different_geometry():
 
 
 def test_apply_bands_with_warp_cache_shared_across_calls():
-    """A shared external cache reuses warp maps across separate calls (e.g. time steps)."""
+    """A shared cache reuses warp maps across separate calls (e.g. time steps)."""
     crs = CRS.from_epsg(4326)
     # Source transform offset from dst so the warp path is exercised.
     transform = Affine(1.0, 0.0, 0.5, 0.0, -1.0, 4.0)

@@ -249,20 +249,20 @@ class TestGrouperFromPeriod:
         assert isinstance(grouper_from_period("P1Y"), _YearGrouper)
 
     def test_invalid_raises(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Unsupported time_period"):
             grouper_from_period("invalid")
 
     def test_pt1h_raises(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Unsupported time_period"):
             grouper_from_period("PT1H")
 
     def test_p2m_raises(self):
         # P2M (2 months) is not supported
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Unsupported time_period"):
             grouper_from_period("P2M")
 
     def test_p2y_raises(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Unsupported time_period"):
             grouper_from_period("P2Y")
 
 
