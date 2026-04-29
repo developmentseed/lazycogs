@@ -16,7 +16,6 @@ from lazycogs._temporal import (
     grouper_from_period,
 )
 
-
 # ---------------------------------------------------------------------------
 # _DayGrouper
 # ---------------------------------------------------------------------------
@@ -213,7 +212,7 @@ class TestFixedDayGrouper:
         dt = "2023-01-15T00:00Z"
         assert g1.group_key(dt) == g2.group_key(dt)
         assert g1.datetime_filter(g1.group_key(dt)) == g2.datetime_filter(
-            g2.group_key(dt)
+            g2.group_key(dt),
         )
 
     def test_p5d_sort_order(self):
@@ -250,20 +249,20 @@ class TestGrouperFromPeriod:
         assert isinstance(grouper_from_period("P1Y"), _YearGrouper)
 
     def test_invalid_raises(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Unsupported time_period"):
             grouper_from_period("invalid")
 
     def test_pt1h_raises(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Unsupported time_period"):
             grouper_from_period("PT1H")
 
     def test_p2m_raises(self):
         # P2M (2 months) is not supported
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Unsupported time_period"):
             grouper_from_period("P2M")
 
     def test_p2y_raises(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Unsupported time_period"):
             grouper_from_period("P2Y")
 
 

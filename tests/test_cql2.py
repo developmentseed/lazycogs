@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-
 from lazycogs._cql2 import _extract_filter_fields, _sortby_fields
-
 
 # ---------------------------------------------------------------------------
 # _extract_filter_fields
@@ -42,7 +40,7 @@ def test_extract_filter_fields_returns_unique():
 def test_extract_filter_fields_nested():
     """Properties nested inside OR expressions are found recursively."""
     fields = _extract_filter_fields(
-        "(eo:cloud_cover < 10 OR eo:cloud_cover > 90) AND platform = 'landsat-8'"
+        "(eo:cloud_cover < 10 OR eo:cloud_cover > 90) AND platform = 'landsat-8'",
     )
     assert fields == {"eo:cloud_cover", "platform"}
 

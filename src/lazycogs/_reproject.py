@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import functools
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
-from affine import Affine
 from pyproj import CRS, Transformer
+
+if TYPE_CHECKING:
+    from affine import Affine
 
 
 @functools.lru_cache(maxsize=256)
@@ -176,6 +179,11 @@ def reproject_array(
 
     """
     warp_map = compute_warp_map(
-        src_transform, src_crs, dst_transform, dst_crs, dst_width, dst_height
+        src_transform,
+        src_crs,
+        dst_transform,
+        dst_crs,
+        dst_width,
+        dst_height,
     )
     return apply_warp_map(data, warp_map, nodata)

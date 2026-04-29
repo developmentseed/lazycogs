@@ -110,13 +110,20 @@ async def _read_lazycogs(
 
     raster = await reader.read(window=window)
     warp_map = compute_warp_map(
-        raster.transform, src_crs, chunk_affine, dst_crs, _CHUNK_SIZE, _CHUNK_SIZE
+        raster.transform,
+        src_crs,
+        chunk_affine,
+        dst_crs,
+        _CHUNK_SIZE,
+        _CHUNK_SIZE,
     )
     return apply_warp_map(raster.data, warp_map, geotiff.nodata)
 
 
 def _odc_overview_level(
-    path: Path, target_res_native: float, native_res: float
+    path: Path,
+    target_res_native: float,
+    native_res: float,
 ) -> int | None:
     """Replicate odc-stac's pick_overview: coarsest shrink <= read_shrink."""
     read_shrink = int(target_res_native / native_res)
@@ -201,16 +208,18 @@ def _assert_parity(
     diff = lazycogs_out.astype(np.int32) - rasterio_out.astype(np.int32)
     n_diff = int(np.count_nonzero(diff))
     actual_max = int(np.abs(diff).max()) if n_diff else 0
-    assert n_diff <= max_differing_pixels and actual_max <= max_abs_diff, (
+    msg = (
         f"{label}: {n_diff}/{lazycogs_out.size} pixels differ "
         f"(allowed ≤{max_differing_pixels}); "
         f"max abs diff = {actual_max} (allowed ≤{max_abs_diff})"
     )
+    assert n_diff <= max_differing_pixels, msg
+    assert actual_max <= max_abs_diff, msg
 
 
 @pytest.mark.parametrize("resolution", _RESOLUTIONS)
 def test_parity_same_crs(synthetic_cog: Path, resolution: int) -> None:
-    """lazycogs matches rasterio/nearest for same-CRS reads at all overview boundaries."""
+    """lazycogs matches rasterio for same-CRS reads at all overview levels."""
     dst_crs = CRS.from_epsg(32632)
     affine = _chunk_affine(resolution, _CENTER_UTM_X, _CENTER_UTM_Y)
 
@@ -237,7 +246,7 @@ def test_parity_cross_crs(synthetic_cog: Path, resolution: int) -> None:
     """
     src_crs = CRS.from_epsg(32632)
     dst_crs = CRS.from_epsg(
-        3035
+        3035,
     )  # ETRS89 / LAEA Europe — same-unit, low distortion near COG
     t = _get_transformer(src_crs, dst_crs)
     cx_laea, cy_laea = t.transform(_CENTER_UTM_X, _CENTER_UTM_Y)
@@ -256,5 +265,5 @@ def test_parity_cross_crs(synthetic_cog: Path, resolution: int) -> None:
         rio_out,
         f"cross_crs res={resolution}m",
         max_differing_pixels=3,
-        max_abs_diff=2048 * 16 + 1,  # 1 row in the coarsest (16×) overview
+        max_abs_diff=2048 * 16 + 1,  # 1 row in the coarsest (16x) overview
     )

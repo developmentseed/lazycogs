@@ -8,19 +8,22 @@ Usage:
 """
 
 import argparse
-import glob
 import json
 import logging
 import sys
 from pathlib import Path
 
+logger = logging.getLogger(__name__)
+
+REGRESSION_THRESHOLD_PCT = 10
+
 
 def find_file(pattern: str) -> Path:
     """Find the most recently modified file matching the given glob pattern."""
-    matches = glob.glob(pattern, recursive=True)
+    matches = list(Path().glob(pattern))
     if not matches:
         raise FileNotFoundError(f"No files match: {pattern!r}")
-    return max((Path(m) for m in matches), key=lambda p: p.stat().st_mtime)
+    return max(matches, key=lambda p: p.stat().st_mtime)
 
 
 def load_benchmarks(path: Path) -> dict[str, dict]:
@@ -45,17 +48,17 @@ def generate_report(baseline: dict[str, dict], pr: dict[str, dict]) -> str:
         pr_mean = pr[name]["mean"]
         pct = (pr_mean - base_mean) / base_mean * 100
         sign = "+" if pct >= 0 else ""
-        flag = " :warning:" if pct > 10 else ""
-        rows.append(
-            f"| `{name}` | {_ms(base_mean)} | {_ms(pr_mean)} | {sign}{pct:.1f}%{flag} |"
-        )
+        flag = " :warning:" if pct > REGRESSION_THRESHOLD_PCT else ""
+        base_ms, pr_ms = _ms(base_mean), _ms(pr_mean)
+        row = f"| `{name}` | {base_ms} | {pr_ms} | {sign}{pct:.1f}%{flag} |"
+        rows.append(row)
 
     table = "\n".join(
         [
             "| Test | Baseline (ms) | PR (ms) | Change |",
             "|------|:-------------:|:-------:|-------:|",
             *rows,
-        ]
+        ],
     )
     return (
         f"<!-- lazycogs-benchmark-comparison -->\n## Benchmark Comparison\n\n{table}\n"
@@ -67,7 +70,9 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--baseline", required=True, help="Glob pattern for the baseline JSON"
+        "--baseline",
+        required=True,
+        help="Glob pattern for the baseline JSON",
     )
     parser.add_argument("--pr", required=True, help="Glob pattern for the PR JSON")
     args = parser.parse_args()
@@ -75,14 +80,18 @@ def main() -> None:
     try:
         baseline_path = find_file(args.baseline)
         pr_path = find_file(args.pr)
-    except FileNotFoundError as e:
-        logging.error("%s", e)
+    except FileNotFoundError:
+        logger.exception("Benchmark file not found")
         sys.exit(1)
 
-    logging.info("Baseline: %s", baseline_path)
-    logging.info("PR:       %s", pr_path)
+    logger.info("Baseline: %s", baseline_path)
+    logger.info("PR:       %s", pr_path)
 
-    print(generate_report(load_benchmarks(baseline_path), load_benchmarks(pr_path)))
+    report = generate_report(
+        load_benchmarks(baseline_path),
+        load_benchmarks(pr_path),
+    )
+    sys.stdout.write(report)
 
 
 if __name__ == "__main__":

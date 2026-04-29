@@ -53,7 +53,7 @@ def _parquet_path(
 
 def _rss_mb() -> float:
     """Return current RSS of this process in MB (Linux only)."""
-    with open("/proc/self/status") as f:
+    with Path("/proc/self/status").open() as f:
         for line in f:
             if line.startswith("VmRSS:"):
                 return int(line.split()[1]) / 1024
@@ -73,7 +73,7 @@ def measure(label: str):
         f"time={elapsed:.2f}s  "
         f"rss_before={rss_before:.0f}MB  "
         f"rss_after={rss_after:.0f}MB  "
-        f"delta={rss_after - rss_before:+.0f}MB"
+        f"delta={rss_after - rss_before:+.0f}MB",
     )
 
 
@@ -132,7 +132,7 @@ async def run():
 
     # --- monthly composite ---
     # max_concurrent_reads is lowered here because each reprojected array for
-    # the full extent is ~20 MB (int16, 4333×2367 px). The default of 32 would
+    # the full extent is ~20 MB (int16, 4333x2367 px). The default of 32 would
     # put ~650 MB in-flight per band task; with 3 bands running in parallel via
     # dask that is ~2 GB just for in-flight reads. 8 keeps it under ~500 MB.
     da_monthly = await lazycogs.open_async(
@@ -150,7 +150,7 @@ async def run():
     print(f"\nmonthly array: {da_monthly}")
 
     # Add spatial chunks so dask breaks the full extent into smaller tasks.
-    # Without them each task holds the full 4333×2367 array in memory.
+    # Without them each task holds the full 4333x2367 array in memory.
     with measure("monthly full extent (chunked time=1, band=1, x=1024, y=1024)"):
         _ = da_monthly.chunk(time=1, band=1, x=1024, y=1024).compute()
 

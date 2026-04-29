@@ -1,8 +1,8 @@
 """Tests for _mosaic_methods."""
 
 import numpy as np
-import numpy.ma as ma
 import pytest
+from numpy import ma
 
 from lazycogs._mosaic_methods import (
     CountMethod,
@@ -28,17 +28,19 @@ def _masked(data: list, mask: list) -> ma.MaskedArray:
 
 
 @pytest.mark.parametrize(
-    "cls", [FirstMethod, HighestMethod, LowestMethod, MeanMethod, MedianMethod]
+    "cls",
+    [FirstMethod, HighestMethod, LowestMethod, MeanMethod, MedianMethod],
 )
 def test_data_raises_before_feed(cls):
     """`data` raises before any tile is fed."""
     m = cls()
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="No data has been fed"):
         _ = m.data
 
 
 @pytest.mark.parametrize(
-    "cls", [FirstMethod, HighestMethod, LowestMethod, MeanMethod, MedianMethod]
+    "cls",
+    [FirstMethod, HighestMethod, LowestMethod, MeanMethod, MedianMethod],
 )
 def test_is_done_false_before_feed(cls):
     """`is_done` is False before any tile is fed."""
@@ -47,7 +49,8 @@ def test_is_done_false_before_feed(cls):
 
 
 @pytest.mark.parametrize(
-    "cls", [FirstMethod, HighestMethod, LowestMethod, MeanMethod, MedianMethod]
+    "cls",
+    [FirstMethod, HighestMethod, LowestMethod, MeanMethod, MedianMethod],
 )
 def test_fully_valid_tile_is_done(cls):
     """A single fully-valid tile makes `is_done` True."""

@@ -1,4 +1,4 @@
-"""Tests for _chunk_reader helpers: _select_overview, _native_window, and mosaic functions."""
+"""Tests for _chunk_reader helpers: _select_overview, _native_window, and mosaics."""
 
 from __future__ import annotations
 
@@ -17,7 +17,6 @@ from lazycogs._chunk_reader import (
     async_mosaic_chunk,
 )
 from lazycogs._mosaic_methods import FirstMethod
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -117,7 +116,7 @@ def test_native_window_full_coverage():
 
 def test_native_window_sub_region():
     """A bbox covering the bottom-right quadrant returns the correct window."""
-    # 8×8 image, 1 m resolution, origin top-left at (0, 8)
+    # 8x8 image, 1 m resolution, origin top-left at (0, 8)
     transform = Affine(1.0, 0.0, 0.0, 0.0, -1.0, 8.0)
     reader = _mock_reader(transform)
     # Bottom-right quadrant: x=[4,8], y=[0,4]
@@ -140,7 +139,7 @@ def test_native_window_bbox_outside_returns_none():
 
 def test_native_window_clamped_to_image_bounds():
     """A bbox that extends beyond image edges is clamped to valid pixels."""
-    # 4×4 image
+    # 4x4 image
     transform = Affine(1.0, 0.0, 0.0, 0.0, -1.0, 4.0)
     reader = _mock_reader(transform)
     # Bbox extends 2 pixels beyond the right and bottom edges
@@ -194,7 +193,7 @@ def test_async_mosaic_chunk_limits_concurrent_reads():
                 chunk_height=chunk_height,
                 nodata=None,
                 max_concurrent_reads=max_concurrent,
-            )
+            ),
         )
 
     assert peak_concurrent[0] <= max_concurrent
@@ -226,7 +225,7 @@ def test_drain_in_order_preserves_source_order():
             call_order.append(idx)
 
         drain = asyncio.ensure_future(
-            _drain_in_order(tasks, on_result, lambda: False, lambda i, e: None)
+            _drain_in_order(tasks, on_result, lambda: False, lambda i, e: None),
         )
         await asyncio.sleep(0)  # let fast() complete first (task index 1)
         event.set()  # unblock slow() (task index 0)
@@ -295,7 +294,8 @@ def test_apply_bands_with_warp_cache_shared_geometry():
         return result
 
     with patch(
-        "lazycogs._chunk_reader.compute_warp_map", side_effect=_spy_compute_warp_map
+        "lazycogs._chunk_reader.compute_warp_map",
+        side_effect=_spy_compute_warp_map,
     ):
         results = _apply_bands_with_warp_cache(
             [("B01", raster_a, crs, None), ("B02", raster_b, crs, None)],
@@ -334,7 +334,8 @@ def test_apply_bands_with_warp_cache_different_geometry():
         return result
 
     with patch(
-        "lazycogs._chunk_reader.compute_warp_map", side_effect=_spy_compute_warp_map
+        "lazycogs._chunk_reader.compute_warp_map",
+        side_effect=_spy_compute_warp_map,
     ):
         results = _apply_bands_with_warp_cache(
             [("B01", raster_a, crs, None), ("B02", raster_b, crs, None)],
@@ -350,7 +351,7 @@ def test_apply_bands_with_warp_cache_different_geometry():
 
 
 def test_apply_bands_with_warp_cache_shared_across_calls():
-    """A shared external cache reuses warp maps across separate calls (e.g. time steps)."""
+    """A shared cache reuses warp maps across separate calls (e.g. time steps)."""
     crs = CRS.from_epsg(4326)
     # Source transform offset from dst so the warp path is exercised.
     transform = Affine(1.0, 0.0, 0.5, 0.0, -1.0, 4.0)
@@ -369,7 +370,8 @@ def test_apply_bands_with_warp_cache_shared_across_calls():
         return result
 
     with patch(
-        "lazycogs._chunk_reader.compute_warp_map", side_effect=_spy_compute_warp_map
+        "lazycogs._chunk_reader.compute_warp_map",
+        side_effect=_spy_compute_warp_map,
     ):
         _apply_bands_with_warp_cache(
             [("B01", raster, crs, None)],
@@ -414,7 +416,8 @@ def test_async_mosaic_chunk_returns_all_bands():
     items = [{"id": "item-0", "assets": {}}]
 
     with patch(
-        "lazycogs._chunk_reader._read_item_band", side_effect=_fake_read_item_band
+        "lazycogs._chunk_reader._read_item_band",
+        side_effect=_fake_read_item_band,
     ):
         result = asyncio.run(
             async_mosaic_chunk(
@@ -424,7 +427,7 @@ def test_async_mosaic_chunk_returns_all_bands():
                 dst_crs=dst_crs,
                 chunk_width=chunk_width,
                 chunk_height=chunk_height,
-            )
+            ),
         )
 
     assert set(result.keys()) == set(bands)
@@ -455,7 +458,8 @@ def test_async_mosaic_chunk_early_exit():
     items = [{"id": f"item-{i}", "assets": {}} for i in range(n_items)]
 
     with patch(
-        "lazycogs._chunk_reader._read_item_band", side_effect=_fake_read_item_band
+        "lazycogs._chunk_reader._read_item_band",
+        side_effect=_fake_read_item_band,
     ):
         asyncio.run(
             async_mosaic_chunk(
@@ -467,7 +471,7 @@ def test_async_mosaic_chunk_early_exit():
                 chunk_height=chunk_height,
                 mosaic_method_cls=FirstMethod,
                 max_concurrent_reads=5,
-            )
+            ),
         )
 
     # All tasks are launched up front, but the semaphore caps in-flight reads

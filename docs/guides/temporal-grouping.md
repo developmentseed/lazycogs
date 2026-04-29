@@ -87,4 +87,4 @@ da = lazycogs.open(
 )
 ```
 
-See also: [Demo notebook](../demo.ipynb) for a worked example of monthly compositing, [Mosaic methods guide](mosaic-methods.md), [API reference for open()](../api/open.md)
+See also: [Example: Southwest US monthly low-cloud Sentinel-2 array](../notebooks/demo_southwest_monthly.ipynb) for a worked example of monthly compositing, [Mosaic methods guide](mosaic-methods.md), [API reference for open()](../api/open.md)

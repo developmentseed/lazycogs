@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import threading
-from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
@@ -14,6 +13,8 @@ from rustac import DuckdbClient
 from lazycogs._storage_ext import _extract_store_kwargs
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from obstore.store import ObjectStore
 
 logger = logging.getLogger(__name__)
@@ -89,8 +90,8 @@ def store_for(
     *,
     asset: str | None = None,
     duckdb_client: DuckdbClient | None = None,
-    **kwargs: Any,
-) -> "ObjectStore":
+    **kwargs: object,
+) -> ObjectStore:
     """Construct an ``ObjectStore`` by inspecting a geoparquet STAC items file.
 
     Reads one sample item from *href*, derives the store root URL from a data
@@ -150,9 +151,10 @@ def store_for(
 
     try:
         inferred = _extract_store_kwargs(item, asset_obj)
-    except Exception:
+    except (AttributeError, TypeError):
         logger.warning(
-            "Failed to extract storage extension kwargs from %r; proceeding without them",
+            "Failed to extract storage extension kwargs from %r;"
+            " proceeding without them",
             href,
         )
         inferred = {}

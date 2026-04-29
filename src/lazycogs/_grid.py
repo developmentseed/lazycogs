@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 import numpy as np
 from affine import Affine
-from pyproj import CRS
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 def compute_output_grid(
     bbox: tuple[float, float, float, float],
-    crs: CRS,
     resolution: float,
 ) -> tuple[Affine, int, int, np.ndarray, np.ndarray]:
     """Compute the output raster grid from a bounding box and resolution.
@@ -23,8 +24,6 @@ def compute_output_grid(
 
     Args:
         bbox: ``(minx, miny, maxx, maxy)`` in the target CRS.
-        crs: Target coordinate reference system (used only for documentation;
-            callers are responsible for ensuring bbox is in this CRS).
         resolution: Pixel size in CRS units (assumed square).
 
     Returns:

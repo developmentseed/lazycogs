@@ -17,13 +17,14 @@ def _storage_extension_version(stac_extensions: list[str]) -> str | None:
     for url in stac_extensions:
         if "stac-extensions.github.io/storage" in url:
             # strip trailing /schema.json then take the last path component
-            version = url.removesuffix("/schema.json").rsplit("/", 1)[-1].lstrip("v")
-            return version
+            return url.removesuffix("/schema.json").rsplit("/", 1)[-1].lstrip("v")
+
     return None
 
 
 def _extract_store_kwargs_v1(
-    item: dict[str, Any], asset: dict[str, Any]
+    item: dict[str, Any],
+    asset: dict[str, Any],
 ) -> dict[str, Any]:
     """Extract obstore kwargs from a STAC Storage Extension v1.0.0 item.
 
@@ -37,7 +38,8 @@ def _extract_store_kwargs_v1(
     ).upper()
     region = asset.get("storage:region") or props.get("storage:region")
     requester_pays = asset.get(
-        "storage:requester_pays", props.get("storage:requester_pays", False)
+        "storage:requester_pays",
+        props.get("storage:requester_pays", False),
     )
 
     kwargs: dict[str, Any] = {}
@@ -50,7 +52,8 @@ def _extract_store_kwargs_v1(
 
 
 def _extract_store_kwargs_v2(
-    item: dict[str, Any], asset: dict[str, Any]
+    item: dict[str, Any],
+    asset: dict[str, Any],
 ) -> dict[str, Any]:
     """Extract obstore kwargs from a STAC Storage Extension v2.0.0 item.
 
@@ -83,7 +86,8 @@ def _extract_store_kwargs_v2(
 
 
 def _extract_store_kwargs(
-    item: dict[str, Any], asset: dict[str, Any]
+    item: dict[str, Any],
+    asset: dict[str, Any],
 ) -> dict[str, Any]:
     """Dispatch storage extension kwarg extraction by schema version.
 

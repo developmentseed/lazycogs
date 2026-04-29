@@ -4,14 +4,11 @@ from unittest.mock import AsyncMock, patch
 
 import numpy as np
 import pytest
-from rustac import DuckdbClient
 from affine import Affine
-from pyproj import CRS, Transformer
+from pyproj import CRS
+from rustac import DuckdbClient
 
-from lazycogs._backend import (
-    MultiBandStacBackendArray,
-    _resolve_spatial_window,
-)
+from lazycogs._backend import MultiBandStacBackendArray
 from lazycogs._mosaic_methods import FirstMethod
 
 
@@ -29,6 +26,9 @@ def _make_array(
     crs: CRS,
     bands: list[str] | None = None,
     dates: list[str] | None = None,
+    dst_affine: Affine | None = None,
+    dst_height: int = 1,
+    dst_width: int = 4,
 ) -> MultiBandStacBackendArray:
     """Return a minimal MultiBandStacBackendArray for unit testing."""
     if bands is None:
@@ -40,14 +40,14 @@ def _make_array(
         duckdb_client=DuckdbClient(),
         bands=bands,
         dates=dates,
-        dst_affine=Affine(1.0, 0.0, 10.0, 0.0, -1.0, 50.0),
+        dst_affine=dst_affine or Affine(1.0, 0.0, 10.0, 0.0, -1.0, 50.0),
         dst_crs=crs,
         bbox_4326=[10.0, 49.0, 14.0, 50.0],
         sortby=None,
         filter=None,
         ids=None,
-        dst_width=4,
-        dst_height=1,
+        dst_width=dst_width,
+        dst_height=dst_height,
         dtype=np.dtype("float32"),
         nodata=-9999.0,
         mosaic_method_cls=FirstMethod,
@@ -61,32 +61,20 @@ def _make_array(
 
 def test_chunk_bbox_4326_identity_in_wgs84(wgs84):
     """When dst_crs is EPSG:4326, bbox is returned as-is."""
-    # dst_affine: origin at (10, 50), 1° resolution, 4 wide × 1 tall
-    dst_affine = Affine(1.0, 0.0, 10.0, 0.0, -1.0, 50.0)
-    win = _resolve_spatial_window(
-        slice(0, 1),
-        slice(0, 4),
-        dst_height=1,
-        dst_width=4,
-        dst_affine=dst_affine,
-        dst_crs=wgs84,
-        dst_to_4326=None,
-    )
+    arr = _make_array(wgs84)
+    win = arr._resolve_spatial_window(slice(0, 1), slice(0, 4))
     assert win.chunk_bbox_4326 == pytest.approx([10.0, 49.0, 14.0, 50.0])
 
 
 def test_chunk_bbox_4326_utm_transforms(utm32n):
     """A UTM chunk bbox is transformed to EPSG:4326."""
-    dst_affine = Affine(100.0, 0.0, 500_000.0, 0.0, -100.0, 5_550_000.0)
-    win = _resolve_spatial_window(
-        slice(0, 10),
-        slice(0, 10),
+    arr = _make_array(
+        utm32n,
+        dst_affine=Affine(100.0, 0.0, 500_000.0, 0.0, -100.0, 5_550_000.0),
         dst_height=10,
         dst_width=10,
-        dst_affine=dst_affine,
-        dst_crs=utm32n,
-        dst_to_4326=Transformer.from_crs(utm32n, CRS.from_epsg(4326), always_xy=True),
     )
+    win = arr._resolve_spatial_window(slice(0, 10), slice(0, 10))
     minx, miny, maxx, maxy = win.chunk_bbox_4326
     assert -180 <= minx <= 180
     assert -90 <= miny <= 90
@@ -96,16 +84,13 @@ def test_chunk_bbox_4326_utm_transforms(utm32n):
 
 def test_chunk_bbox_4326_ordering(utm32n):
     """Returned bbox satisfies minx < maxx and miny < maxy."""
-    dst_affine = Affine(1000.0, 0.0, 400_000.0, 0.0, -1000.0, 5_600_000.0)
-    win = _resolve_spatial_window(
-        slice(0, 100),
-        slice(0, 100),
+    arr = _make_array(
+        utm32n,
+        dst_affine=Affine(1000.0, 0.0, 400_000.0, 0.0, -1000.0, 5_600_000.0),
         dst_height=100,
         dst_width=100,
-        dst_affine=dst_affine,
-        dst_crs=utm32n,
-        dst_to_4326=Transformer.from_crs(utm32n, CRS.from_epsg(4326), always_xy=True),
     )
+    win = arr._resolve_spatial_window(slice(0, 100), slice(0, 100))
     minx, miny, maxx, maxy = win.chunk_bbox_4326
     assert minx < maxx
     assert miny < maxy
@@ -184,7 +169,9 @@ def test_raw_getitem_chunk_affine_offset(wgs84):
 
 
 def _make_multiband_array(
-    crs: CRS, bands: list[str], dates: list[str] | None = None
+    crs: CRS,
+    bands: list[str],
+    dates: list[str] | None = None,
 ) -> MultiBandStacBackendArray:
     """Return a minimal MultiBandStacBackendArray for unit testing."""
     if dates is None:
@@ -214,7 +201,7 @@ def test_multiband_raw_getitem_no_items_returns_nodata(wgs84):
 
     with patch("rustac.DuckdbClient.search", return_value=[]):
         result = multi._raw_getitem(
-            (slice(0, 2), slice(0, 1), slice(0, 1), slice(0, 4))
+            (slice(0, 2), slice(0, 1), slice(0, 1), slice(0, 4)),
         )
 
     assert result.shape == (2, 1, 1, 4)
@@ -226,7 +213,7 @@ def test_multiband_raw_getitem_calls_multiband_mosaic(wgs84):
     bands = ["B01", "B02"]
     multi = _make_multiband_array(wgs84, bands)
     fake_items = [
-        {"id": "item-1", "assets": {b: {"href": f"s3://b/{b}.tif"} for b in bands}}
+        {"id": "item-1", "assets": {b: {"href": f"s3://b/{b}.tif"} for b in bands}},
     ]
 
     call_count = [0]
@@ -239,7 +226,7 @@ def test_multiband_raw_getitem_calls_multiband_mosaic(wgs84):
             {
                 b: np.full((1, 1, 4), float(i), dtype=np.float32)
                 for i, b in enumerate(bands)
-            }
+            },
         ]
 
     with (

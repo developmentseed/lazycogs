@@ -15,14 +15,13 @@ from lazycogs._storage_ext import (
 )
 from lazycogs._store import resolve, store_for
 
-
 # ---------------------------------------------------------------------------
 # resolve
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
-    "href, expected_path",
+    ("href", "expected_path"),
     [
         ("s3://my-bucket/path/to/file.tif", "path/to/file.tif"),
         ("s3a://my-bucket/deep/path/file.tif", "deep/path/file.tif"),
@@ -55,7 +54,7 @@ def test_store_is_not_none(href):
 
 def test_unsupported_scheme_raises():
     """obstore's from_url rejects unknown schemes."""
-    with pytest.raises(Exception, match="(?i)scheme|url"):
+    with pytest.raises(Exception, match=r"(?i)scheme|url"):
         resolve("ftp://server/file.tif")
 
 
@@ -108,7 +107,8 @@ def test_path_fn_overrides_default_extraction():
 
 
 def test_path_fn_with_store_returns_both():
-    """When store and path_fn are both supplied, path_fn drives extraction and store is returned unchanged."""
+    """When store and path_fn are both supplied, path_fn drives extraction and the
+    store is returned unchanged."""
     user_store = MemoryStore()
 
     def path_fn(href: str) -> str:
@@ -139,7 +139,7 @@ def test_path_fn_not_called_without_it():
 
 
 @pytest.mark.parametrize(
-    "url, expected",
+    ("url", "expected"),
     [
         (
             "https://stac-extensions.github.io/storage/v1.0.0/schema.json",
@@ -163,7 +163,7 @@ def test_storage_extension_version_absent():
     assert _storage_extension_version([]) is None
     assert (
         _storage_extension_version(
-            ["https://stac-extensions.github.io/eo/v1.0.0/schema.json"]
+            ["https://stac-extensions.github.io/eo/v1.0.0/schema.json"],
         )
         is None
     )
@@ -268,7 +268,7 @@ def test_v2_region_and_requester_pays_mapped():
             "platform": "s3://",
             "region": "us-west-2",
             "requester_pays": True,
-        }
+        },
     }
     asset = _v2_asset(["primary"])
     item = _v2_item(schemes, ["primary"])
@@ -284,7 +284,7 @@ def test_v2_non_s3_type_region_not_mapped():
             "type": "ms-azure",
             "platform": "https://account.blob.core.windows.net/",
             "region": "westus",
-        }
+        },
     }
     asset = _v2_asset(["az"])
     item = _v2_item(schemes, ["az"])
@@ -297,7 +297,7 @@ def test_v2_custom_s3_endpoint_mapped():
         "minio": {
             "type": "custom-s3",
             "platform": "https://minio.example.com",
-        }
+        },
     }
     asset = _v2_asset(["minio"])
     item = _v2_item(schemes, ["minio"])
@@ -311,7 +311,7 @@ def test_v2_custom_s3_template_platform_not_mapped():
         "aws": {
             "type": "custom-s3",
             "platform": "https://s3.{region}.amazonaws.com",
-        }
+        },
     }
     asset = _v2_asset(["aws"])
     item = _v2_item(schemes, ["aws"])
@@ -366,7 +366,7 @@ def test_dispatch_no_extension_returns_empty():
 def test_dispatch_unknown_version_returns_empty():
     item = {
         "stac_extensions": [
-            "https://stac-extensions.github.io/storage/v99.0.0/schema.json"
+            "https://stac-extensions.github.io/storage/v99.0.0/schema.json",
         ],
         "properties": {},
         "assets": {},
@@ -387,7 +387,7 @@ _S3_ITEM = {
             "href": "s3://sentinel-cogs/sentinel-s2-l2a/B04.tif",
             "type": "image/tiff; application=geotiff; profile=cloud-optimized",
             "roles": ["data"],
-        }
+        },
     },
 }
 
@@ -400,15 +400,19 @@ def test_store_for_returns_store():
 
 
 def test_store_for_no_items_raises():
-    with patch("rustac.DuckdbClient.search", return_value=[]):
-        with pytest.raises(ValueError, match="No STAC items"):
-            store_for("items.parquet")
+    with (
+        patch("rustac.DuckdbClient.search", return_value=[]),
+        pytest.raises(ValueError, match="No STAC items"),
+    ):
+        store_for("items.parquet")
 
 
 def test_store_for_missing_asset_raises():
-    with patch("rustac.DuckdbClient.search", return_value=[_S3_ITEM]):
-        with pytest.raises(KeyError, match="B99"):
-            store_for("items.parquet", asset="B99")
+    with (
+        patch("rustac.DuckdbClient.search", return_value=[_S3_ITEM]),
+        pytest.raises(KeyError, match="B99"),
+    ):
+        store_for("items.parquet", asset="B99")
 
 
 def test_store_for_asset_kwarg_selects_asset():
@@ -471,7 +475,7 @@ def test_store_for_v1_extension_infers_region():
             "data": {
                 "href": "s3://my-bucket/file.tif",
                 "roles": ["data"],
-            }
+            },
         },
     }
     with patch("rustac.DuckdbClient.search", return_value=[item]):
@@ -491,7 +495,7 @@ def test_store_for_v2_extension_infers_region():
                     "type": "aws-s3",
                     "platform": "s3://",
                     "region": "eu-west-1",
-                }
+                },
             },
             "datetime": "2023-06-01T00:00:00Z",
         },
@@ -500,7 +504,7 @@ def test_store_for_v2_extension_infers_region():
                 "href": "s3://my-bucket/file.tif",
                 "roles": ["data"],
                 "storage:refs": ["primary"],
-            }
+            },
         },
     }
     with patch("rustac.DuckdbClient.search", return_value=[item]):
@@ -521,7 +525,7 @@ def test_store_for_malformed_extension_does_not_raise():
                 "href": "s3://bucket/file.tif",
                 "roles": ["data"],
                 "storage:refs": ["primary"],
-            }
+            },
         },
     }
     with patch("rustac.DuckdbClient.search", return_value=[item]):
@@ -546,7 +550,7 @@ def test_store_for_https_url_region_in_hostname_no_duplicate():
             "data": {
                 "href": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/file.tif",
                 "roles": ["data"],
-            }
+            },
         },
     }
     with patch("rustac.DuckdbClient.search", return_value=[item]):
@@ -564,9 +568,11 @@ def test_store_for_no_skip_signature_by_default():
 
         return real_from_url(url, **kwargs)
 
-    with patch("rustac.DuckdbClient.search", return_value=[_S3_ITEM]):
-        with patch("lazycogs._store.from_url", side_effect=capture_from_url):
-            store_for("items.parquet", skip_signature=True)
+    with (
+        patch("rustac.DuckdbClient.search", return_value=[_S3_ITEM]),
+        patch("lazycogs._store.from_url", side_effect=capture_from_url),
+    ):
+        store_for("items.parquet", skip_signature=True)
 
     assert call_kwargs.get("skip_signature") is True
 
@@ -581,8 +587,10 @@ def test_store_for_caller_kwargs_forwarded():
 
         return real_from_url(url, **kwargs)
 
-    with patch("rustac.DuckdbClient.search", return_value=[_S3_ITEM]):
-        with patch("lazycogs._store.from_url", side_effect=capture_from_url):
-            store_for("items.parquet", skip_signature=True)
+    with (
+        patch("rustac.DuckdbClient.search", return_value=[_S3_ITEM]),
+        patch("lazycogs._store.from_url", side_effect=capture_from_url),
+    ):
+        store_for("items.parquet", skip_signature=True)
 
     assert "skip_signature" in call_kwargs

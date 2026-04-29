@@ -6,10 +6,10 @@ from unittest.mock import patch
 
 import numpy as np
 import pytest
-from rustac import DuckdbClient
 import xarray as xr
 from affine import Affine
 from pyproj import CRS
+from rustac import DuckdbClient
 
 from lazycogs._backend import MultiBandStacBackendArray
 from lazycogs._explain import (
@@ -22,7 +22,6 @@ from lazycogs._explain import (
     _roi_pixel_offsets,
 )
 from lazycogs._mosaic_methods import FirstMethod
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -103,7 +102,7 @@ def _make_da_with_backends(
     # Build coordinates matching the grid convention: x ascending, y ascending
     x_coords = np.array([affine.c + (i + 0.5) * resolution for i in range(width)])
     y_coords = np.array(
-        [affine.f + (height - 1 - i + 0.5) * affine.e for i in range(height)]
+        [affine.f + (height - 1 - i + 0.5) * affine.e for i in range(height)],
     )
     # y ascending (south to north)
     y_coords = np.sort(y_coords)
@@ -310,7 +309,7 @@ def _make_plan(n_bands: int = 2, n_time: int = 3, n_items: int = 1) -> ExplainPl
                     chunk_width=10,
                     chunk_height=10,
                     cog_reads=items,
-                )
+                ),
             )
     return ExplainPlan(
         href="/tmp/fake.parquet",
@@ -376,9 +375,9 @@ def test_explain_plan_summary_fetch_headers():
                     window_row_off=0,
                     window_width=256,
                     window_height=256,
-                )
+                ),
             ],
-        )
+        ),
     ]
     plan = ExplainPlan(
         href="/tmp/fake.parquet",
@@ -462,7 +461,7 @@ def _fake_items(band: str, n: int) -> list[dict]:
 def test_accessor_raises_on_non_stac_da():
     """explain() raises ValueError when the DataArray has no explain metadata."""
     da = xr.DataArray(np.zeros((3, 3)))
-    with pytest.raises(ValueError, match="lazycogs.open"):
+    with pytest.raises(ValueError, match=r"lazycogs\.open"):
         da.lazycogs.explain()
 
 

@@ -13,7 +13,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 import numpy as np
-import numpy.ma as ma
+from numpy import ma
 
 
 class MosaicMethodBase(ABC):

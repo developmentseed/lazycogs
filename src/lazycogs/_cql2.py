@@ -3,11 +3,11 @@ from typing import Any
 from cql2 import Expr
 
 
-def _extract_filter_fields(filter: str | dict[str, Any]) -> set[str]:
-    """Extracts all property field names from a CQL2 filter expression.
+def _extract_filter_fields(filter_expr: str | dict[str, Any]) -> set[str]:
+    """Extract all property field names from a CQL2 filter expression.
 
     Args:
-        filter: A CQL2-Text string or CQL2-JSON dict.
+        filter_expr: A CQL2-Text string or CQL2-JSON dict.
 
     Returns:
         Set of property field name strings referenced in the filter.
@@ -15,7 +15,7 @@ def _extract_filter_fields(filter: str | dict[str, Any]) -> set[str]:
     """
     properties: set[str] = set()
 
-    def _traverse(node: Any) -> None:
+    def _traverse(node: object) -> None:
         if isinstance(node, dict):
             if "property" in node:
                 properties.add(node["property"])
@@ -27,7 +27,7 @@ def _extract_filter_fields(filter: str | dict[str, Any]) -> set[str]:
             for item in node:
                 _traverse(item)
 
-    _traverse(Expr(filter).to_json())
+    _traverse(Expr(filter_expr).to_json())
 
     return properties
 
