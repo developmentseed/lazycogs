@@ -1,4 +1,4 @@
-"""Tests for the open() / open_async() entry points."""
+"""Tests for the open() entry point."""
 
 from __future__ import annotations
 

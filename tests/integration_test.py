@@ -109,7 +109,7 @@ async def run():
         )
 
     # --- daily time steps ---
-    da = await lazycogs.open_async(
+    da = lazycogs.open(
         str(items_parquet),
         crs=dst_crs,
         bbox=dst_bbox,
@@ -135,7 +135,7 @@ async def run():
     # the full extent is ~20 MB (int16, 4333x2367 px). The default of 32 would
     # put ~650 MB in-flight per band task; with 3 bands running in parallel via
     # dask that is ~2 GB just for in-flight reads. 8 keeps it under ~500 MB.
-    da_monthly = await lazycogs.open_async(
+    da_monthly = lazycogs.open(
         str(items_parquet),
         crs=dst_crs,
         bbox=dst_bbox,

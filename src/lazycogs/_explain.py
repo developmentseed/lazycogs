@@ -703,7 +703,7 @@ class StacCogAccessor:
 
     Registered as the ``stac_cog`` namespace on all ``xr.DataArray`` objects.
     The :meth:`explain` method is only useful on DataArrays produced by
-    :func:`lazycogs.open` or :func:`lazycogs.open_async`.
+    :func:`lazycogs.open`.
 
     """
 
@@ -744,8 +744,7 @@ class StacCogAccessor:
         if backend is None:
             raise ValueError(
                 "This DataArray does not have stac_cog explain metadata. "
-                "Ensure it was created by lazycogs.open() or "
-                "lazycogs.open_async().",
+                "Ensure it was created by lazycogs.open().",
             )
         return _run_coroutine(
             _explain_async(self._da, backend, fetch_headers=fetch_headers),
