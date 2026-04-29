@@ -1937,7 +1937,7 @@ HLS_STAC_GEOPARQUET_HREF = "s3://nasa-maap-data-store/file-staging/nasa-map/hls-
 <span class="s2">        SECRET '</span><span class="si">{</span><span class="n">creds</span><span class="o">.</span><span class="n">secret_key</span><span class="si">}</span><span class="s2">',</span>
 <span class="s2">        SESSION_TOKEN '</span><span class="si">{</span><span class="n">creds</span><span class="o">.</span><span class="n">token</span><span class="si">}</span><span class="s2">'</span>
 <span class="s2">    );</span>
-<span class="s2">    """</span>
+<span class="s2">    """</span><span class="p">,</span>
 <span class="p">)</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-2">duckdb_client = DuckdbClient(use_hive_partitioning=True)
@@ -1952,7 +1952,7 @@ _ = duckdb_client.execute(
         SECRET '{creds.secret_key}',
         SESSION_TOKEN '{creds.token}'
     );
-    """
+    """,
 )</div>
 </div>
 </div>
@@ -2274,13 +2274,15 @@ sample_item</div>
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">dst_bbox_aligned</span> <span class="o">=</span> <span class="n">lazycogs</span><span class="o">.</span><span class="n">align_bbox</span><span class="p">(</span>
-    <span class="n">sample_item</span><span class="p">[</span><span class="s2">"properties"</span><span class="p">][</span><span class="s2">"proj:transform"</span><span class="p">],</span> <span class="n">dst_bbox</span>
+    <span class="n">sample_item</span><span class="p">[</span><span class="s2">"properties"</span><span class="p">][</span><span class="s2">"proj:transform"</span><span class="p">],</span>
+    <span class="n">dst_bbox</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"aligned bbox: </span><span class="si">{</span><span class="n">dst_bbox_aligned</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-5">dst_bbox_aligned = lazycogs.align_bbox(
-    sample_item["properties"]["proj:transform"], dst_bbox
+    sample_item["properties"]["proj:transform"],
+    dst_bbox,
 )
 
 print(f"aligned bbox: {dst_bbox_aligned}")</div>
@@ -2334,7 +2336,7 @@ print(f"aligned bbox: {dst_bbox_aligned}")</div>
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">cp</span> <span class="o">=</span> <span class="n">NasaEarthdataCredentialProvider</span><span class="p">(</span>
-    <span class="n">credentials_url</span><span class="o">=</span><span class="s2">"https://data.lpdaac.earthdatacloud.nasa.gov/s3credentials"</span>
+    <span class="n">credentials_url</span><span class="o">=</span><span class="s2">"https://data.lpdaac.earthdatacloud.nasa.gov/s3credentials"</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="n">store</span> <span class="o">=</span> <span class="n">S3Store</span><span class="p">(</span>
@@ -2352,7 +2354,7 @@ print(f"aligned bbox: {dst_bbox_aligned}")</div>
 <span class="n">strip_bucket</span><span class="p">(</span><span class="n">sample_item</span><span class="p">[</span><span class="s2">"assets"</span><span class="p">][</span><span class="s2">"B04"</span><span class="p">][</span><span class="s2">"href"</span><span class="p">])</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-6">cp = NasaEarthdataCredentialProvider(
-    credentials_url="https://data.lpdaac.earthdatacloud.nasa.gov/s3credentials"
+    credentials_url="https://data.lpdaac.earthdatacloud.nasa.gov/s3credentials",
 )
 
 store = S3Store(
@@ -2416,7 +2418,8 @@ strip_bucket(sample_item["assets"]["B04"]["href"])</div>
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">geotiff</span> <span class="o">=</span> <span class="k">await</span> <span class="n">GeoTIFF</span><span class="o">.</span><span class="n">open</span><span class="p">(</span>
-    <span class="n">strip_bucket</span><span class="p">(</span><span class="n">sample_item</span><span class="p">[</span><span class="s2">"assets"</span><span class="p">][</span><span class="s2">"B04"</span><span class="p">][</span><span class="s2">"href"</span><span class="p">]),</span> <span class="n">store</span><span class="o">=</span><span class="n">store</span>
+    <span class="n">strip_bucket</span><span class="p">(</span><span class="n">sample_item</span><span class="p">[</span><span class="s2">"assets"</span><span class="p">][</span><span class="s2">"B04"</span><span class="p">][</span><span class="s2">"href"</span><span class="p">]),</span>
+    <span class="n">store</span><span class="o">=</span><span class="n">store</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="n">resolutions</span> <span class="o">=</span> <span class="p">[</span><span class="n">geotiff</span><span class="o">.</span><span class="n">res</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span>
@@ -2430,7 +2433,8 @@ strip_bucket(sample_item["assets"]["B04"]["href"])</div>
 <span class="nb">print</span><span class="p">(</span><span class="s2">"data type:"</span><span class="p">,</span> <span class="n">geotiff</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-7">geotiff = await GeoTIFF.open(
-    strip_bucket(sample_item["assets"]["B04"]["href"]), store=store
+    strip_bucket(sample_item["assets"]["B04"]["href"]),
+    store=store,
 )
 
 resolutions = [geotiff.res[0]]

@@ -1159,7 +1159,7 @@
 <a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="n">da</span> <span class="o">=</span> <span class="n">lazycogs</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s2">&quot;items.parquet&quot;</span><span class="p">,</span> <span class="o">...</span><span class="p">,</span> <span class="n">store</span><span class="o">=</span><span class="n">store</span><span class="p">)</span>
 </code></pre></div>
 <p><code>NasaEarthdataAsyncCredentialProvider</code> is not supported. It creates an <code>aiohttp</code> session bound to the event loop active when it is constructed. lazycogs runs each chunk read in a short-lived event loop (and in Jupyter, in a separate thread with its own loop), so the session ends up attached to the wrong loop and raises a runtime error. The synchronous provider uses <code>requests</code>, which is event-loop-agnostic and works correctly in all contexts.</p>
-<p>See <a href="../hls.ipynb">NASA HLS example notebook</a> for a full worked example with direct S3 access.</p>
+<p>See <a href="../../notebooks/hls/">NASA HLS example notebook</a> for a full worked example with direct S3 access.</p>
 <p>See also: <a href="../../api/open/">API reference for open()</a>, <a href="../../api/utils/">API reference for store_for()</a>, <a href="../stac-search/">STAC item queries guide</a></p>
 
 
