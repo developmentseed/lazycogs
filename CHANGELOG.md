@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/developmentseed/lazycogs/compare/v0.1.1...v0.1.2) (2026-04-29)
+
+
+### Bug Fixes
+
+* rip out fake-async open_async ([#37](https://github.com/developmentseed/lazycogs/issues/37)) ([cf07318](https://github.com/developmentseed/lazycogs/commit/cf07318c0c2414bf47251de72fde9c2189263d31)), closes [#26](https://github.com/developmentseed/lazycogs/issues/26)
+
 ## [0.1.1](https://github.com/developmentseed/lazycogs/compare/v0.1.0...v0.1.1) (2026-04-27)
 
 
