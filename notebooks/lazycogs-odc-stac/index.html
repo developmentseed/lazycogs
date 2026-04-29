@@ -1959,7 +1959,7 @@ if not Path(items_parquet).exists():
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="k">with</span> <span class="n">timer</span><span class="p">(</span><span class="s2">"Initializing lazycogs array"</span><span class="p">):</span>
     <span class="n">store</span> <span class="o">=</span> <span class="n">lazycogs</span><span class="o">.</span><span class="n">store_for</span><span class="p">(</span><span class="n">items_parquet</span><span class="p">,</span> <span class="n">skip_signature</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-    <span class="n">lazycogs_da</span> <span class="o">=</span> <span class="k">await</span> <span class="n">lazycogs</span><span class="o">.</span><span class="n">open_async</span><span class="p">(</span>
+    <span class="n">lazycogs_da</span> <span class="o">=</span> <span class="n">lazycogs</span><span class="o">.</span><span class="n">open</span><span class="p">(</span>
         <span class="n">items_parquet</span><span class="p">,</span>
         <span class="n">crs</span><span class="o">=</span><span class="n">dst_crs</span><span class="p">,</span>
         <span class="n">bbox</span><span class="o">=</span><span class="n">dst_bbox</span><span class="p">,</span>
@@ -1975,7 +1975,7 @@ if not Path(items_parquet).exists():
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-3">with timer("Initializing lazycogs array"):
     store = lazycogs.store_for(items_parquet, skip_signature=True)
-    lazycogs_da = await lazycogs.open_async(
+    lazycogs_da = lazycogs.open(
         items_parquet,
         crs=dst_crs,
         bbox=dst_bbox,
