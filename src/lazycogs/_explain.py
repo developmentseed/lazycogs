@@ -505,9 +505,9 @@ async def _explain_async(
     Issues one DuckDB query per ``(time step, spatial tile)`` — not one per
     ``(band, time step, spatial tile)`` — because the query result is
     band-independent.  All ``(time x tile)`` queries are dispatched
-    concurrently via :func:`asyncio.gather`; the ``backend.duckdb_lock``
-    serialises actual DuckDB access.  Each query result is then fanned across
-    all active bands to produce one :class:`ChunkRead` per
+    concurrently via :func:`asyncio.gather` so the per-query JSON
+    construction and result processing overlap.  Each query result is then
+    fanned across all active bands to produce one :class:`ChunkRead` per
     ``(band, time, tile)`` combination.
 
     Args:
@@ -598,15 +598,14 @@ async def _explain_async(
             actual_h,
             dst_crs,
         )
-        with backend.duckdb_lock:
-            items = backend.duckdb_client.search(
-                backend.parquet_path,
-                bbox=chunk_bbox_4326,
-                datetime=date_filter,
-                sortby=backend.sortby,
-                filter=backend.filter,
-                ids=backend.ids,
-            )
+        items = backend.duckdb_client.search(
+            backend.parquet_path,
+            bbox=chunk_bbox_4326,
+            datetime=date_filter,
+            sortby=backend.sortby,
+            filter=backend.filter,
+            ids=backend.ids,
+        )
         logger.debug(
             "explain date=%s chunk=(%d,%d) -> %d items (for %d band(s))",
             date_filter,

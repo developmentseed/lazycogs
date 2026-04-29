@@ -51,7 +51,6 @@ class _ChunkReadPlan:
     Attributes:
         duckdb_client: ``DuckdbClient`` instance used for STAC queries.
         parquet_path: Path to the geoparquet file or hive-partitioned directory.
-        duckdb_lock: Lock serialising access to ``duckdb_client``.
         sortby: Optional sort keys forwarded to ``client.search``.
         filter_expr: Optional CQL2 filter forwarded to ``client.search``.
         ids: Optional STAC item IDs forwarded to ``client.search``.
@@ -74,7 +73,6 @@ class _ChunkReadPlan:
 
     duckdb_client: DuckdbClient
     parquet_path: str
-    duckdb_lock: threading.Lock
     sortby: str | list[str | dict[str, str]] | None
     filter_expr: str | dict[str, Any] | None
     ids: list[str] | None
@@ -280,9 +278,7 @@ async def _run_one_date(
 
     """
     date = plan.dates[t_idx]
-
-    with plan.duckdb_lock:
-        items = _search_items(plan, date)
+    items = _search_items(plan, date)
 
     if not items:
         return None
@@ -319,8 +315,9 @@ async def _run_mosaic_all_dates(
 ) -> list[dict[str, np.ndarray] | None]:
     """Run all time steps concurrently inside a single event loop.
 
-    DuckDB queries are issued sequentially (the threading.Lock already
-    serialises access). Mosaic coroutines for all time steps are gathered
+    DuckDB queries run inline; DuckDB itself serialises access on a single
+    connection, so concurrent queries on the same ``DuckdbClient`` are safe
+    but not parallel.  Mosaic coroutines for all time steps are gathered
     concurrently so COG reads and reprojections overlap across time steps.
 
     Args:
@@ -409,12 +406,6 @@ class MultiBandStacBackendArray(BackendArray):
     path_from_href: Callable[[str], str] | None = field(default=None)
     shape: tuple[int, ...] = field(init=False)
     _dst_to_4326: Transformer | None = field(init=False, repr=False, compare=False)
-    _duckdb_lock: threading.Lock = field(
-        init=False,
-        repr=False,
-        compare=False,
-        default_factory=threading.Lock,
-    )
 
     def __post_init__(self) -> None:
         """Derive shape and cache the dst→EPSG:4326 transformer."""
@@ -428,11 +419,6 @@ class MultiBandStacBackendArray(BackendArray):
                 epsg_4326,
                 always_xy=True,
             )
-
-    @property
-    def duckdb_lock(self) -> threading.Lock:
-        """Lock serialising access to ``duckdb_client``."""
-        return self._duckdb_lock
 
     def __repr__(self) -> str:
         """Return a compact string representation."""
@@ -562,7 +548,6 @@ class MultiBandStacBackendArray(BackendArray):
         plan = _ChunkReadPlan(
             duckdb_client=self.duckdb_client,
             parquet_path=self.parquet_path,
-            duckdb_lock=self._duckdb_lock,
             sortby=self.sortby,
             filter_expr=self.filter,
             ids=self.ids,
@@ -582,7 +567,9 @@ class MultiBandStacBackendArray(BackendArray):
             path_fn=self.path_from_href,
         )
 
-        all_chunk_data = _run_coroutine(_run_mosaic_all_dates(time_indices, plan))
+        all_chunk_data = _run_coroutine(
+            _run_mosaic_all_dates(time_indices, plan),
+        )
 
         out_shape = (
             len(band_indices),
