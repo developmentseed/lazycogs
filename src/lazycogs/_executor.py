@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 
-_config: dict[str, int | None] = {"max_workers": None}
+config: dict[str, int | None] = {"max_workers": None}
 
 
 def _default_workers() -> int:
@@ -25,7 +25,7 @@ def get_max_workers() -> int:
         Number of reprojection threads each event loop will use.
 
     """
-    val = _config["max_workers"]
+    val = config["max_workers"]
     return val if val is not None else _default_workers()
 
 
@@ -54,4 +54,4 @@ def set_reproject_workers(n: int) -> None:
     """
     if n < 1:
         raise ValueError(f"n must be >= 1, got {n!r}")
-    _config["max_workers"] = n
+    config["max_workers"] = n

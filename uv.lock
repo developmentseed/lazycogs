@@ -1287,10 +1287,12 @@ name = "lazycogs"
 version = "0.1.1"
 source = { editable = "." }
 dependencies = [
+    { name = "arro3-core" },
     { name = "async-geotiff" },
     { name = "cql2" },
     { name = "numpy" },
     { name = "obstore" },
+    { name = "pandas" },
     { name = "pyproj" },
     { name = "rustac", extra = ["arrow"] },
     { name = "xarray" },
@@ -1320,11 +1322,13 @@ docs = [
 
 [package.metadata]
 requires-dist = [
+    { name = "arro3-core", specifier = ">=0.8.0" },
     { name = "async-geotiff", specifier = ">=0.4.0" },
     { name = "cql2", specifier = ">=0.5.5" },
     { name = "dask", marker = "extra == 'dask'", specifier = ">=2026.3.0" },
     { name = "numpy", specifier = ">=2.4.4" },
     { name = "obstore", specifier = ">=0.9.2" },
+    { name = "pandas", specifier = ">=3.0.2" },
     { name = "pyproj", specifier = ">=3.7.2" },
     { name = "rustac", extras = ["arrow"], specifier = ">=0.9.10" },
     { name = "xarray", specifier = ">=2026.2.0" },

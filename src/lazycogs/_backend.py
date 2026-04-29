@@ -592,6 +592,8 @@ class MultiBandStacBackendArray(BackendArray):
         )
         result: np.ndarray | None = None
 
+        expected_dims = 3
+
         for i, chunk_data in enumerate(all_chunk_data):
             if chunk_data is None:
                 continue
@@ -599,7 +601,7 @@ class MultiBandStacBackendArray(BackendArray):
                 result = np.full(out_shape, fill, dtype=self.dtype)
             for bi, band in enumerate(selected_bands):
                 arr = chunk_data[band]
-                slice_ = arr.reshape(arr.shape[-2:])
+                slice_ = arr[0] if arr.ndim == expected_dims else arr
                 result[bi, i] = slice_.astype(self.dtype, copy=False)
 
         if result is None:
