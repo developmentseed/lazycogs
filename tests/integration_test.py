@@ -12,7 +12,7 @@ from pyproj import Transformer
 import lazycogs
 
 logging.basicConfig(level="WARN")
-logging.getLogger("lazycogs").setLevel("INFO")
+logging.getLogger("lazycogs").setLevel("DEBUG")
 
 
 def _parquet_path(
@@ -109,6 +109,7 @@ async def run():
         )
 
     # --- daily time steps ---
+    store = lazycogs.store_for(str(items_parquet), skip_signature=True)
     da = lazycogs.open(
         str(items_parquet),
         crs=dst_crs,
@@ -117,6 +118,7 @@ async def run():
         time_period="P1D",
         bands=["red", "green", "blue"],
         dtype="int16",
+        store=store,
     )
     print(f"\ndaily array: {da}")
 
@@ -129,37 +131,6 @@ async def run():
     )
     with measure("daily spatial subset isel(time=1)"):
         _ = subset.isel(time=1).load()
-
-    # --- monthly composite ---
-    # max_concurrent_reads is lowered here because each reprojected array for
-    # the full extent is ~20 MB (int16, 4333x2367 px). The default of 32 would
-    # put ~650 MB in-flight per band task; with 3 bands running in parallel via
-    # dask that is ~2 GB just for in-flight reads. 8 keeps it under ~500 MB.
-    da_monthly = lazycogs.open(
-        str(items_parquet),
-        crs=dst_crs,
-        bbox=dst_bbox,
-        resolution=300,
-        time_period="P1M",
-        bands=["red", "green", "blue"],
-        dtype="int16",
-        sortby="eo:cloud_cover",
-        filter="eo:cloud_cover < 50",
-        max_concurrent_reads=8,
-    )
-    print(f"\nmonthly array: {da_monthly}")
-
-    # Add spatial chunks so dask breaks the full extent into smaller tasks.
-    # Without them each task holds the full 4333x2367 array in memory.
-    with measure("monthly full extent (chunked time=1, band=1, x=1024, y=1024)"):
-        _ = da_monthly.chunk(time=1, band=1, x=1024, y=1024).compute()
-
-    with measure("monthly spatial subset"):
-        monthly_subset = da_monthly.sel(
-            x=slice(100_000, 400_000),
-            y=slice(2_600_000, 2_800_000),
-        )
-        _ = monthly_subset.load()
 
 
 if __name__ == "__main__":
