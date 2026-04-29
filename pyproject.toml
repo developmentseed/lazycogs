@@ -20,6 +20,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Image Processing",
 ]
 dependencies = [
+    "affine>=2.4.0",
     "arro3-core>=0.8.0",
     "async-geotiff>=0.4.0",
     "cql2>=0.5.5",

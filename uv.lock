@@ -1287,6 +1287,7 @@ name = "lazycogs"
 version = "0.1.1"
 source = { editable = "." }
 dependencies = [
+    { name = "affine" },
     { name = "arro3-core" },
     { name = "async-geotiff" },
     { name = "cql2" },
@@ -1322,6 +1323,7 @@ docs = [
 
 [package.metadata]
 requires-dist = [
+    { name = "affine", specifier = ">=2.4.0" },
     { name = "arro3-core", specifier = ">=0.8.0" },
     { name = "async-geotiff", specifier = ">=0.4.0" },
     { name = "cql2", specifier = ">=0.5.5" },
