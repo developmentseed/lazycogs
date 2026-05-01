@@ -22,3 +22,4 @@ site/
 # docs data directory (fetched at build time, not committed)
 docs/notebooks/data/
 
+dev-docs/plans/
