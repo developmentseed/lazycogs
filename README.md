@@ -5,7 +5,7 @@
 [![Python Versions](https://img.shields.io/pypi/pyversions/lazycogs)](https://pypi.org/project/lazycogs/)
 [![License](https://img.shields.io/github/license/developmentseed/lazycogs)](https://github.com/developmentseed/lazycogs/blob/main/LICENSE)
 
-Open a lazy `(time, band, y, x)` xarray DataArray from thousands of cloud-optimized geotiffs (COGs). No GDAL required.
+Open a lazy `(band, time, y, x)` xarray DataArray from thousands of cloud-optimized geotiffs (COGs). No GDAL required.
 
 ## What is lazycogs?
 
@@ -45,7 +45,7 @@ dst_crs = "EPSG:32615"
 dst_bbox = (380000.0, 4928000.0, 420000.0, 4984000.0)
 
 # transform to 4326 for STAC search
-transformer = Transformer.from_crs(dst_crs, "epsg:4326", alwaysxy=True)
+transformer = Transformer.from_crs(dst_crs, "epsg:4326", always_xy=True)
 bbox_4326 = transformer.transform_bounds(*dst_bbox)
 
 # Search a STAC API and cache results to a local stac-geoparquet file.
@@ -57,7 +57,7 @@ await rustac.search_to(
     bbox=bbox_4326,
 )
 
-# Open a fully lazy (time, band, y, x) DataArray. No COGs are read yet.
+# Open a fully lazy (band, time, y, x) DataArray. No COGs are read yet.
 da = lazycogs.open(
     "items.parquet",
     bbox=dst_bbox,

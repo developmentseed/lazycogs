@@ -1,6 +1,6 @@
 ![lazycogs](./lazycogs.svg)
 
-Open a lazy `(time, band, y, x)` xarray DataArray from thousands of cloud-optimized GeoTIFFs. No GDAL required.
+Open a lazy `(band, time, y, x)` xarray DataArray from thousands of cloud-optimized GeoTIFFs. No GDAL required.
 
 --8<-- "docs/includes/dataarray_repr.html"
 
@@ -50,7 +50,7 @@ await rustac.search_to(
     bbox=bbox_4326,
 )
 
-# Open a fully lazy (time, band, y, x) DataArray. No COGs are read yet.
+# Open a fully lazy (band, time, y, x) DataArray. No COGs are read yet.
 da = lazycogs.open(
     "items.parquet",
     bbox=dst_bbox,
