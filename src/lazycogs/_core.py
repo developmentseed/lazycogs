@@ -308,7 +308,7 @@ def _build_dataarray(
             :func:`open` for full documentation.
 
     Returns:
-        Lazy ``xr.DataArray`` with dimensions ``(time, band, y, x)``.
+        Lazy ``xr.DataArray`` with dimensions ``(band, time, y, x)``.
 
     """
     dst_affine, dst_width, dst_height, x_coords, y_coords = compute_output_grid(
@@ -386,7 +386,7 @@ def open(  # noqa: A001
     path_from_href: Callable[[str], str] | None = None,
     duckdb_client: DuckdbClient | None = None,
 ) -> xr.DataArray:
-    """Open a mosaic of STAC items as a lazy ``(time, band, y, x)`` DataArray.
+    """Open a mosaic of STAC items as a lazy ``(band, time, y, x)`` DataArray.
 
     ``href`` must be a path to a geoparquet file (``.parquet`` or
     ``.geoparquet``) or, when *duckdb_client* is provided, to a
@@ -480,7 +480,7 @@ def open(  # noqa: A001
                 )
 
     Returns:
-        Lazy ``xr.DataArray`` with dimensions ``(time, band, y, x)``.
+        Lazy ``xr.DataArray`` with dimensions ``(band, time, y, x)``.
 
     Raises:
         ValueError: If ``href`` is not a ``.parquet`` or ``.geoparquet`` file
