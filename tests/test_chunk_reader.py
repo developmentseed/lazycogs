@@ -14,7 +14,7 @@ from lazycogs._chunk_reader import (
     _drain_in_order,
     _native_window,
     _select_overview,
-    async_mosaic_chunk,
+    read_chunk_async,
 )
 from lazycogs._mosaic_methods import FirstMethod
 
@@ -151,11 +151,11 @@ def test_native_window_clamped_to_image_bounds():
 
 
 # ---------------------------------------------------------------------------
-# async_mosaic_chunk concurrency
+# read_chunk_async concurrency
 # ---------------------------------------------------------------------------
 
 
-def test_async_mosaic_chunk_limits_concurrent_reads():
+def test_read_chunk_async_limits_concurrent_reads():
     """No more than max_concurrent_reads items are read concurrently."""
     chunk_width, chunk_height = 4, 4
     chunk_affine = Affine(1.0, 0.0, 0.0, 0.0, -1.0, 4.0)
@@ -184,7 +184,7 @@ def test_async_mosaic_chunk_limits_concurrent_reads():
         side_effect=_fake_read_item_band,
     ):
         asyncio.run(
-            async_mosaic_chunk(
+            read_chunk_async(
                 items=items,
                 bands=bands,
                 chunk_affine=chunk_affine,
@@ -396,11 +396,11 @@ def test_apply_bands_with_warp_cache_shared_across_calls():
 
 
 # ---------------------------------------------------------------------------
-# async_mosaic_chunk (multi-band)
+# read_chunk_async (multi-band)
 # ---------------------------------------------------------------------------
 
 
-def test_async_mosaic_chunk_returns_all_bands():
+def test_read_chunk_async_returns_all_bands():
     """Returns a dict with one entry per requested band."""
     chunk_width, chunk_height = 4, 4
     chunk_affine = Affine(1.0, 0.0, 0.0, 0.0, -1.0, 4.0)
@@ -420,7 +420,7 @@ def test_async_mosaic_chunk_returns_all_bands():
         side_effect=_fake_read_item_band,
     ):
         result = asyncio.run(
-            async_mosaic_chunk(
+            read_chunk_async(
                 items=items,
                 bands=bands,
                 chunk_affine=chunk_affine,
@@ -435,7 +435,7 @@ def test_async_mosaic_chunk_returns_all_bands():
         assert result[b].shape == (1, chunk_height, chunk_width)
 
 
-def test_async_mosaic_chunk_early_exit():
+def test_read_chunk_async_early_exit():
     """All bands filled on first item → remaining items are skipped."""
     chunk_width, chunk_height = 4, 4
     chunk_affine = Affine(1.0, 0.0, 0.0, 0.0, -1.0, 4.0)
@@ -462,7 +462,7 @@ def test_async_mosaic_chunk_early_exit():
         side_effect=_fake_read_item_band,
     ):
         asyncio.run(
-            async_mosaic_chunk(
+            read_chunk_async(
                 items=items,
                 bands=bands,
                 chunk_affine=chunk_affine,

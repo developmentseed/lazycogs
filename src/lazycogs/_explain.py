@@ -14,13 +14,15 @@ from affine import Affine
 from pandas import DataFrame
 from pyproj import CRS, Transformer
 
-from lazycogs._backend import MultiBandStacBackendArray, _run_coroutine
 from lazycogs._chunk_reader import _ChunkContext, _open_and_window
+from lazycogs._executor import _DUCKDB_EXECUTOR, _run_coroutine
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from obstore.store import ObjectStore
+
+    from lazycogs._backend import MultiBandStacBackendArray
 
 logger = logging.getLogger(__name__)
 
@@ -598,13 +600,17 @@ async def _explain_async(
             actual_h,
             dst_crs,
         )
-        items = backend.duckdb_client.search(
-            backend.parquet_path,
-            bbox=chunk_bbox_4326,
-            datetime=date_filter,
-            sortby=backend.sortby,
-            filter=backend.filter,
-            ids=backend.ids,
+        loop = asyncio.get_running_loop()
+        items = await loop.run_in_executor(
+            _DUCKDB_EXECUTOR,
+            lambda: backend.duckdb_client.search(
+                backend.parquet_path,
+                bbox=chunk_bbox_4326,
+                datetime=date_filter,
+                sortby=backend.sortby,
+                filter=backend.filter,
+                ids=backend.ids,
+            ),
         )
         logger.debug(
             "explain date=%s chunk=(%d,%d) -> %d items (for %d band(s))",

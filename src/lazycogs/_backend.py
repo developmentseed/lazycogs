@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import concurrent.futures
 import logging
-import threading
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -16,19 +14,18 @@ from pyproj import CRS, Transformer
 from xarray.backends.common import BackendArray
 from xarray.core import indexing
 
-from lazycogs._chunk_reader import async_mosaic_chunk
+from lazycogs._chunk_reader import read_chunk_async
 from lazycogs._cql2 import _extract_filter_fields, _sortby_fields
-from lazycogs._executor import get_max_workers
+from lazycogs._executor import (
+    _DUCKDB_EXECUTOR,
+    _run_coroutine,
+)
 
 logger = logging.getLogger(__name__)
 
 
-_tls = threading.local()
-
 if TYPE_CHECKING:
-    from asyncio.futures import Future
     from collections.abc import Callable
-    from types import CoroutineType
 
     from rustac import DuckdbClient
 
@@ -39,8 +36,8 @@ if TYPE_CHECKING:
 class _ChunkReadPlan:
     """Everything needed to materialise one chunk across all its time steps.
 
-    Built once in ``_raw_getitem`` and passed through to
-    ``_run_mosaic_all_dates`` and ``_run_one_date``. Frozen to make the
+    Built once in ``_async_getitem`` and passed through to
+    ``_read_chunk_all_dates`` and ``_run_one_date``. Frozen to make the
     read-only intent explicit.
 
     Note: ``warp_cache`` is a mutable dict despite the frozen dataclass. This
@@ -90,58 +87,6 @@ class _ChunkReadPlan:
     max_concurrent_reads: int
     warp_cache: dict
     path_fn: Callable[[str], str] | None
-
-
-def _get_or_create_background_loop() -> asyncio.AbstractEventLoop:
-    """Return the persistent background event loop for the current thread.
-
-    Creates the loop, its bounded reprojection executor, and its daemon runner
-    thread on first call from a given thread.  Subsequent calls on the same
-    thread return the cached loop immediately.
-
-    The loop is stored on ``threading.local`` so each thread (each dask worker,
-    each Jupyter kernel callback thread) has its own independent loop and
-    executor — tasks on different threads do not share a pool.
-
-    Using a persistent loop (rather than a fresh one per call) ensures that
-    any in-flight callbacks from ``async_geotiff``/``obstore`` background
-    threads can always be delivered, avoiding ``RuntimeError: Event loop is
-    closed`` errors from callbacks that fire after a fresh loop is torn down.
-    """
-    loop: asyncio.AbstractEventLoop | None = getattr(_tls, "loop", None)
-    if loop is not None and loop.is_running():
-        return loop
-
-    loop = asyncio.new_event_loop()
-    loop.set_default_executor(
-        concurrent.futures.ThreadPoolExecutor(
-            max_workers=get_max_workers(),
-            thread_name_prefix="lazycogs-reproject",
-        ),
-    )
-    t = threading.Thread(target=loop.run_forever, daemon=True, name="lazycogs-loop")
-    t.start()
-    _tls.loop = loop
-    return loop
-
-
-def _run_coroutine(coro: CoroutineType) -> Future:
-    """Run an async coroutine from sync code.
-
-    Submits the coroutine to a persistent per-thread background event loop,
-    blocking until it completes.  The background loop is created on the first
-    call from a given thread (dask worker, Jupyter kernel thread, etc.) and
-    reused for all subsequent calls on that same thread.
-
-    Args:
-        coro: The coroutine to execute.
-
-    Returns:
-        The return value of the coroutine.
-
-    """
-    loop = _get_or_create_background_loop()
-    return asyncio.run_coroutine_threadsafe(coro, loop).result()
 
 
 @dataclass
@@ -214,7 +159,7 @@ def _resolve_band_indices(
     return list(range(start, stop, step)), False
 
 
-def _search_items(
+def _search_items_sync(
     plan: _ChunkReadPlan,
     date: str,
 ) -> list[Any]:
@@ -259,6 +204,28 @@ def _search_items(
     return items
 
 
+async def _search_items_async(
+    plan: _ChunkReadPlan,
+    date: str,
+) -> list[Any]:
+    """Run the DuckDB search on the dedicated DuckDB executor.
+
+    DuckDB queries serialise on a single connection internally, so this
+    yields the event loop during the query but does not produce parallel
+    queries against the same DuckdbClient.
+
+    Args:
+        plan: Read plan carrying all parameters for this chunk.
+        date: Acquisition date string (``"YYYY-MM-DD"``).
+
+    Returns:
+        List of STAC items returned by DuckDB.
+
+    """
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(_DUCKDB_EXECUTOR, _search_items_sync, plan, date)
+
+
 async def _run_one_date(
     t_idx: int,
     plan: _ChunkReadPlan,
@@ -266,7 +233,7 @@ async def _run_one_date(
     """Read and mosaic all COGs for a single time step.
 
     Issues one DuckDB query for items overlapping the chunk at this date, then
-    calls async_mosaic_chunk to fetch and reproject all tiles.
+    calls read_chunk_async to fetch and reproject all tiles.
     Returns None if no items match the query.
 
     Args:
@@ -278,12 +245,12 @@ async def _run_one_date(
 
     """
     date = plan.dates[t_idx]
-    items = _search_items(plan, date)
+    items = await _search_items_async(plan, date)
 
     if not items:
         return None
     t0 = time.perf_counter()
-    chunk_result = await async_mosaic_chunk(
+    chunk_result = await read_chunk_async(
         items=items,
         bands=plan.selected_bands,
         chunk_affine=plan.chunk_affine,
@@ -298,7 +265,7 @@ async def _run_one_date(
         path_fn=plan.path_fn,
     )
     logger.debug(
-        "async_mosaic_chunk bands=%r date=%s (%d items, %dx%d px) took %.3fs",
+        "read_chunk_async bands=%r date=%s (%d items, %dx%d px) took %.3fs",
         plan.selected_bands,
         date,
         len(items),
@@ -309,16 +276,17 @@ async def _run_one_date(
     return chunk_result
 
 
-async def _run_mosaic_all_dates(
+async def _read_chunk_all_dates(
     time_indices: list[int],
     plan: _ChunkReadPlan,
 ) -> list[dict[str, np.ndarray] | None]:
     """Run all time steps concurrently inside a single event loop.
 
-    DuckDB queries run inline; DuckDB itself serialises access on a single
-    connection, so concurrent queries on the same ``DuckdbClient`` are safe
-    but not parallel.  Mosaic coroutines for all time steps are gathered
-    concurrently so COG reads and reprojections overlap across time steps.
+    DuckDB queries run on the dedicated DuckDB executor; DuckDB itself
+    serialises access on a single connection, so concurrent queries on the
+    same ``DuckdbClient`` are safe but not parallel.  Mosaic coroutines for
+    all time steps are gathered concurrently so COG reads and reprojections
+    overlap across time steps.
 
     Args:
         time_indices: Ordered list of time-dimension indices to materialise.
@@ -515,16 +483,30 @@ class MultiBandStacBackendArray(BackendArray):
             key,
             self.shape,
             indexing.IndexingSupport.BASIC,
-            self._raw_getitem,
+            self._sync_getitem,
         )
 
-    def _raw_getitem(self, key: tuple[Any, ...]) -> np.ndarray:
+    def _sync_getitem(self, key: tuple[Any, ...]) -> np.ndarray:
+        """Sync adapter that runs ``_async_getitem`` on the background loop.
+
+        Args:
+            key: A tuple of ``int | slice`` objects for the
+                ``(band, time, y, x)`` dimensions.
+
+        Returns:
+            Numpy array with shape determined by the indexing key.
+
+        """
+        return _run_coroutine(self._async_getitem(key))
+
+    async def _async_getitem(self, key: tuple[Any, ...]) -> np.ndarray:
         """Materialise the chunk identified by ``key``.
 
-        Reads all selected bands together per time step via
-        :func:`~lazycogs._chunk_reader.async_mosaic_chunk`, issuing
-        a single DuckDB query per time step and sharing reprojection warp maps
-        across bands that have identical source geometry.
+        Single source of truth for chunk reads. Reads all selected bands
+        together per time step via
+        :func:`~lazycogs._chunk_reader.read_chunk_async`, issuing a single
+        DuckDB query per time step and sharing reprojection warp maps across
+        bands that have identical source geometry.
 
         Args:
             key: A tuple of ``int | slice`` objects for the
@@ -567,9 +549,7 @@ class MultiBandStacBackendArray(BackendArray):
             path_fn=self.path_from_href,
         )
 
-        all_chunk_data = _run_coroutine(
-            _run_mosaic_all_dates(time_indices, plan),
-        )
+        all_chunk_data = await _read_chunk_all_dates(time_indices, plan)
 
         out_shape = (
             len(band_indices),

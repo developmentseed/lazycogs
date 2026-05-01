@@ -12,6 +12,7 @@ import numpy as np
 from async_geotiff import GeoTIFF, Overview, RasterArray, Window
 from numpy import ma
 
+from lazycogs._executor import _run_coroutine
 from lazycogs._mosaic_methods import FirstMethod, MosaicMethodBase
 from lazycogs._reproject import (
     WarpMap,
@@ -510,7 +511,7 @@ async def _drain_in_order(
         await asyncio.gather(*tasks, return_exceptions=True)
 
 
-async def async_mosaic_chunk(
+async def read_chunk_async(
     items: list[dict],
     bands: list[str],
     chunk_affine: Affine,
@@ -527,8 +528,7 @@ async def async_mosaic_chunk(
     """Read, reproject, and mosaic multiple bands from a list of STAC items.
 
     Processes all requested bands together per item so that bands sharing the
-    same source geometry
-    compute the reprojection warp map only once (via
+    same source geometry compute the reprojection warp map only once (via
     :func:`_apply_bands_with_warp_cache`).
 
     Items are processed in batches of ``max_concurrent_reads``.  When all
@@ -615,3 +615,62 @@ async def async_mosaic_chunk(
                 dtype=np.float32,
             )
     return output
+
+
+def read_chunk(
+    items: list[dict],
+    bands: list[str],
+    chunk_affine: Affine,
+    dst_crs: CRS,
+    chunk_width: int,
+    chunk_height: int,
+    nodata: float | None = None,
+    mosaic_method_cls: type[MosaicMethodBase] | None = None,
+    store: ObjectStore | None = None,
+    max_concurrent_reads: int = 32,
+    warp_cache: dict | None = None,
+    path_fn: Callable[[str], str] | None = None,
+) -> dict[str, np.ndarray]:
+    """Run :func:`read_chunk_async` on the persistent per-thread background loop.
+
+    All arguments are identical to :func:`read_chunk_async`.
+
+    Args:
+        items: List of STAC item dicts to mosaic.  Processed in order.
+        bands: Asset keys identifying the bands to read from each item.
+        chunk_affine: Affine transform of the destination chunk.
+        dst_crs: CRS of the destination chunk.
+        chunk_width: Width of the destination chunk in pixels.
+        chunk_height: Height of the destination chunk in pixels.
+        nodata: No-data fill value.
+        mosaic_method_cls: Mosaic method class instantiated once per band.
+            Defaults to :class:`~lazycogs._mosaic_methods.FirstMethod`.
+        store: Optional pre-configured obstore ``ObjectStore`` instance.
+        max_concurrent_reads: Maximum number of COG reads to run concurrently.
+        warp_cache: Optional cache shared across calls for reusing warp maps
+            from earlier time steps.
+        path_fn: Optional callable that takes an asset HREF and returns the
+            object path to use with *store*.
+
+    Returns:
+        ``dict`` mapping each band name to an array of shape
+        ``(cog_bands, chunk_height, chunk_width)`` with dtype matching the
+        source COGs.
+
+    """
+    return _run_coroutine(
+        read_chunk_async(
+            items=items,
+            bands=bands,
+            chunk_affine=chunk_affine,
+            dst_crs=dst_crs,
+            chunk_width=chunk_width,
+            chunk_height=chunk_height,
+            nodata=nodata,
+            mosaic_method_cls=mosaic_method_cls,
+            store=store,
+            max_concurrent_reads=max_concurrent_reads,
+            warp_cache=warp_cache,
+            path_fn=path_fn,
+        ),
+    )
