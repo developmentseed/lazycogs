@@ -2,7 +2,7 @@
 
 ## Context
 
-Currently `lazycogs.open()` defaults to `float32` for both output `dtype` and `nodata`. The actual COG's internal nodata is used at chunk-read time if the user doesn't provide one, but the output DataArray is still `float32`. This is wasteful when all requested bands are integer types (e.g. `uint8` or `int16`). Users can override these defaults, but they must inspect the collection manually.
+Currently `lazycogs.open()` defaults to `float32` for both output `dtype` and `None` for `nodata`. The actual COG's internal nodata is used at chunk-read time if the user doesn't provide one, but the output DataArray is still `float32`. This is wasteful when all requested bands are integer types (e.g. `uint8` or `int16`). Users can override these defaults, but they must inspect the collection manually.
 
 The library already queries the first matching item for band discovery (`_discover_bands`) and storage smoketesting (`_smoketest_store`). We can piggyback on this by opening one COG per requested band via `GeoTIFF.open` and extracting its dtype and nodata metadata with minimal overhead.
 
