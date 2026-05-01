@@ -1036,7 +1036,7 @@
   <h1>Home</h1>
 
 <p><img alt="lazycogs" src="lazycogs.svg" /></p>
-<p>Open a lazy <code>(time, band, y, x)</code> xarray DataArray from thousands of cloud-optimized GeoTIFFs. No GDAL required.</p>
+<p>Open a lazy <code>(band, time, y, x)</code> xarray DataArray from thousands of cloud-optimized GeoTIFFs. No GDAL required.</p>
 <div><svg style="position: absolute; width: 0; height: 0; overflow: hidden">
 <defs>
 <symbol id="icon-database" viewBox="0 0 32 32">
@@ -1690,7 +1690,7 @@ Attributes:
 <a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>    <span class="n">bbox</span><span class="o">=</span><span class="n">bbox_4326</span><span class="p">,</span>
 <a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="p">)</span>
 <a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>
-<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="c1"># Open a fully lazy (time, band, y, x) DataArray. No COGs are read yet.</span>
+<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="c1"># Open a fully lazy (band, time, y, x) DataArray. No COGs are read yet.</span>
 <a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="n">da</span> <span class="o">=</span> <span class="n">lazycogs</span><span class="o">.</span><span class="n">open</span><span class="p">(</span>
 <a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>    <span class="s2">&quot;items.parquet&quot;</span><span class="p">,</span>
 <a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>    <span class="n">bbox</span><span class="o">=</span><span class="n">dst_bbox</span><span class="p">,</span>
