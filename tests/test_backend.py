@@ -1,4 +1,4 @@
-"""Tests for _backend helpers and _raw_getitem."""
+"""Tests for _backend helpers and _async_getitem / _sync_getitem."""
 
 from unittest.mock import AsyncMock, patch
 
@@ -97,7 +97,7 @@ def test_chunk_bbox_4326_ordering(utm32n):
 
 
 # ---------------------------------------------------------------------------
-# MultiBandStacBackendArray._raw_getitem — single-band behaviour
+# MultiBandStacBackendArray._sync_getitem — single-band behaviour
 # ---------------------------------------------------------------------------
 
 
@@ -106,7 +106,7 @@ def test_raw_getitem_empty_items_returns_nodata(wgs84):
     arr = _make_array(wgs84)
 
     with patch("rustac.DuckdbClient.search", return_value=[]):
-        result = arr._raw_getitem((slice(0, 1), slice(0, 2), slice(0, 1), slice(0, 4)))
+        result = arr._sync_getitem((slice(0, 1), slice(0, 2), slice(0, 1), slice(0, 4)))
 
     assert result.shape == (1, 2, 1, 4)
     np.testing.assert_array_equal(result, -9999.0)
@@ -117,13 +117,13 @@ def test_raw_getitem_scalar_time_squeezes(wgs84):
     arr = _make_array(wgs84)
 
     with patch("rustac.DuckdbClient.search", return_value=[]):
-        result = arr._raw_getitem((slice(0, 1), 0, slice(0, 1), slice(0, 4)))
+        result = arr._sync_getitem((slice(0, 1), 0, slice(0, 1), slice(0, 4)))
 
     assert result.shape == (1, 1, 4)
 
 
 def test_raw_getitem_with_items_calls_mosaic(wgs84):
-    """When items are returned, async_mosaic_chunk is called and result used."""
+    """When items are returned, read_chunk_async is called and result used."""
     arr = _make_array(wgs84, dates=["2023-01-01"])
     band = "B04"
     fake_items = [{"id": "item-1", "assets": {band: {"href": "s3://b/f.tif"}}}]
@@ -132,12 +132,12 @@ def test_raw_getitem_with_items_calls_mosaic(wgs84):
     with (
         patch("rustac.DuckdbClient.search", return_value=fake_items),
         patch(
-            "lazycogs._backend.async_mosaic_chunk",
+            "lazycogs._backend.read_chunk_async",
             new_callable=AsyncMock,
             return_value=fake_chunk,
         ),
     ):
-        result = arr._raw_getitem((0, 0, slice(0, 1), slice(0, 4)))
+        result = arr._sync_getitem((0, 0, slice(0, 1), slice(0, 4)))
 
     assert result.shape == (1, 4)
     np.testing.assert_array_equal(result, 42.0)
@@ -151,12 +151,12 @@ def test_raw_getitem_chunk_affine_offset(wgs84):
     with (
         patch("rustac.DuckdbClient.search", return_value=fake_items),
         patch(
-            "lazycogs._backend.async_mosaic_chunk",
+            "lazycogs._backend.read_chunk_async",
             new_callable=AsyncMock,
             return_value={"B04": np.zeros((1, 1, 2), dtype=np.float32)},
         ),
     ):
-        arr._raw_getitem((slice(0, 1), 0, slice(0, 1), slice(2, 4)))
+        arr._sync_getitem((slice(0, 1), 0, slice(0, 1), slice(2, 4)))
 
     # The full grid origin is (10, 50); x_start=2 → chunk origin x = 10 + 2 = 12
     chunk_affine = arr.dst_affine * Affine.translation(2, 0)
@@ -164,7 +164,7 @@ def test_raw_getitem_chunk_affine_offset(wgs84):
 
 
 # ---------------------------------------------------------------------------
-# MultiBandStacBackendArray._raw_getitem — multi-band behaviour
+# MultiBandStacBackendArray._sync_getitem — multi-band behaviour
 # ---------------------------------------------------------------------------
 
 
@@ -200,7 +200,7 @@ def test_multiband_raw_getitem_no_items_returns_nodata(wgs84):
     multi = _make_multiband_array(wgs84, ["B01", "B02"])
 
     with patch("rustac.DuckdbClient.search", return_value=[]):
-        result = multi._raw_getitem(
+        result = multi._sync_getitem(
             (slice(0, 2), slice(0, 1), slice(0, 1), slice(0, 4)),
         )
 
@@ -209,7 +209,7 @@ def test_multiband_raw_getitem_no_items_returns_nodata(wgs84):
 
 
 def test_multiband_raw_getitem_calls_multiband_mosaic(wgs84):
-    """_raw_getitem calls async_mosaic_chunk once per time step, not per band."""
+    """_sync_getitem calls read_chunk_async once per time step, not per band."""
     bands = ["B01", "B02"]
     multi = _make_multiband_array(wgs84, bands)
     fake_items = [
@@ -218,24 +218,20 @@ def test_multiband_raw_getitem_calls_multiband_mosaic(wgs84):
 
     call_count = [0]
 
-    def _fake_run_coroutine(coro):
+    async def _fake_read_chunk_async(*args, **kwargs):
         call_count[0] += 1
-        coro.close()
-        # _mosaic_all_dates returns a list with one entry per time step.
-        return [
-            {
-                b: np.full((1, 1, 4), float(i), dtype=np.float32)
-                for i, b in enumerate(bands)
-            },
-        ]
+        return {
+            b: np.full((1, 1, 4), float(i), dtype=np.float32)
+            for i, b in enumerate(bands)
+        }
 
     with (
         patch("rustac.DuckdbClient.search", return_value=fake_items),
-        patch("lazycogs._backend._run_coroutine", side_effect=_fake_run_coroutine),
+        patch("lazycogs._backend.read_chunk_async", side_effect=_fake_read_chunk_async),
     ):
-        result = multi._raw_getitem((slice(0, 2), 0, slice(0, 1), slice(0, 4)))
+        result = multi._sync_getitem((slice(0, 2), 0, slice(0, 1), slice(0, 4)))
 
-    # One call to _run_coroutine (which runs all time steps together), not one per band.
+    # One call to read_chunk_async per time step (all bands per call), not one per band.
     assert call_count[0] == 1
     assert result.shape == (2, 1, 4)
 
@@ -245,7 +241,7 @@ def test_multiband_raw_getitem_squeeze_band(wgs84):
     multi = _make_multiband_array(wgs84, ["B01", "B02"])
 
     with patch("rustac.DuckdbClient.search", return_value=[]):
-        result = multi._raw_getitem((0, 0, slice(0, 1), slice(0, 4)))
+        result = multi._sync_getitem((0, 0, slice(0, 1), slice(0, 4)))
 
     assert result.shape == (1, 4)
 
@@ -255,6 +251,6 @@ def test_multiband_raw_getitem_single_band_single_pixel(wgs84):
     multi = _make_multiband_array(wgs84, ["B01", "B02"])
 
     with patch("rustac.DuckdbClient.search", return_value=[]):
-        result = multi._raw_getitem((0, 0, 0, 0))
+        result = multi._sync_getitem((0, 0, 0, 0))
 
     assert result.shape == ()
