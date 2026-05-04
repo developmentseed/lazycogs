@@ -1,5 +1,6 @@
 """Tests for _backend helpers and _async_getitem / _sync_getitem."""
 
+import asyncio
 from unittest.mock import AsyncMock, patch
 
 import numpy as np
@@ -7,6 +8,7 @@ import pytest
 from affine import Affine
 from pyproj import CRS
 from rustac import DuckdbClient
+from xarray.core import indexing
 
 from lazycogs._backend import MultiBandStacBackendArray
 from lazycogs._mosaic_methods import FirstMethod
@@ -254,3 +256,54 @@ def test_multiband_raw_getitem_single_band_single_pixel(wgs84):
         result = multi._sync_getitem((0, 0, 0, 0))
 
     assert result.shape == ()
+
+
+# ---------------------------------------------------------------------------
+# MultiBandStacBackendArray.async_getitem — async protocol
+# ---------------------------------------------------------------------------
+
+
+def test_async_getitem_awaitable(wgs84):
+    """async_getitem returns the same numpy array as the sync path."""
+    arr = _make_array(wgs84)
+
+    key = indexing.BasicIndexer(
+        (slice(0, 1), slice(0, 2), slice(0, 1), slice(0, 4)),
+    )
+
+    async def _inner():
+        with patch("rustac.DuckdbClient.search", return_value=[]):
+            sync_result = arr[key]
+            async_result = await arr.async_getitem(key)
+        return sync_result, async_result
+
+    sync_result, async_result = asyncio.run(_inner())
+
+    assert isinstance(async_result, np.ndarray)
+    np.testing.assert_array_equal(async_result, sync_result)
+
+
+def test_async_getitem_concurrent_chunk_reads(wgs84):
+    """Multiple async_getitem calls on the same loop run concurrently."""
+    arr = _make_array(wgs84)
+
+    key1 = indexing.BasicIndexer(
+        (slice(0, 1), slice(0, 1), slice(0, 1), slice(0, 2)),
+    )
+    key2 = indexing.BasicIndexer(
+        (slice(0, 1), slice(1, 2), slice(0, 1), slice(2, 4)),
+    )
+
+    async def _inner():
+        with patch("rustac.DuckdbClient.search", return_value=[]):
+            return await asyncio.gather(
+                arr.async_getitem(key1),
+                arr.async_getitem(key2),
+            )
+
+    out1, out2 = asyncio.run(_inner())
+
+    assert isinstance(out1, np.ndarray)
+    assert isinstance(out2, np.ndarray)
+    assert out1.shape == (1, 1, 1, 2)
+    assert out2.shape == (1, 1, 1, 2)

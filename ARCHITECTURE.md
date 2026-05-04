@@ -79,6 +79,7 @@ With `fetch_headers=True`, each matched COG header is fetched (a small HTTP rang
 `MultiBandStacBackendArray.__getitem__` in `_backend.py`:
 
 1. xarray calls `__getitem__` with an `ExplicitIndexer`. The call is forwarded through `indexing.explicit_indexing_adapter` to `_sync_getitem`, which calls `_run_coroutine(self._async_getitem(key))` with a basic `(int | slice, int | slice, int | slice, int | slice)` key for `(band, time, y, x)`.
+   When the caller is already inside an async event loop (for example, an interactive map running in Jupyter), xarray can dispatch reads via `async_getitem` instead. `async_getitem` calls `indexing.async_explicit_indexing_adapter` with the same `_async_getitem` method, so the sync and async paths share a single source of truth and produce identical results. The only difference is that `async_getitem` stays on the caller's loop and avoids the background-thread overhead of `_run_coroutine`.
 2. The band key is resolved to a list of integer band indices. If it was an integer the band dimension is squeezed in the output.
 3. The time key is resolved to a list of integer positions. Integer keys squeeze the time dimension.
 4. Integer y or x keys are normalised to size-1 slices; the dimension is squeezed before returning.
