@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0](https://github.com/developmentseed/lazycogs/compare/v0.1.2...v0.2.0) (2026-05-04)
+
+
+### Features
+
+* add run_chunk_async and run_chunk for direct non-xarray access pattern ([#45](https://github.com/developmentseed/lazycogs/issues/45)) ([31e1952](https://github.com/developmentseed/lazycogs/commit/31e195206f2bb8490766373694afd8ee9e8cc7b6))
+
+
+### Bug Fixes
+
+* remove unnecessary lock on duckdb searches ([#39](https://github.com/developmentseed/lazycogs/issues/39)) ([dede83c](https://github.com/developmentseed/lazycogs/commit/dede83cff9594576e04e47a08e943ce9a3527dab))
+
 ## [0.1.2](https://github.com/developmentseed/lazycogs/compare/v0.1.1...v0.1.2) (2026-04-29)
 
 
