@@ -312,6 +312,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Minimal example">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#async-loading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Async loading
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
     </ul>
@@ -1039,6 +1056,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Minimal example">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#async-loading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Async loading
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
     </ul>
@@ -1726,6 +1760,18 @@ Attributes:
 <a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a>    <span class="n">resolution</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span>
 <a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a><span class="p">)</span>
 </code></pre></div>
+<h3 id="async-loading">Async loading<a class="headerlink" href="#async-loading" title="Permanent link">&para;</a></h3>
+<p>When you are already inside an async context (for example, a Jupyter
+notebook running on an asyncio loop), you can trigger chunk reads
+without blocking the event loop:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Fetch data asynchronously and load into memory in-place.</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">subset</span> <span class="o">=</span> <span class="k">await</span> <span class="n">da</span><span class="o">.</span><span class="n">isel</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="nb">slice</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">10</span><span class="p">),</span> <span class="n">y</span><span class="o">=</span><span class="nb">slice</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">10</span><span class="p">),</span> <span class="n">time</span><span class="o">=</span><span class="nb">slice</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span><span class="o">.</span><span class="n">load_async</span><span class="p">()</span>
+</code></pre></div>
+<p><code>load_async</code> uses xarray's async protocol, which dispatches through
+<code>MultiBandStacBackendArray.async_getitem</code> and stays on the caller's
+event loop. Multiple concurrent chunk reads overlap naturally, so the
+async path can be faster than the synchronous <code>da.compute()</code> when
+reading many chunks inside an already-running loop.</p>
 <p>Get started with the <a href="notebooks/quickstart/">Quickstart</a>. Evaluating lazycogs against alternatives? See <a href="performance/">Performance</a>.</p>
 
 

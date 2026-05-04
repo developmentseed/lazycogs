@@ -1590,7 +1590,8 @@
 <h2 id="phase-1-in-detail">Phase 1 in detail<a class="headerlink" href="#phase-1-in-detail" title="Permanent link">&para;</a></h2>
 <p><code>MultiBandStacBackendArray.__getitem__</code> in <code>_backend.py</code>:</p>
 <ol>
-<li>xarray calls <code>__getitem__</code> with an <code>ExplicitIndexer</code>. The call is forwarded through <code>indexing.explicit_indexing_adapter</code> to <code>_sync_getitem</code>, which calls <code>_run_coroutine(self._async_getitem(key))</code> with a basic <code>(int | slice, int | slice, int | slice, int | slice)</code> key for <code>(band, time, y, x)</code>.</li>
+<li>xarray calls <code>__getitem__</code> with an <code>ExplicitIndexer</code>. The call is forwarded through <code>indexing.explicit_indexing_adapter</code> to <code>_sync_getitem</code>, which calls <code>_run_coroutine(self._async_getitem(key))</code> with a basic <code>(int | slice, int | slice, int | slice, int | slice)</code> key for <code>(band, time, y, x)</code>.
+   When the caller is already inside an async event loop (for example, an interactive map running in Jupyter), xarray can dispatch reads via <code>async_getitem</code> instead. <code>async_getitem</code> calls <code>indexing.async_explicit_indexing_adapter</code> with the same <code>_async_getitem</code> method, so the sync and async paths share a single source of truth and produce identical results. The only difference is that <code>async_getitem</code> stays on the caller's loop and avoids the background-thread overhead of <code>_run_coroutine</code>.</li>
 <li>The band key is resolved to a list of integer band indices. If it was an integer the band dimension is squeezed in the output.</li>
 <li>The time key is resolved to a list of integer positions. Integer keys squeeze the time dimension.</li>
 <li>Integer y or x keys are normalised to size-1 slices; the dimension is squeezed before returning.</li>
