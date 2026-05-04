@@ -635,6 +635,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../notebooks/async-workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Experimental: async array fetching workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../notebooks/lazycogs-odc-stac/" class="md-nav__link">
         
   
@@ -1665,12 +1693,13 @@ any inferred values.</p>
 
     <div class="doc doc-contents first">
 
-        <p>Set the number of threads each chunk's event loop uses for reprojection.</p>
-<p>Each chunk read creates a fresh asyncio event loop with its own dedicated
-<code>ThreadPoolExecutor</code> bounded to <code>n</code> workers. Dask tasks do not compete
-for a shared pool — each task gets <code>n</code> independent reprojection threads.
-Total reprojection threads at any moment is at most
-<code>n x dask_worker_count</code>.</p>
+        <p>Set the number of threads each thread's event loop uses for reprojection.</p>
+<p>Each thread (dask worker, Jupyter kernel callback thread, etc.) gets one
+persistent background event loop with one bounded reprojection
+<code>ThreadPoolExecutor</code>.  All chunk reads on that thread share the same loop
+and executor.  Dask tasks on different threads do not compete for a shared
+pool.  Total reprojection threads at any moment is at most
+<code>n x active_thread_count</code>.</p>
 <p>Reprojection is memory-bandwidth-bound rather than compute-bound, so values
 above 4 typically offer no benefit and can hurt throughput due to memory
 contention. The default is <code>min(os.cpu_count(), 4)</code>.</p>
