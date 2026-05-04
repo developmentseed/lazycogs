@@ -486,6 +486,28 @@ class MultiBandStacBackendArray(BackendArray):
             self._sync_getitem,
         )
 
+    async def async_getitem(self, key: indexing.ExplicitIndexer) -> np.typing.ArrayLike:
+        """Return the data for the requested index without blocking the event loop.
+
+        This method implements xarray's async indexing protocol, enabling
+        callers that already have an active event loop to dispatch chunk
+        reads without spawning a background thread.
+
+        Args:
+            key: An xarray ``ExplicitIndexer``.
+
+        Returns:
+            A numpy array (or array-like) with shape determined by the
+            indexing key.
+
+        """
+        return await indexing.async_explicit_indexing_adapter(
+            key,
+            self.shape,
+            indexing.IndexingSupport.BASIC,
+            self._async_getitem,
+        )
+
     def _sync_getitem(self, key: tuple[Any, ...]) -> np.ndarray:
         """Sync adapter that runs ``_async_getitem`` on the background loop.
 
