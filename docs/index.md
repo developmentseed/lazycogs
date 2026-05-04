@@ -59,4 +59,21 @@ da = lazycogs.open(
 )
 ```
 
+### Async loading
+
+When you are already inside an async context (for example, a Jupyter
+notebook running on an asyncio loop), you can trigger chunk reads
+without blocking the event loop:
+
+```python
+# Fetch data asynchronously and load into memory in-place.
+subset = await da.isel(x=slice(0, 10), y=slice(0, 10), time=slice(0, 10).load_async()
+```
+
+`load_async` uses xarray's async protocol, which dispatches through
+`MultiBandStacBackendArray.async_getitem` and stays on the caller's
+event loop. Multiple concurrent chunk reads overlap naturally, so the
+async path can be faster than the synchronous `da.compute()` when
+reading many chunks inside an already-running loop.
+
 Get started with the [Quickstart](notebooks/quickstart.ipynb). Evaluating lazycogs against alternatives? See [Performance](performance.md).
