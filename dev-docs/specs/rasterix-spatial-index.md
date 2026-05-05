@@ -19,7 +19,6 @@ Today lazycogs returns a DataArray with scalar `x` and `y` coordinate arrays (pi
 
 - **Primary goal:** Attach a `RasterIndex` to every DataArray returned by `lazycogs.open()`, making the CRS and affine transform discoverable to the xarray ecosystem and enabling alignment with other RasterIndex-backed arrays.
 - **Primary goal:** Replace eager `x`/`y` coordinate arrays with lazy coordinate generation derived from the affine transform, reducing memory for large grids.
-- **Secondary goal:** Preserve the existing ascending-y coordinate convention so that `da.sel(y=slice(0, 100))` remains intuitive.
 - **Secondary goal:** Emit standard spatial metadata attributes so that downstream tools chosen by the user can reconstruct the grid if they choose to persist the array elsewhere.
 - **Non-goal:** Adding write APIs to lazycogs (COG writer, Zarr writer, etc.).
 - **Non-goal:** Supporting input formats other than COG. rasterix is applied to the *output* DataArray.
@@ -28,8 +27,8 @@ Today lazycogs returns a DataArray with scalar `x` and `y` coordinate arrays (pi
 ## Constraints & Assumptions
 
 - **lazycogs grids are always rectilinear and north-up.** `compute_output_grid()` produces `Affine(res, 0, minx, 0, -res, maxy)`.
-- **y-coordinates in lazycogs are ascending (south to north).** This is an intentional UX decision. `da.sel(y=slice(0, 100))` selects the southernmost 10 km of a UTM grid. This must be preserved after adopting rasterix.
-- **rasterix `RasterIndex.from_transform` generates coordinates from the affine transform.** For a standard top-down affine (negative y-scale), the derived y coordinates are descending (north to south), which conflicts with lazycogs' ascending convention. **This is the main integration challenge.** See Open Questions for discussion.
+- **y-coordinates follow the standard raster convention (descending, north to south).** lazycogs previously flipped y-coordinates to be ascending, but this deviated from the affine transform and from conventions used by `odc-stac`, `rioxarray`, and other spatial xarray tools. After adopting rasterix, y will be descending, consistent with the top-down affine (`e < 0`). `da.sel(y=slice(2_700_000, 2_500_000))` selects the southernmost portion of a UTM grid.
+- **rasterix `RasterIndex.from_transform` generates coordinates from the affine transform.** For a standard top-down affine (negative y-scale), the derived y coordinates are descending (north to south), which matches lazycogs' updated convention.
 - **xproj is required for CRS-aware indexing.** Adding rasterix implies adding `xproj` as a dependency.
 - **Chunking must preserve the index.** When `chunks=...` is passed, xarray calls `.chunk()` on the DataArray. For rectilinear grids, rasterix's `isel()` returns a new `RasterIndex` with an updated transform on slice indexing. This needs verification with `LazilyIndexedArray` → dask transition.
 - **Backward compatibility.** Existing code that accesses `da.coords['x']` or iterates over `da['y'].values` must continue to work. The coordinate variable values themselves must remain identical.
@@ -210,11 +209,11 @@ The spec includes metadata attributes that describe the spatial grid. These are 
 
 ## Migration Path
 
-This is an additive change with no deprecation cycle:
+This release contains a breaking change to y-coordinate ordering:
 
-- The coordinate variables (`x`, `y`) remain identical in values and shape.
+- **y-coordinate values are reversed.** The `y` coordinate array will be descending (north to south) instead of ascending. Code that slices with `y=slice(min_y, max_y)` must be updated to `y=slice(max_y, min_y)`.
 - The public API of `lazycogs.open()` gains no new arguments.
-- Existing code that accesses `da.coords['x']` or iterates over `da['y'].values` continues to work unchanged.
+- Existing code that accesses `da.coords['x']` or iterates over `da['y'].values` will still execute, but the order of `y` values is inverted.
 
 Because there is no `spatial_index` toggle, the integration must be rock-solid before release. The recommended path is to ship behind a feature flag during development (e.g. an environment variable) and remove the flag once tests pass.
 
@@ -227,7 +226,7 @@ Because there is no `spatial_index` toggle, the integration must be rock-solid b
 3. **Transform round-trip.** `da.xindexes['x'].transform()` reconstructs the expected pixel-centre affine.
 4. **Metadata attributes.** `da.attrs` contains `grid_mapping` and a `spatial_ref` coordinate after attachment.
 5. **Zarr convention attrs.** When opened with `crs="EPSG:5070"`, the DataArray carries `spatial:transform`, `proj:code`, and the correct `zarr_conventions` list.
-6. **Ascending y preserved.** `da.coords['y'].values` is strictly increasing (bottom to top) after rasterix attachment.
+6. **Descending y (standard raster orientation).** `da.coords['y'].values` is strictly decreasing (north to south) after rasterix attachment, matching the top-down affine transform.
 
 ### Integration tests
 
@@ -244,23 +243,14 @@ Because there is no `spatial_index` toggle, the integration must be rock-solid b
 | Emit all three metadata conventions | Only CF/GDAL; only Zarr; both. | Both. The attrs are tiny and maximize interoperability with any tool the user chooses. |
 | Make rasterix required | Optional with import fallback vs. required. | Required. rasterix + xproj are lightweight pure Python. An optional path adds import complexity for marginal benefit. |
 | Pass top-left or centre transform to rasterix | Top-left (GDAL) vs. centre. | `from_transform` docs say "Should represent pixel top-left corners" and internally applies `Affine.translation(0.5, 0.5)`. We pass the same top-left transform that lazycogs computes. |
+| Adopt descending y coordinates (north to south) | Keep ascending y (south to north) via manual flip vs. accept rasterix's descending coords. | The broader ecosystem (`odc-stac`, `rioxarray`, GDAL) uses descending y consistent with top-down affine transforms. Staying true to the transform removes integration friction, even though it breaks existing lazycogs slicing assumptions. |
 | Leave write support out of scope | Include COG/GeoZarr/netCDF write discussion vs. exclude entirely. | The user explicitly wants write pathways out of scope. The spec focuses on indexing, alignment, lazy coords, and metadata portability. |
 
 ## Open Questions
 
-1. **Ascending y coordinates vs. rasterix's descending transform-derived coords.** This is the main blocking question.
+1. **Resolved: y-axis coordinate ordering.** After surveying `odc-stac`, `rioxarray`, and other spatial-xarray tools, the prevailing convention is a descending y-axis that remains consistent with the affine transform (`e < 0`). Manually flipping coordinates to ascending was an outlier that complicated integration.
 
-   rasterix `RasterIndex.from_transform` with a standard top-down affine (`e < 0`) generates y coordinates via `AxisAffineTransform.forward()`: position 0 maps to the top (largest y), position height-1 maps to the bottom (smallest y). The resulting coordinate array is descending.
-
-   lazycogs deliberately makes `y` ascending (smallest y at position 0, largest y at position height-1) so that `da.sel(y=slice(0, 100))` selects the southern end of the grid.
-
-   Potential approaches:
-   - **Option A:** Pass rasterix a synthetic y-axis transform with positive y-scale and adjusted origin, then override the coord variable values after index creation. This may break `sel()` because the index's reverse mapping would not match the coord labels.
-   - **Option B:** Skip `Coordinates.from_xindex()` entirely. Manually construct `AxisAffineTransformIndex` objects with custom transforms that produce ascending y coords, attach them via `da.set_xindex()`, and supply our own coord variables. This bypasses rasterix's normal path but gives full control.
-   - **Option C:** Patch rasterix to support an `ascending_y` flag or to respect externally-supplied coordinate arrays instead of generating them from the transform.
-   - **Option D:** Accept descending y coords from rasterix and flip the lazycogs data array convention to match standard raster orientation (top-down y). This is a breaking change to the user-facing API.
-
-   **Recommendation:** investigate Option B first. It gives us full control over both the index and the coordinate values without requiring upstream rasterix changes. If Option B proves too complex, Option C (a small rasterix patch) is the next best path.
+   **Decision:** Adopt standard top-down raster orientation. The `y` coordinate array will be descending (north to south). This is a breaking change for code that relied on the previous ascending-y convention, but it makes lazycogs interoperable with rasterix, `odc-geo`, and similar libraries without workarounds.
 
 2. **Dask chunking with CoordinateTransformIndex.** When `da.chunk(chunks)` is called, xarray creates new indexes for each chunk via `index.isel()`. For rectilinear grids, rasterix's `isel()` returns a new `RasterIndex` with an updated transform. This needs end-to-end verification with the `LazilyIndexedArray` → dask transition path that lazycogs uses.
 
