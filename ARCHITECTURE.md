@@ -102,7 +102,7 @@ With `fetch_headers=True`, each matched COG header is fetched (a small HTTP rang
 
 The y coordinates are derived directly from the affine transform: `y[i] = f + e * (0.5 + i)`. Because `e < 0`, `y[0]` is the northernmost pixel centre and the array is strictly decreasing. Spatial selection uses `sel(y=slice(north, south))` (high to low).
 
-A `rasterix.RasterIndex` is attached to every DataArray returned by `open()`. The index replaces the explicit x/y coordinate arrays with lazy coordinate generation from the affine transform, provides CRS discoverability via `da.proj.crs`, and enables spatial alignment with other RasterIndex-backed arrays. The index is constructed in `_spatial_index.py` by `attach_raster_index()` and called from `_build_dataarray()` in `_core.py`.
+A `rasterix.RasterIndex` is attached to every DataArray returned by `open()`. The index replaces the explicit x/y coordinate arrays with lazy coordinate generation from the affine transform, provides CRS discoverability via `da.proj.crs`, and enables spatial alignment with other RasterIndex-backed arrays..
 
 ## Per-chunk read and resample pipeline
 
