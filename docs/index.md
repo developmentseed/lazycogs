@@ -4,6 +4,13 @@ Open a lazy `(band, time, y, x)` xarray DataArray from thousands of cloud-optimi
 
 --8<-- "docs/includes/dataarray_repr.html"
 
+## Coordinate convention
+
+`lazycogs.open()` returns a DataArray with `y` coordinates in the standard
+north-up raster convention: **descending** from north to south.  Use
+`da.sel(y=slice(north, south))` (high to low) for spatial subsetting.
+This is consistent with `odc-stac`, `rioxarray`, and GDAL.
+
 ## What is lazycogs?
 
 lazycogs lets you materialize a lazy xarray DataArray view of massive STAC-indexed data archives in any CRS and resolution. Opening the array is nearly instant because no COGs are read until you request pixels. lazycogs queries the stac-geoparquet dataset using [rustac](https://stac-utils.github.io/rustac-py) to find only the COGs that intersect a spatial and temporal selection, fetches only the relevant pixel windows using [async-geotiff](https://developmentseed.org/async-geotiff), and reprojects into your target grid.

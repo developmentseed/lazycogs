@@ -127,7 +127,7 @@ async def run():
 
     subset = da.sel(
         x=slice(100_000, 400_000),
-        y=slice(2_600_000, 2_800_000),
+        y=slice(2_800_000, 2_600_000),
     )
     with measure("daily spatial subset isel(time=1)"):
         _ = subset.isel(time=1).load()

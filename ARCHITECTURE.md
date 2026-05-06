@@ -35,6 +35,7 @@ src/lazycogs/
   _store.py          Resolve cloud HREFs into obstore Store instances (or route through a user-supplied store) with a thread-local cache; store_for() factory for constructing stores from parquet STAC files.
   _temporal.py       Temporal grouping strategies (day, week, month, year, fixed-day-count).
   _mosaic_methods.py Pixel-selection strategies (First, Highest, Lowest, Mean, Median, Stdev, Count).
+  _spatial_index.py  RasterIndex attachment and spatial metadata attrs.
 ```
 
 ## Phase 0 in detail
@@ -49,8 +50,9 @@ src/lazycogs/
 6. Calls `_build_time_steps()`: queries the parquet source via `duckdb_client.search_to_arrow(...)` to obtain an Arrow table containing only the `datetime` and `start_datetime` columns (plus any filter/sort fields). Extracts timestamps from the Arrow columns without Python-level dict walking, buckets them with the `_TemporalGrouper`, deduplicates, and returns sorted `(filter_strings, time_coords)` pairs. Only groups with at least one item produce a time step.
 7. Calls `compute_output_grid()` to get the output affine transform and x/y coordinate arrays.
 8. Creates a single `MultiBandStacBackendArray` (a dataclass) with shape `(band, time, y, x)` holding all the parameters needed to materialise any chunk later, then wraps it in one `xarray.core.indexing.LazilyIndexedArray`. This avoids `xr.concat` (used internally by `ds.to_array()`), which would eagerly load `LazilyIndexedArray`-backed objects.
-9. Constructs the `xr.DataArray` directly from the 4-D variable. If `chunks` is provided, calls `.chunk(chunks)` to convert to a dask-backed array; otherwise the `LazilyIndexedArray` remains in play so narrow slices (e.g. a single pixel) translate to minimal I/O.
-10. Stores `_stac_backend` (the `MultiBandStacBackendArray` instance) and `_stac_time_coords` (the full time coordinate array) in `da.attrs` so that `da.lazycogs.explain()` can reconstruct the explain plan without re-specifying `open()` parameters.
+9. Calls `attach_raster_index()` from `_spatial_index.py` to replace the default x/y `PandasIndex` instances with a `rasterix.RasterIndex` built from the top-left affine transform, width, height, and CRS. This attaches the spatial index, adds CF/GDAL and Zarr convention metadata attrs, and creates a `spatial_ref` coordinate.
+10. Constructs the `xr.DataArray` directly from the 4-D variable. If `chunks` is provided, calls `.chunk(chunks)` to convert to a dask-backed array; otherwise the `LazilyIndexedArray` remains in play so narrow slices (e.g. a single pixel) translate to minimal I/O.
+11. Stores `_stac_backend` (the `MultiBandStacBackendArray` instance) and `_stac_time_coords` (the full time coordinate array) in `da.attrs` so that `da.lazycogs.explain()` can reconstruct the explain plan without re-specifying `open()` parameters.
 
 ## Explain: dry-run read estimator
 
@@ -83,22 +85,24 @@ With `fetch_headers=True`, each matched COG header is fetched (a small HTTP rang
 2. The band key is resolved to a list of integer band indices. If it was an integer the band dimension is squeezed in the output.
 3. The time key is resolved to a list of integer positions. Integer keys squeeze the time dimension.
 4. Integer y or x keys are normalised to size-1 slices; the dimension is squeezed before returning.
-5. Logical y-indices (ascending, south-to-north) are converted to physical row indices (descending, north-to-south) to match the affine transform origin.
+5. Physical top-down y-indices are used directly; no conversion is needed.
 6. The chunk's affine transform is derived: `chunk_affine = dst_affine * Affine.translation(x_start, y_start_physical)`.
 7. The chunk's EPSG:4326 bounding box is computed from the four corners of the chunk using `_dst_to_4326`, a `pyproj.Transformer` cached on the `MultiBandStacBackendArray` instance at construction time (or `None` when `dst_crs` is already EPSG:4326).
 8. `_async_getitem` drives all time steps via `await _read_chunk_all_dates(...)`. Inside `_read_chunk_all_dates`, an `asyncio.gather` fans out one `_run_one_date` coroutine per time step, so COG reads overlap across dates:
    a. Each `_run_one_date` calls `await _search_items_async(plan, date)`, which dispatches the DuckDB query to `_DUCKDB_EXECUTOR` via `run_in_executor`. DuckDB serialises access internally, so concurrent queries on the same client are safe but not parallel. Empty results short-circuit to nodata immediately.
    b. `read_chunk_async(...)` materialises all selected bands for the time step concurrently.
-9. The result array is flipped vertically (`result[:, :, ::-1, :]`) to restore ascending y-order before squeezing and returning.
+9. The result is returned in the same top-down orientation as the COG data.
 
 ## Grid and coordinate convention
 
 `compute_output_grid()` in `_grid.py` produces:
 
 - An affine transform with origin at the top-left corner of the top-left pixel and a negative y-scale (standard north-up raster convention).
-- x-coordinates and y-coordinates as 1-D arrays of pixel-centre values, with y ascending (south to north) to match xarray label-based slicing conventions.
+- x-coordinates and y-coordinates as 1-D arrays of pixel-centre values, with y descending (north to south) to match the standard raster convention used by GDAL, `odc-stac`, and `rioxarray`.
 
-The ascending-y / top-down-affine duality is resolved in `_async_getitem` by converting logical y-indices to physical row indices before computing `chunk_affine`, and flipping the result array before returning.
+The y coordinates are derived directly from the affine transform: `y[i] = f + e * (0.5 + i)`. Because `e < 0`, `y[0]` is the northernmost pixel centre and the array is strictly decreasing. Spatial selection uses `sel(y=slice(north, south))` (high to low).
+
+A `rasterix.RasterIndex` is attached to every DataArray returned by `open()`. The index replaces the explicit x/y coordinate arrays with lazy coordinate generation from the affine transform, provides CRS discoverability via `da.proj.crs`, and enables spatial alignment with other RasterIndex-backed arrays. The index is constructed in `_spatial_index.py` by `attach_raster_index()` and called from `_build_dataarray()` in `_core.py`.
 
 ## Per-chunk read and resample pipeline
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import patch
 
 import numpy as np
@@ -10,6 +11,7 @@ import rustac
 from rustac import DuckdbClient
 
 import lazycogs
+from lazycogs._backend import MultiBandStacBackendArray
 from lazycogs._core import _build_time_steps, _smoketest_store
 from lazycogs._temporal import _DayGrouper, _FixedDayGrouper, _MonthGrouper
 
@@ -258,7 +260,6 @@ def test_open_invalid_time_period_raises():
 
 def test_open_works_inside_running_event_loop(tmp_path):
     """open() does not raise RuntimeError when called inside a running event loop."""
-    import asyncio
 
     path = str(tmp_path / "items.parquet")
     (tmp_path / "items.parquet").write_bytes(b"")
@@ -280,6 +281,76 @@ def test_open_works_inside_running_event_loop(tmp_path):
 
     asyncio.run(_call_open())
     assert "error" not in result, f"Got RuntimeError: {result.get('error')}"
+
+
+def test_open_sets_expected_dataarray_attributes(tmp_path):
+    """open() attaches all expected extra attributes to the returned DataArray."""
+    from obstore.store import MemoryStore
+
+    parquet = tmp_path / "items.parquet"
+    parquet.write_bytes(b"")
+
+    store = MemoryStore()
+    store.put("B04.tif", b"dummy")
+
+    item = {
+        "id": "test-item",
+        "stac_extensions": [],
+        "properties": {"datetime": "2023-01-15T10:00:00Z"},
+        "assets": {
+            "B04": {
+                "href": "s3://bucket/B04.tif",
+                "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+                "roles": ["data"],
+            },
+        },
+    }
+
+    table = _items_to_arrow([{"properties": {"datetime": "2023-01-15T10:00:00Z"}}])
+
+    with (
+        patch("rustac.DuckdbClient.search", return_value=[item]),
+        patch("rustac.DuckdbClient.search_to_arrow", return_value=table),
+    ):
+        da = lazycogs.open(
+            str(parquet),
+            bbox=(0.0, 0.0, 100.0, 100.0),
+            crs="EPSG:32632",
+            resolution=10.0,
+            store=store,
+            path_from_href=lambda href: href.split("/", 3)[-1],
+        )
+
+    # Coordinates
+    assert da.coords["band"].values.tolist() == ["B04"]
+    assert len(da.coords["time"]) == 1
+    assert da.coords["time"].values[0] == np.datetime64("2023-01-15", "D")
+    assert "spatial_ref" in da.coords
+    assert "x" in da.coords
+    assert "y" in da.coords
+
+    # Dimensions
+    assert da.dims == ("band", "time", "y", "x")
+
+    # Attributes
+    assert da.attrs["grid_mapping"] == "spatial_ref"
+    assert da.attrs["spatial:transform_type"] == "affine"
+    assert da.attrs["spatial_registration"] == "pixel"
+    assert da.attrs["proj:code"] == "EPSG:32632"
+
+    # spatial:transform should be the 6-element GeoTransform list
+    assert isinstance(da.attrs["spatial:transform"], list)
+    assert len(da.attrs["spatial:transform"]) == 6
+
+    # zarr_conventions
+    assert isinstance(da.attrs["zarr_conventions"], list)
+    names = {c["name"] for c in da.attrs["zarr_conventions"]}
+    assert "spatial:" in names
+    assert "proj:" in names
+
+    # Internal bookkeeping attributes
+    assert isinstance(da.attrs["_stac_backend"], MultiBandStacBackendArray)
+    assert da.attrs["_stac_time_coords"].dtype == np.dtype("datetime64[D]")
 
 
 # ---------------------------------------------------------------------------

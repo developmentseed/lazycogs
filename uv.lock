@@ -1295,8 +1295,10 @@ dependencies = [
     { name = "obstore" },
     { name = "pandas" },
     { name = "pyproj" },
+    { name = "rasterix" },
     { name = "rustac", extra = ["arrow"] },
     { name = "xarray" },
+    { name = "xproj" },
 ]
 
 [package.optional-dependencies]
@@ -1332,8 +1334,10 @@ requires-dist = [
     { name = "obstore", specifier = ">=0.9.2" },
     { name = "pandas", specifier = ">=3.0.2" },
     { name = "pyproj", specifier = ">=3.7.2" },
+    { name = "rasterix", specifier = ">=0.2.0" },
     { name = "rustac", extras = ["arrow"], specifier = ">=0.9.10" },
     { name = "xarray", specifier = ">=2026.2.0" },
+    { name = "xproj", specifier = ">=0.2.0" },
 ]
 provides-extras = ["dask"]
 
@@ -2536,6 +2540,22 @@ wheels = [
 ]
 
 [[package]]
+name = "rasterix"
+version = "0.2.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "affine" },
+    { name = "numpy" },
+    { name = "pandas" },
+    { name = "xarray" },
+    { name = "xproj" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/33/ab/92ea6124b9182f01b7c36d93028363e72ad5910df6a69c3d11208056be19/rasterix-0.2.1.tar.gz", hash = "sha256:aafc21b2bed1b6034576f6c45bef2f0538e8231be267b925f7bf312347b29ff9", size = 102739, upload-time = "2026-02-18T20:57:00.964Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/da/9e/0f2401926a5a465dd6eaf2877cabb4e5557d1817fd55f68356fb74273105/rasterix-0.2.1-py3-none-any.whl", hash = "sha256:308779392ec0d59fc6bb6ba2180c4eeabb922fd31c2c9efb2c29be359f16f5b5", size = 49436, upload-time = "2026-02-18T20:56:59.88Z" },
+]
+
+[[package]]
 name = "referencing"
 version = "0.37.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3013,4 +3033,17 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/4b/a6/6fe936a798a3a38a79c7422d1a31afd2e9a14690fcb0ccff96bc01f04bf2/xarray-2026.4.0.tar.gz", hash = "sha256:c4ac9a01a945d90d5b1628e2af045099a9d4943536d4f2ee3ae963c3b222d15b", size = 3132311, upload-time = "2026-04-13T19:45:36.688Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/dc/83/6d810a8a9ebc9c307989b418840c20e46907c74d707beb67ab566773e6fc/xarray-2026.4.0-py3-none-any.whl", hash = "sha256:d43751d9fb4a90f9249c30431684f00c41bc874f1edccd862631a40cbc0edf08", size = 1414326, upload-time = "2026-04-13T19:45:34.659Z" },
+]
+
+[[package]]
+name = "xproj"
+version = "0.2.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyproj" },
+    { name = "xarray" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/48/33/8c2bcceedfa13122916b6a582eedf9581682dbee329d95bcfb4c69542ade/xproj-0.2.1.tar.gz", hash = "sha256:d520c7a0df402f6a5922108ed614c8ea0ce6b04bec12c91aceb75fe3c1d3c5c3", size = 31781, upload-time = "2025-07-07T09:05:48.022Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/05/b9/b6a9cf72aef69c3e6db869dcc130e19452a658366dac9377f9cd32a76b80/xproj-0.2.1-py3-none-any.whl", hash = "sha256:d762c540c1bc4abc5955b4034b409b9b2f7733c3e49285f3aeb71f9a2dd6bf34", size = 23837, upload-time = "2025-07-07T09:05:46.889Z" },
 ]
