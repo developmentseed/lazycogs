@@ -3838,14 +3838,14 @@ Attributes:
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">subset</span> <span class="o">=</span> <span class="n">da</span><span class="o">.</span><span class="n">sel</span><span class="p">(</span>
     <span class="n">x</span><span class="o">=</span><span class="nb">slice</span><span class="p">(</span><span class="mi">550_000</span><span class="p">,</span> <span class="mi">700_000</span><span class="p">),</span>
-    <span class="n">y</span><span class="o">=</span><span class="nb">slice</span><span class="p">(</span><span class="mi">5_150_000</span><span class="p">,</span> <span class="mi">5_250_000</span><span class="p">),</span>
+    <span class="n">y</span><span class="o">=</span><span class="nb">slice</span><span class="p">(</span><span class="mi">5_250_000</span><span class="p">,</span> <span class="mi">5_150_000</span><span class="p">),</span>
     <span class="n">time</span><span class="o">=</span><span class="n">pt</span><span class="o">.</span><span class="n">time</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="n">pt</span><span class="o">.</span><span class="n">isel</span><span class="p">(</span><span class="n">band</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">values</span> <span class="o">!=</span> <span class="n">geotiff</span><span class="o">.</span><span class="n">nodata</span><span class="p">],</span>
 <span class="p">)</span>
 <span class="n">subset</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-10">subset = da.sel(
     x=slice(550_000, 700_000),
-    y=slice(5_150_000, 5_250_000),
+    y=slice(5_250_000, 5_150_000),
     time=pt.time.values[pt.isel(band=0).values != geotiff.nodata],
 )
 subset</div>

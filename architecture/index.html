@@ -1551,7 +1551,7 @@
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>  _chunk_reader.py   Async mosaic logic: open COGs, select overviews, read windows, reproject, mosaic.
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>  _executor.py       Per-chunk reprojection thread pool configuration. Exposes set_reproject_workers() and get_max_workers(); the actual pool is created per event loop in _backend.py.
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>  _explain.py        Dry-run read estimator. Registers the da.lazycogs.explain() xarray accessor.
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>  _grid.py           Compute output affine transform and coordinate arrays from bbox + resolution.
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>  _grid.py           Compute output affine transform and dimensions from bbox + resolution.
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>  _reproject.py      Nearest-neighbor reprojection using pyproj Transformer + numpy fancy indexing.
 <a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>  _storage_ext.py    STAC Storage Extension metadata parsing (version detection, kwargs extraction for v1 and v2).
 <a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>  _store.py          Resolve cloud HREFs into obstore Store instances (or route through a user-supplied store) with a thread-local cache; store_for() factory for constructing stores from parquet STAC files.
@@ -1567,8 +1567,9 @@
 <li>Calls <code>_discover_bands()</code>: queries the parquet source via <code>duckdb_client.search(..., max_items=1)</code> to find asset keys. Assets with role <code>"data"</code> or media type <code>"image/tiff"</code> are returned first.</li>
 <li>Calls <code>_smoketest_store()</code>: fetches one sample item from the parquet, resolves the object store for a representative data asset HREF, and calls <code>head()</code> to confirm access. Raises <code>RuntimeError</code> immediately with a clear message if the store cannot reach the asset, so misconfiguration is surfaced at <code>open()</code> time rather than deferred to the first chunk read.</li>
 <li>Calls <code>_build_time_steps()</code>: queries the parquet source via <code>duckdb_client.search_to_arrow(...)</code> to obtain an Arrow table containing only the <code>datetime</code> and <code>start_datetime</code> columns (plus any filter/sort fields). Extracts timestamps from the Arrow columns without Python-level dict walking, buckets them with the <code>_TemporalGrouper</code>, deduplicates, and returns sorted <code>(filter_strings, time_coords)</code> pairs. Only groups with at least one item produce a time step.</li>
-<li>Calls <code>compute_output_grid()</code> to get the output affine transform and x/y coordinate arrays.</li>
+<li>Calls <code>compute_output_grid()</code> to get the output affine transform and dimensions (width, height). No eager coordinate arrays are produced.</li>
 <li>Creates a single <code>MultiBandStacBackendArray</code> (a dataclass) with shape <code>(band, time, y, x)</code> holding all the parameters needed to materialise any chunk later, then wraps it in one <code>xarray.core.indexing.LazilyIndexedArray</code>. This avoids <code>xr.concat</code> (used internally by <code>ds.to_array()</code>), which would eagerly load <code>LazilyIndexedArray</code>-backed objects.</li>
+<li>Uses <code>rasterix.RasterIndex</code> to define the x/y coordinates (lazily).</li>
 <li>Constructs the <code>xr.DataArray</code> directly from the 4-D variable. If <code>chunks</code> is provided, calls <code>.chunk(chunks)</code> to convert to a dask-backed array; otherwise the <code>LazilyIndexedArray</code> remains in play so narrow slices (e.g. a single pixel) translate to minimal I/O.</li>
 <li>Stores <code>_stac_backend</code> (the <code>MultiBandStacBackendArray</code> instance) and <code>_stac_time_coords</code> (the full time coordinate array) in <code>da.attrs</code> so that <code>da.lazycogs.explain()</code> can reconstruct the explain plan without re-specifying <code>open()</code> parameters.</li>
 </ol>
@@ -1595,21 +1596,22 @@
 <li>The band key is resolved to a list of integer band indices. If it was an integer the band dimension is squeezed in the output.</li>
 <li>The time key is resolved to a list of integer positions. Integer keys squeeze the time dimension.</li>
 <li>Integer y or x keys are normalised to size-1 slices; the dimension is squeezed before returning.</li>
-<li>Logical y-indices (ascending, south-to-north) are converted to physical row indices (descending, north-to-south) to match the affine transform origin.</li>
+<li>Physical top-down y-indices are used directly; no conversion is needed.</li>
 <li>The chunk's affine transform is derived: <code>chunk_affine = dst_affine * Affine.translation(x_start, y_start_physical)</code>.</li>
 <li>The chunk's EPSG:4326 bounding box is computed from the four corners of the chunk using <code>_dst_to_4326</code>, a <code>pyproj.Transformer</code> cached on the <code>MultiBandStacBackendArray</code> instance at construction time (or <code>None</code> when <code>dst_crs</code> is already EPSG:4326).</li>
 <li><code>_async_getitem</code> drives all time steps via <code>await _read_chunk_all_dates(...)</code>. Inside <code>_read_chunk_all_dates</code>, an <code>asyncio.gather</code> fans out one <code>_run_one_date</code> coroutine per time step, so COG reads overlap across dates:
    a. Each <code>_run_one_date</code> calls <code>await _search_items_async(plan, date)</code>, which dispatches the DuckDB query to <code>_DUCKDB_EXECUTOR</code> via <code>run_in_executor</code>. DuckDB serialises access internally, so concurrent queries on the same client are safe but not parallel. Empty results short-circuit to nodata immediately.
    b. <code>read_chunk_async(...)</code> materialises all selected bands for the time step concurrently.</li>
-<li>The result array is flipped vertically (<code>result[:, :, ::-1, :]</code>) to restore ascending y-order before squeezing and returning.</li>
+<li>The result is returned in the same top-down orientation as the COG data.</li>
 </ol>
 <h2 id="grid-and-coordinate-convention">Grid and coordinate convention<a class="headerlink" href="#grid-and-coordinate-convention" title="Permanent link">&para;</a></h2>
 <p><code>compute_output_grid()</code> in <code>_grid.py</code> produces:</p>
 <ul>
 <li>An affine transform with origin at the top-left corner of the top-left pixel and a negative y-scale (standard north-up raster convention).</li>
-<li>x-coordinates and y-coordinates as 1-D arrays of pixel-centre values, with y ascending (south to north) to match xarray label-based slicing conventions.</li>
+<li>x-coordinates and y-coordinates as 1-D arrays of pixel-centre values, with y descending (north to south) to match the standard raster convention used by GDAL, <code>odc-stac</code>, and <code>rioxarray</code>.</li>
 </ul>
-<p>The ascending-y / top-down-affine duality is resolved in <code>_async_getitem</code> by converting logical y-indices to physical row indices before computing <code>chunk_affine</code>, and flipping the result array before returning.</p>
+<p>The y coordinates are derived directly from the affine transform: <code>y[i] = f + e * (0.5 + i)</code>. Because <code>e &lt; 0</code>, <code>y[0]</code> is the northernmost pixel centre and the array is strictly decreasing. Spatial selection uses <code>sel(y=slice(north, south))</code> (high to low).</p>
+<p>A <code>rasterix.RasterIndex</code> is attached to every DataArray returned by <code>open()</code>. The index replaces explicit x/y coordinate arrays with lazy coordinate generation from the affine transform, provides CRS discoverability via <code>da.proj.crs</code>, and enables spatial alignment with other RasterIndex-backed arrays.</p>
 <h2 id="per-chunk-read-and-resample-pipeline">Per-chunk read and resample pipeline<a class="headerlink" href="#per-chunk-read-and-resample-pipeline" title="Permanent link">&para;</a></h2>
 <p>Each call to <code>_read_item_band()</code> in <code>_chunk_reader.py</code> follows a four-step pipeline to turn a remote COG into a correctly-sized, correctly-projected numpy array for one destination chunk.</p>
 <h3 id="1-overview-selection">1. Overview selection<a class="headerlink" href="#1-overview-selection" title="Permanent link">&para;</a></h3>
@@ -1786,6 +1788,14 @@ mean that requires all weeks to be present before reducing).</p>
 <tr>
 <td><code>xarray</code></td>
 <td>DataArray / Dataset assembly, <code>BackendArray</code> / <code>LazilyIndexedArray</code> protocol</td>
+</tr>
+<tr>
+<td><code>rasterix</code></td>
+<td>CRS-aware <code>RasterIndex</code> for lazy spatial coordinates</td>
+</tr>
+<tr>
+<td><code>xproj</code></td>
+<td>CRS accessor and alignment for xarray Flexible Indexes</td>
 </tr>
 <tr>
 <td><code>dask</code></td>

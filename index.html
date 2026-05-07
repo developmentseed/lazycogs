@@ -70,7 +70,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#what-is-lazycogs" class="md-skip">
+        <a href="#coordinate-convention" class="md-skip">
           Skip to content
         </a>
       
@@ -280,6 +280,17 @@
       Table of contents
     </label>
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#coordinate-convention" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Coordinate convention
+      
+    </span>
+  </a>
+  
+</li>
       
         <li class="md-nav__item">
   <a href="#what-is-lazycogs" class="md-nav__link">
@@ -1026,6 +1037,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#coordinate-convention" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Coordinate convention
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#what-is-lazycogs" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1694,6 +1716,14 @@ Attributes:
       shape=(7100,))</pre></div></li><li class='xr-var-item'><div class='xr-var-name'><span class='xr-has-index'>x</span></div><div class='xr-var-dims'>(x)</div><div class='xr-var-dtype'>float64</div><div class='xr-var-preview xr-preview'>-7e+05 -6.998e+05 ... 6e+05</div><input id='attrs-33a948ad-c780-4035-a673-8f60542cb2f4' class='xr-var-attrs-in' type='checkbox' disabled><label for='attrs-33a948ad-c780-4035-a673-8f60542cb2f4' title='Show/Hide attributes'><svg class='icon xr-icon-file-text2'><use xlink:href='#icon-file-text2'></use></svg></label><input id='data-16d3f6a6-f366-4dc9-885a-a4d120b2256d' class='xr-var-data-in' type='checkbox'><label for='data-16d3f6a6-f366-4dc9-885a-a4d120b2256d' title='Show/Hide data repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-var-attrs'><dl class='xr-attrs'></dl></div><div class='xr-var-data'><pre>array([-699950., -699850., -699750., ...,  599750.,  599850.,  599950.],
       shape=(13000,))</pre></div></li></ul></div></li><li class='xr-section-item'><input id='section-ba2ce2d0-274d-4008-8af7-c67adc8c20a7' class='xr-section-summary-in' type='checkbox' checked /><label for='section-ba2ce2d0-274d-4008-8af7-c67adc8c20a7' class='xr-section-summary' title='Expand/collapse section'>Attributes: <span>(2)</span></label><div class='xr-section-inline-details'></div><div class='xr-section-details'><dl class='xr-attrs'><dt><span>_stac_backend :</span></dt><dd>MultiBandStacBackendArray(bands=[&#x27;red&#x27;, &#x27;green&#x27;, &#x27;blue&#x27;], shape=(3, 121, 7100, 13000))</dd><dt><span>_stac_time_coords :</span></dt><dd>2025-06-01 … 2025-09-30 (n=121)</dd></dl></div></li></ul></div></div>
 
+<h2 id="coordinate-convention">Coordinate convention<a class="headerlink" href="#coordinate-convention" title="Permanent link">&para;</a></h2>
+<p><code>lazycogs.open()</code> returns a DataArray whose <code>y</code> coordinates follow the standard
+north-up raster convention with the origin in the top left (not bottom left). 
+That is, <code>y</code> coordinates are <strong>descending</strong> from north to south.  In other words,
+y label <code>0</code> is the northernmost pixel and <code>y[-1]</code> is the southernmost.  This
+matches the affine transform and is consistent with <code>odc-stac</code>, <code>rioxarray</code>, and
+GDAL.</p>
+<p>Use <code>sel(y=slice(north, south))</code> (high to low) for spatial subsetting.</p>
 <h2 id="what-is-lazycogs">What is lazycogs?<a class="headerlink" href="#what-is-lazycogs" title="Permanent link">&para;</a></h2>
 <p>lazycogs lets you materialize a lazy xarray DataArray view of massive STAC-indexed data archives in any CRS and resolution. Opening the array is nearly instant because no COGs are read until you request pixels. lazycogs queries the stac-geoparquet dataset using <a href="https://stac-utils.github.io/rustac-py">rustac</a> to find only the COGs that intersect a spatial and temporal selection, fetches only the relevant pixel windows using <a href="https://developmentseed.org/async-geotiff">async-geotiff</a>, and reprojects into your target grid.</p>
 <p><strong>Note:</strong> lazycogs only reads GeoTIFFs. If your assets are in another format, lazycogs is not the right tool.</p>
