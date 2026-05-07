@@ -96,7 +96,7 @@ Affine(10.0, 0.0, -399995.0, 0.0, -10.0, 2700005.0)
  'zarr_conventions': [{'name': 'spatial:', ...}, {'name': 'proj:', ...}],
  'spatial:transform': [10.0, 0.0, -400000.0, 0.0, -10.0, 2700000.0],
  'spatial:transform_type': 'affine',
- 'spatial_registration': 'pixel',
+ 'spatial:registration': 'pixel',
  'proj:code': 'EPSG:5070',
  ...}
 ```
@@ -137,7 +137,7 @@ attributes = {
     "zarr_conventions": [...],
     "spatial:transform": gt,
     "spatial:transform_type": "affine",
-    "spatial_registration": "pixel",
+    "spatial:registration": "pixel",
     # ... plus _stac_backend, _stac_time_coords, proj:code, etc.
 }
 ```
@@ -167,7 +167,7 @@ The DataArray carries metadata attributes that describe the spatial grid. These 
    - `'zarr_conventions': [{"name": "spatial:", "uuid": "689b58e2-cf7b-45e0-9fff-9cfc0883d6b4"}, ...]`
    - `'spatial:transform': [a, b, c, d, e, f]` (the top-left-corner affine, not pixel-centre)
    - `'spatial:transform_type': 'affine'`
-   - `'spatial_registration': 'pixel'`
+   - `'spatial:registration': 'pixel'`
 
 3. **Zarr geo-proj convention**
    - `'zarr_conventions'` list also contains `{"name": "proj:", "uuid": "f17cb550-5864-4468-aeb7-f3180cfb622f"}`
