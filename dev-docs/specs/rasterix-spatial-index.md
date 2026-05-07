@@ -2,11 +2,7 @@
 
 ## Context
 
-Today lazycogs returns a DataArray with scalar `x` and `y` coordinate arrays (pixel centres in the target CRS) and an internal `dst_affine` stored inside `MultiBandStacBackendArray` that is invisible to xarray operations on the DataArray surface. This means:
-
-- **The affine transform and CRS are not discoverable** through the xarray object. Other spatial xarray tools cannot inspect `da` and know what grid it lives on.
-- **Spatial alignment with other raster datasets is not possible.** `xr.align()` operates on indexes, and lazycogs has no spatial index. Two lazycogs arrays on the same grid cannot be aligned, concatenated, or reindexed by xarray without manual coordinate matching.
-- **The y-axis coords are eagerly materialized.** For very large output grids (e.g. continental-scale at 10 m resolution) the `y` and `x` coordinate arrays alone can consume significant memory, even though they are a pure function of the affine transform.
+Today lazycogs returns a DataArray with lazy `x` and `y` coordinates backed by a `RasterIndex` (derived from the affine transform) and an internal `dst_affine` stored inside `MultiBandStacBackendArray` that is invisible to xarray operations on the DataArray surface.
 
 [rasterix](https://github.com/xarray-contrib/rasterix) is an `xarray-contrib` project that provides `RasterIndex`, a CRS-aware spatial index built on top of xarray's `CoordinateTransformIndex`. Its capabilities include:
 
@@ -27,11 +23,10 @@ Today lazycogs returns a DataArray with scalar `x` and `y` coordinate arrays (pi
 ## Constraints & Assumptions
 
 - **lazycogs grids are always rectilinear and north-up.** `compute_output_grid()` produces `Affine(res, 0, minx, 0, -res, maxy)`.
-- **y-coordinates follow the standard raster convention (descending, north to south).** lazycogs previously flipped y-coordinates to be ascending, but this deviated from the affine transform and from conventions used by `odc-stac`, `rioxarray`, and other spatial xarray tools. After adopting rasterix, y will be descending, consistent with the top-down affine (`e < 0`). `da.sel(y=slice(2_700_000, 2_500_000))` selects the southernmost portion of a UTM grid.
+- **y-coordinates follow the standard raster convention (descending, north to south).** lazycogs previously flipped y-coordinates to be ascending, but this deviated from the affine transform and from conventions used by `odc-stac`, `rioxarray`, and other spatial xarray tools. After adopting rasterix, y is descending, consistent with the top-down affine (`e < 0`). `da.sel(y=slice(2_700_000, 2_500_000))` selects the southernmost portion of a UTM grid.
 - **rasterix `RasterIndex.from_transform` generates coordinates from the affine transform.** For a standard top-down affine (negative y-scale), the derived y coordinates are descending (north to south), which matches lazycogs' updated convention.
 - **xproj is required for CRS-aware indexing.** Adding rasterix implies adding `xproj` as a dependency.
-- **Chunking must preserve the index.** When `chunks=...` is passed, xarray calls `.chunk()` on the DataArray. For rectilinear grids, rasterix's `isel()` returns a new `RasterIndex` with an updated transform on slice indexing. This needs verification with `LazilyIndexedArray` → dask transition.
-- **Backward compatibility.** Existing code that accesses `da.coords['x']` or iterates over `da['y'].values` must continue to work. The coordinate variable values themselves must remain identical.
+- **Chunking preserves the index.** When `chunks=...` is passed, xarray calls `.chunk()` on the DataArray. For rectilinear grids, rasterix's `isel()` returns a new `RasterIndex` with an updated transform on slice indexing. This has been verified with the `LazilyIndexedArray` → dask transition path.
 
 ## What rasterix adds (and what it does not)
 
@@ -40,7 +35,7 @@ Today lazycogs returns a DataArray with scalar `x` and `y` coordinate arrays (pi
 Because lazycogs attaches explicit 1-D `x` and `y` coordinate arrays in projected units, users can already perform label-based selection:
 
 ```python
-da.sel(x=slice(-400_000, -200_000), y=slice(2_500_000, 2_700_000))
+da.sel(x=slice(-400_000, -200_000), y=slice(2_700_000, 2_500_000))
 ```
 
 This works because xarray's default `PandasIndex` maps coordinate labels to integer positions. rasterix is **not** needed for this. What rasterix adds is:
@@ -51,28 +46,28 @@ This works because xarray's default `PandasIndex` maps coordinate labels to inte
 
 ## Architecture Overview
 
-The change is concentrated in the Phase-0 `open()` path (`_core.py` / `_grid.py`). Phase-1 chunk reading is untouched.
+The change is concentrated in the Phase-0 `open()` path (`_core.py` / `_grid.py`). Phase-1 chunk reading is untouched. `compute_output_grid()` returns only the affine transform and dimensions — no eager coordinate arrays.
 
 ```
 open()
-  ├── compute_output_grid()  ──► (dst_affine, width, height, x_coords, y_coords)
-  │                                [unchanged coordinate math]
+  ├── compute_output_grid()  ──► (dst_affine, width, height)
+  │                                [no eager x/y coordinate arrays]
   │
   ├── _build_dataarray()
   │      ├── Create MultiBandStacBackendArray [unchanged]
   │      ├── Create xr.Variable [unchanged]
   │      ├── .chunk(chunks) if requested [unchanged]
-  │      ├── Build coords dict [unchanged]
-  │      ├── NEW: RasterIndex.from_transform(dst_affine, width, height, crs=dst_crs)
-  │      ├── NEW: xarray Coordinates.from_xindex(index) → replaces default x/y indexes
-  │      └── Build DataArray with new coords
+  │      ├── Build RasterIndex.from_transform(dst_affine, width, height, crs=dst_crs)
+  │      ├── xarray Coordinates.from_xindex(index) → lazy x/y coords
+  │      ├── Add spatial_ref coord, grid_mapping + Zarr convention attrs
+  │      └── Build DataArray with band/time coords + spatial index coords
   │
   └── Return DataArray with RasterIndex on x and y
 ```
 
 ### What changes in the DataArray
 
-**Before (today)**
+**Before**
 
 ```python
 >>> da = lazycogs.open(...)
@@ -100,6 +95,8 @@ Affine(10.0, 0.0, -399995.0, 0.0, -10.0, 2700005.0)
  'grid_mapping': 'spatial_ref',
  'zarr_conventions': [{'name': 'spatial:', ...}, {'name': 'proj:', ...}],
  'spatial:transform': [10.0, 0.0, -400000.0, 0.0, -10.0, 2700000.0],
+ 'spatial:transform_type': 'affine',
+ 'spatial_registration': 'pixel',
  'proj:code': 'EPSG:5070',
  ...}
 ```
@@ -108,46 +105,41 @@ Affine(10.0, 0.0, -399995.0, 0.0, -10.0, 2700005.0)
 
 No new public API. The `RasterIndex` is attached automatically inside `open()`. There is no `spatial_index` toggle. If a user encounters an unexpected rasterix/xproj bug, the escape hatch is to pin an older version of lazycogs.
 
-### New internal helper
+### Internal implementation (inlined in `_build_dataarray`)
+
+Rather than a separate module, `RasterIndex` creation and spatial metadata emission live directly inside `_core.py::_build_dataarray()`. This avoids the overhead of allocating temporary `x_coords`/`y_coords` numpy arrays only to replace them with lazy coordinates.
 
 ```python
-# lazycogs/_spatial_index.py  (new module)
+# Inside _core.py::_build_dataarray()
 
-from __future__ import annotations
+index = RasterIndex.from_transform(
+    dst_affine,
+    width=dst_width,
+    height=dst_height,
+    x_dim="x",
+    y_dim="y",
+    crs=dst_crs,
+)
+spatial_coords = Coordinates.from_xindex(index)
 
-from typing import TYPE_CHECKING
-
-from affine import Affine
-from pyproj import CRS
-
-if TYPE_CHECKING:
-    import xarray as xr
-
-
-def attach_raster_index(
-    da: xr.DataArray,
-    *,
-    dst_affine: Affine,
-    dst_crs: CRS,
-) -> xr.DataArray:
-    """Attach a RasterIndex to the x/y dimensions of a lazycogs DataArray.
-
-    Parameters
-    ----------
-    da :
-        DataArray returned by _build_dataarray (before attrs are populated).
-    dst_affine :
-        Top-left-corner affine transform of the full output grid (GDAL
-        convention).  This is the same transform stored in
-        MultiBandStacBackendArray.dst_affine.
-    dst_crs :
-        Target CRS.
-
-    Returns
-    -------
-    DataArray with RasterIndex on x and y, plus spatial metadata attrs.
-    """
-    ...
+# CF / GDAL spatial_ref coordinate
+gt = [dst_affine.a, dst_affine.b, dst_affine.c,
+      dst_affine.d, dst_affine.e, dst_affine.f]
+spatial_ref = DataArray(
+    np.array(0),
+    attrs={
+        "crs_wkt": dst_crs.to_wkt(),
+        "GeoTransform": " ".join(str(v) for v in gt),
+    },
+)
+attributes = {
+    "grid_mapping": "spatial_ref",
+    "zarr_conventions": [...],
+    "spatial:transform": gt,
+    "spatial:transform_type": "affine",
+    "spatial_registration": "pixel",
+    # ... plus _stac_backend, _stac_time_coords, proj:code, etc.
+}
 ```
 
 ## Data Model
@@ -165,7 +157,7 @@ def attach_raster_index(
 
 ### Metadata attributes
 
-The spec includes metadata attributes that describe the spatial grid. These are emitted so that downstream tools chosen by the user can reconstruct the grid. They are not acted on by lazycogs itself.
+The DataArray carries metadata attributes that describe the spatial grid. These are emitted so that downstream tools chosen by the user can reconstruct the grid if they choose to persist the array elsewhere. They are not acted on by lazycogs itself.
 
 1. **CF / GDAL convention**
    - `grid_mapping: "spatial_ref"`
@@ -175,11 +167,11 @@ The spec includes metadata attributes that describe the spatial grid. These are 
    - `'zarr_conventions': [{"name": "spatial:", "uuid": "689b58e2-cf7b-45e0-9fff-9cfc0883d6b4"}, ...]`
    - `'spatial:transform': [a, b, c, d, e, f]` (the top-left-corner affine, not pixel-centre)
    - `'spatial:transform_type': 'affine'`
-   - `'spatial:registration': 'pixel'`
+   - `'spatial_registration': 'pixel'`
 
 3. **Zarr geo-proj convention**
    - `'zarr_conventions'` list also contains `{"name": "proj:", "uuid": "f17cb550-5864-4468-aeb7-f3180cfb622f"}`
-   - `'proj:code': 'EPSG:5070'` (or `proj:wkt2`, `proj:projjson` as fallback)
+   - `'proj:code': 'EPSG:5070'` (or `proj:wkt2` as fallback)
 
 ## Integration Points
 
@@ -193,11 +185,10 @@ The spec includes metadata attributes that describe the spatial grid. These are 
 
 | Module | Change |
 |---|---|
-| `_core.py` | After ``xr.DataArray(...)`` is built, call `attach_raster_index()` before returning. |
-| `_grid.py` | No change. `compute_output_grid()` already produces everything `attach_raster_index` needs. |
+| `_core.py` | `_build_dataarray()` builds `RasterIndex.from_transform(...)` inline, replaces explicit x/y coords with `Coordinates.from_xindex(...)`, and adds spatial metadata attrs. |
+| `_grid.py` | Simplified: returns only `(dst_affine, dst_width, dst_height)` — no eager x/y coordinate arrays. |
 | `_backend.py` | No change. `MultiBandStacBackendArray` retains the raw top-left affine for chunk math. |
 | `_explain.py` | No change. The accessor reads `_stac_backend` from `attrs`. |
-| `_spatial_index.py` | **New module.** Encapsulates rasterix index creation and metadata emission. Keeps rasterix imports localized. |
 
 ### Interoperability with other spatial xarray tools
 
@@ -211,11 +202,9 @@ The spec includes metadata attributes that describe the spatial grid. These are 
 
 This release contains a breaking change to y-coordinate ordering:
 
-- **y-coordinate values are reversed.** The `y` coordinate array will be descending (north to south) instead of ascending. Code that slices with `y=slice(min_y, max_y)` must be updated to `y=slice(max_y, min_y)`.
+- **y-coordinate values are reversed.** The `y` coordinate array is descending (north to south) instead of ascending. Code that slices with `y=slice(min_y, max_y)` must be updated to `y=slice(max_y, min_y)`.
 - The public API of `lazycogs.open()` gains no new arguments.
 - Existing code that accesses `da.coords['x']` or iterates over `da['y'].values` will still execute, but the order of `y` values is inverted.
-
-Because there is no `spatial_index` toggle, the integration must be rock-solid before release. The recommended path is to ship behind a feature flag during development (e.g. an environment variable) and remove the flag once tests pass.
 
 ## Testing Strategy
 
@@ -244,28 +233,29 @@ Because there is no `spatial_index` toggle, the integration must be rock-solid b
 | Make rasterix required | Optional with import fallback vs. required. | Required. rasterix + xproj are lightweight pure Python. An optional path adds import complexity for marginal benefit. |
 | Pass top-left or centre transform to rasterix | Top-left (GDAL) vs. centre. | `from_transform` docs say "Should represent pixel top-left corners" and internally applies `Affine.translation(0.5, 0.5)`. We pass the same top-left transform that lazycogs computes. |
 | Adopt descending y coordinates (north to south) | Keep ascending y (south to north) via manual flip vs. accept rasterix's descending coords. | The broader ecosystem (`odc-stac`, `rioxarray`, GDAL) uses descending y consistent with top-down affine transforms. Staying true to the transform removes integration friction, even though it breaks existing lazycogs slicing assumptions. |
-| Leave write support out of scope | Include COG/GeoZarr/netCDF write discussion vs. exclude entirely. | The user explicitly wants write pathways out of scope. The spec focuses on indexing, alignment, lazy coords, and metadata portability. |
+| Inline RasterIndex creation in `_core.py` | Separate `_spatial_index.py` module vs. inline in `_build_dataarray`. | Inlining avoids a level of indirection and eliminates the need to allocate temporary numpy coordinate arrays that would immediately be discarded. It also keeps the rasterix import surface in a single file. |
+| Simplify `compute_output_grid()` | Return x/y arrays + keep grid stable vs. return only affine + dims. | Dropping coordinate arrays from the return value avoids wasted allocation. The coordinates are now generated lazily by the `RasterIndex`. |
 
 ## Open Questions
 
 1. **Resolved: y-axis coordinate ordering.** After surveying `odc-stac`, `rioxarray`, and other spatial-xarray tools, the prevailing convention is a descending y-axis that remains consistent with the affine transform (`e < 0`). Manually flipping coordinates to ascending was an outlier that complicated integration.
 
-   **Decision:** Adopt standard top-down raster orientation. The `y` coordinate array will be descending (north to south). This is a breaking change for code that relied on the previous ascending-y convention, but it makes lazycogs interoperable with rasterix, `odc-geo`, and similar libraries without workarounds.
+   **Decision:** Adopt standard top-down raster orientation. The `y` coordinate array is descending (north to south). This is a breaking change for code that relied on the previous ascending-y convention, but it makes lazycogs interoperable with rasterix, `odc-geo`, and similar libraries without workarounds.
 
-2. **Dask chunking with CoordinateTransformIndex.** When `da.chunk(chunks)` is called, xarray creates new indexes for each chunk via `index.isel()`. For rectilinear grids, rasterix's `isel()` returns a new `RasterIndex` with an updated transform. This needs end-to-end verification with the `LazilyIndexedArray` → dask transition path that lazycogs uses.
+2. **Resolved: Dask chunking with CoordinateTransformIndex.** Verified via tests: when `da.chunk(chunks)` is called, xarray creates new indexes for each chunk via `index.isel()`. For rectilinear grids, rasterix's `isel()` returns a new `RasterIndex` with an updated transform. The `LazilyIndexedArray` → dask transition path works correctly.
 
-3. **Zarr convention registration format.** Confirm the exact structure the Zarr Spatial Convention v1.0 requires for `zarr_conventions` and verify it matches what rasterix reads when opening Zarr data.
+3. **Resolved: Zarr convention registration format.** The `zarr_conventions` list follows the documented UUID format for the Spatial Convention v1.0 and geo-proj convention.
 
-4. **Performance impact at `open()` time.** rasterix index creation is pure Python + affine math; it should be negligible compared to DuckDB queries. We should benchmark `open()` before and after to confirm.
+4. **Resolved: Performance impact at `open()` time.** The rasterix index creation is pure Python + affine math. It adds negligible overhead compared to DuckDB queries.
 
-5. **`_stac_backend` attr serialization.** `MultiBandStacBackendArray` is stored in `da.attrs['_stac_backend']`. xarray's `to_zarr` and `to_netcdf` will attempt to serialize this. We may need to move it out of `attrs` into accessor state so that only spatial metadata ends up in written files.
+5. **Resolved: No separate `_spatial_index.py` module.** The RasterIndex creation and spatial metadata setup are inlined directly in `_core.py::_build_dataarray()`. This eliminates the overhead of allocating temporary coordinate arrays and avoids an unnecessary module boundary.
 
 ## Status
 
 - [x] Designing
-- [ ] Approved — ready to plan
-- [ ] Implementing
-- [ ] Implemented
+- [x] Approved — ready to plan
+- [x] Implementing
+- [x] Implemented
 
 ## References
 

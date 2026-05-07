@@ -29,13 +29,12 @@ src/lazycogs/
   _chunk_reader.py   Async mosaic logic: open COGs, select overviews, read windows, reproject, mosaic.
   _executor.py       Per-chunk reprojection thread pool configuration. Exposes set_reproject_workers() and get_max_workers(); the actual pool is created per event loop in _backend.py.
   _explain.py        Dry-run read estimator. Registers the da.lazycogs.explain() xarray accessor.
-  _grid.py           Compute output affine transform and coordinate arrays from bbox + resolution.
+  _grid.py           Compute output affine transform and dimensions from bbox + resolution.
   _reproject.py      Nearest-neighbor reprojection using pyproj Transformer + numpy fancy indexing.
   _storage_ext.py    STAC Storage Extension metadata parsing (version detection, kwargs extraction for v1 and v2).
   _store.py          Resolve cloud HREFs into obstore Store instances (or route through a user-supplied store) with a thread-local cache; store_for() factory for constructing stores from parquet STAC files.
   _temporal.py       Temporal grouping strategies (day, week, month, year, fixed-day-count).
   _mosaic_methods.py Pixel-selection strategies (First, Highest, Lowest, Mean, Median, Stdev, Count).
-  _spatial_index.py  RasterIndex attachment and spatial metadata attrs.
 ```
 
 ## Phase 0 in detail
@@ -48,7 +47,7 @@ src/lazycogs/
 4. Calls `_discover_bands()`: queries the parquet source via `duckdb_client.search(..., max_items=1)` to find asset keys. Assets with role `"data"` or media type `"image/tiff"` are returned first.
 5. Calls `_smoketest_store()`: fetches one sample item from the parquet, resolves the object store for a representative data asset HREF, and calls `head()` to confirm access. Raises `RuntimeError` immediately with a clear message if the store cannot reach the asset, so misconfiguration is surfaced at `open()` time rather than deferred to the first chunk read.
 6. Calls `_build_time_steps()`: queries the parquet source via `duckdb_client.search_to_arrow(...)` to obtain an Arrow table containing only the `datetime` and `start_datetime` columns (plus any filter/sort fields). Extracts timestamps from the Arrow columns without Python-level dict walking, buckets them with the `_TemporalGrouper`, deduplicates, and returns sorted `(filter_strings, time_coords)` pairs. Only groups with at least one item produce a time step.
-7. Calls `compute_output_grid()` to get the output affine transform and x/y coordinate arrays.
+7. Calls `compute_output_grid()` to get the output affine transform and dimensions (width, height). No eager coordinate arrays are produced.
 8. Creates a single `MultiBandStacBackendArray` (a dataclass) with shape `(band, time, y, x)` holding all the parameters needed to materialise any chunk later, then wraps it in one `xarray.core.indexing.LazilyIndexedArray`. This avoids `xr.concat` (used internally by `ds.to_array()`), which would eagerly load `LazilyIndexedArray`-backed objects.
 9. Uses `rasterix.RasterIndex` to define the x/y coordinates (lazily).
 10. Constructs the `xr.DataArray` directly from the 4-D variable. If `chunks` is provided, calls `.chunk(chunks)` to convert to a dask-backed array; otherwise the `LazilyIndexedArray` remains in play so narrow slices (e.g. a single pixel) translate to minimal I/O.
@@ -102,7 +101,7 @@ With `fetch_headers=True`, each matched COG header is fetched (a small HTTP rang
 
 The y coordinates are derived directly from the affine transform: `y[i] = f + e * (0.5 + i)`. Because `e < 0`, `y[0]` is the northernmost pixel centre and the array is strictly decreasing. Spatial selection uses `sel(y=slice(north, south))` (high to low).
 
-A `rasterix.RasterIndex` is attached to every DataArray returned by `open()`. The index replaces the explicit x/y coordinate arrays with lazy coordinate generation from the affine transform, provides CRS discoverability via `da.proj.crs`, and enables spatial alignment with other RasterIndex-backed arrays..
+A `rasterix.RasterIndex` is attached to every DataArray returned by `open()`. The index replaces explicit x/y coordinate arrays with lazy coordinate generation from the affine transform, provides CRS discoverability via `da.proj.crs`, and enables spatial alignment with other RasterIndex-backed arrays.
 
 ## Per-chunk read and resample pipeline
 
@@ -267,6 +266,8 @@ When the store root does not align with the URL structure of the asset HREFs —
 | `obstore` | Cloud object store abstraction layer for async-geotiff |
 | `pyproj` | CRS transforms: bbox reprojection, warp map generation |
 | `xarray` | DataArray / Dataset assembly, `BackendArray` / `LazilyIndexedArray` protocol |
+| `rasterix` | CRS-aware `RasterIndex` for lazy spatial coordinates |
+| `xproj` | CRS accessor and alignment for xarray Flexible Indexes |
 | `dask` | Parallel chunk execution |
 | `affine` | Affine transform arithmetic |
 | `numpy` | Array operations throughout |
