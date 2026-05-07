@@ -360,7 +360,6 @@ def _build_dataarray(
 
     time_coord = np.array(time_coords, dtype="datetime64[D]")
 
-    # CF / GDAL spatial_ref coordinate
     gt = [
         dst_affine.a,
         dst_affine.b,
@@ -369,6 +368,7 @@ def _build_dataarray(
         dst_affine.e,
         dst_affine.f,
     ]
+
     spatial_ref = DataArray(
         np.array(0),
         attrs={
@@ -376,15 +376,33 @@ def _build_dataarray(
             "GeoTransform": " ".join(str(v) for v in gt),
         },
     )
+
     attributes = {
         "grid_mapping": "spatial_ref",
         "zarr_conventions": [
-            {"name": "spatial:", "uuid": "689b58e2-cf7b-45e0-9fff-9cfc0883d6b4"},
-            {"name": "proj:", "uuid": "f17cb550-5864-4468-aeb7-f3180cfb622f"},
+            {
+                "schema_url": "https://raw.githubusercontent.com/zarr-experimental/geo-proj/refs/tags/v1/schema.json",
+                "spec_url": "https://github.com/zarr-experimental/geo-proj/blob/v1/README.md",
+                "uuid": "f17cb550-5864-4468-aeb7-f3180cfb622f",
+                "name": "proj:",
+                "description": (
+                    "Coordinate reference system information for geospatial data"
+                ),
+            },
+            {
+                "schema_url": "https://raw.githubusercontent.com/zarr-conventions/spatial/refs/tags/v1/schema.json",
+                "spec_url": "https://github.com/zarr-conventions/spatial/blob/v1/README.md",
+                "uuid": "689b58e2-cf7b-45e0-9fff-9cfc0883d6b4",
+                "name": "spatial:",
+                "description": "Spatial coordinate information",
+            },
         ],
-        "spatial:transform": gt,
+        "spatial:dimensions": ["y", "x"],
+        "spatial:bbox": bbox,
         "spatial:transform_type": "affine",
-        "spatial_registration": "pixel",
+        "spatial:transform": gt,
+        "spatial:shape": [dst_height, dst_width],
+        "spatial:registration": "pixel",
         "_stac_backend": multi,
         "_stac_time_coords": _CompactDateArray(time_coord),
     }
