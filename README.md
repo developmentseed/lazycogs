@@ -36,7 +36,7 @@ pip install lazycogs
 ## Coordinate convention
 
 `lazycogs.open()` returns a DataArray whose `y` coordinates follow the standard
-north-up raster convention: **descending** from north to south.  In other words,
+north-up raster convention with the origin in the top left (not bottom left). That is, `y` coordinates are **descending** from north to south.  In other words,
 y label `0` is the northernmost pixel and `y[-1]` is the southernmost.  This
 matches the affine transform and is consistent with `odc-stac`, `rioxarray`, and
 GDAL.
