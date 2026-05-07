@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0](https://github.com/developmentseed/lazycogs/compare/v0.2.0...v0.3.0) (2026-05-07)
+
+
+### Features
+
+* implement xarray async capability ([#46](https://github.com/developmentseed/lazycogs/issues/46)) ([e7a501c](https://github.com/developmentseed/lazycogs/commit/e7a501caeecee7f9cc2c0fb104fd7af2a03172ad))
+* use rasterix to handle x/y dimensions ([#52](https://github.com/developmentseed/lazycogs/issues/52)) ([0f02cc2](https://github.com/developmentseed/lazycogs/commit/0f02cc24f43bc3c9028d9ce33c1f595ce4c9de94))
+
 ## [0.2.0](https://github.com/developmentseed/lazycogs/compare/v0.1.2...v0.2.0) (2026-05-04)
 
 
