@@ -335,7 +335,7 @@ def test_open_sets_expected_dataarray_attributes(tmp_path):
     # Attributes
     assert da.attrs["grid_mapping"] == "spatial_ref"
     assert da.attrs["spatial:transform_type"] == "affine"
-    assert da.attrs["spatial_registration"] == "pixel"
+    assert da.attrs["spatial:registration"] == "pixel"
     assert da.attrs["proj:code"] == "EPSG:32632"
 
     # spatial:transform should be the 6-element GeoTransform list
