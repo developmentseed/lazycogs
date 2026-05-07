@@ -14,9 +14,9 @@ Benchmarks run against `odc-stac==0.5.2` on a laptop against the Sentinel-2 C1 L
 
 | Operation | lazycogs | odc-stac |
 |---|---|---|
-| Load STAC items into memory | n/a | 12.22s |
-| Initialize array | 0.90s | 52.05s |
-| Extract point values (30 days) | 5.01s | 16.21s |
-| Load spatial subset array (3 time steps) | 16.37s | 28.93s |
+| Load STAC items into memory | n/a | 10.44s |
+| Initialize array | 0.77s | 45.47s |
+| Extract point values (30 days) | 4.96s | 17.13s |
+| Load spatial subset array (3 time steps) | 13.55s | 28.81s |
 
 For full reproducible benchmarks, see the [lazycogs vs odc-stac notebook](notebooks/lazycogs-odc-stac.ipynb).

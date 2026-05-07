@@ -399,10 +399,8 @@ class MultiBandStacBackendArray(BackendArray):
     ) -> _SpatialWindow:
         """Resolve spatial indexers to a concrete chunk window.
 
-        Converts logical ascending y indices (south-to-north, as exposed to
-        xarray) to physical top-down row offsets (north-to-south, as stored in
-        the COG), then computes the chunk affine transform and EPSG:4326
-        bounding box.
+        Computes the chunk affine transform and EPSG:4326 bounding box from
+        the top-down y/x indexers.
 
         Args:
             y_key: Integer or slice indexer for the y dimension.
@@ -426,19 +424,15 @@ class MultiBandStacBackendArray(BackendArray):
         else:
             squeeze_x = False
 
-        y_start_logical = y_key.start if y_key.start is not None else 0
-        y_stop_logical = y_key.stop if y_key.stop is not None else self.dst_height
+        y_start = y_key.start if y_key.start is not None else 0
+        y_stop = y_key.stop if y_key.stop is not None else self.dst_height
         x_start = x_key.start if x_key.start is not None else 0
         x_stop = x_key.stop if x_key.stop is not None else self.dst_width
 
-        # logical index 0 = southernmost = physical row (dst_height - 1)
-        y_start_physical = self.dst_height - y_stop_logical
-        y_stop_physical = self.dst_height - y_start_logical
-
-        chunk_height = y_stop_physical - y_start_physical
+        chunk_height = y_stop - y_start
         chunk_width = x_stop - x_start
 
-        chunk_affine = self.dst_affine * Affine.translation(x_start, y_start_physical)
+        chunk_affine = self.dst_affine * Affine.translation(x_start, y_start)
 
         minx = chunk_affine.c
         maxy = chunk_affine.f
@@ -595,9 +589,6 @@ class MultiBandStacBackendArray(BackendArray):
 
         if result is None:
             result = np.full(out_shape, fill, dtype=self.dtype)
-
-        # Physical data is top-down; flip to ascending y order for xarray.
-        result = result[:, :, ::-1, :]
 
         # result shape: (n_selected_bands, n_time, chunk_height, chunk_width)
         # Apply squeezes in axis order: time (axis 1), band (axis 0), y (-2), x (-1).

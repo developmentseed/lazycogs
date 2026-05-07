@@ -429,7 +429,7 @@ def _roi_pixel_offsets(
     x_start = round((float(da.x.to_numpy()[0]) - affine.c) / resolution - 0.5)
 
     y_start_physical = round(
-        (affine.f - float(da.y.to_numpy()[-1])) / resolution - 0.5,
+        (affine.f - float(da.y.to_numpy()[0])) / resolution - 0.5,
     )
 
     return (

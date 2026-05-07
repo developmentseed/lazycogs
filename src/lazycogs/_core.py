@@ -7,9 +7,10 @@ import time
 from typing import TYPE_CHECKING, Any, Self
 
 import numpy as np
-import xarray as xr
 from pyproj import CRS, Transformer
+from rasterix import RasterIndex
 from rustac import DuckdbClient
+from xarray import Coordinates, DataArray, Variable
 from xarray.core import indexing
 
 from lazycogs._backend import MultiBandStacBackendArray
@@ -271,7 +272,7 @@ def _build_dataarray(
     store: ObjectStore | None = None,
     max_concurrent_reads: int = 32,
     path_from_href: Callable[[str], str] | None = None,
-) -> xr.DataArray:
+) -> DataArray:
     """Assemble the lazy DataArray from pre-computed parameters.
 
     This is the shared implementation used by both :func:`open` and
@@ -311,7 +312,7 @@ def _build_dataarray(
         Lazy ``xr.DataArray`` with dimensions ``(band, time, y, x)``.
 
     """
-    dst_affine, dst_width, dst_height, x_coords, y_coords = compute_output_grid(
+    dst_affine, dst_width, dst_height = compute_output_grid(
         bbox=bbox,
         resolution=resolution,
     )
@@ -337,7 +338,7 @@ def _build_dataarray(
         path_from_href=path_from_href,
     )
     lazy = indexing.LazilyIndexedArray(multi)
-    var = xr.Variable(("band", "time", "y", "x"), lazy)
+    var = Variable(("band", "time", "y", "x"), lazy)
 
     # Only convert to dask when the caller explicitly requests chunking.
     # Without this guard, xr.concat (used inside to_array) would eagerly load
@@ -347,22 +348,80 @@ def _build_dataarray(
     if chunks is not None:
         var = var.chunk(chunks)
 
+    index = RasterIndex.from_transform(
+        dst_affine,
+        width=dst_width,
+        height=dst_height,
+        x_dim="x",
+        y_dim="y",
+        crs=dst_crs,
+    )
+    spatial_coords = Coordinates.from_xindex(index)
+
     time_coord = np.array(time_coords, dtype="datetime64[D]")
 
-    da = xr.DataArray(
-        var,
-        coords={
-            "band": resolved_bands,
-            "time": time_coord,
-            "y": y_coords,
-            "x": x_coords,
+    gt = [
+        dst_affine.a,
+        dst_affine.b,
+        dst_affine.c,
+        dst_affine.d,
+        dst_affine.e,
+        dst_affine.f,
+    ]
+
+    spatial_ref = DataArray(
+        np.array(0),
+        attrs={
+            "crs_wkt": dst_crs.to_wkt(),
+            "GeoTransform": " ".join(str(v) for v in gt),
         },
     )
-    # Store explain metadata so that da.lazycogs.explain() can reconstruct
-    # which DuckDB queries to run without re-specifying all open() parameters.
-    da.attrs["_stac_backend"] = multi
-    da.attrs["_stac_time_coords"] = _CompactDateArray(time_coord)
-    return da
+
+    attributes = {
+        "grid_mapping": "spatial_ref",
+        "zarr_conventions": [
+            {
+                "schema_url": "https://raw.githubusercontent.com/zarr-experimental/geo-proj/refs/tags/v1/schema.json",
+                "spec_url": "https://github.com/zarr-experimental/geo-proj/blob/v1/README.md",
+                "uuid": "f17cb550-5864-4468-aeb7-f3180cfb622f",
+                "name": "proj:",
+                "description": (
+                    "Coordinate reference system information for geospatial data"
+                ),
+            },
+            {
+                "schema_url": "https://raw.githubusercontent.com/zarr-conventions/spatial/refs/tags/v1/schema.json",
+                "spec_url": "https://github.com/zarr-conventions/spatial/blob/v1/README.md",
+                "uuid": "689b58e2-cf7b-45e0-9fff-9cfc0883d6b4",
+                "name": "spatial:",
+                "description": "Spatial coordinate information",
+            },
+        ],
+        "spatial:dimensions": ["y", "x"],
+        "spatial:bbox": bbox,
+        "spatial:transform_type": "affine",
+        "spatial:transform": gt,
+        "spatial:shape": [dst_height, dst_width],
+        "spatial:registration": "pixel",
+        "_stac_backend": multi,
+        "_stac_time_coords": _CompactDateArray(time_coord),
+    }
+
+    # Zarr geo-proj convention
+    epsg = dst_crs.to_epsg()
+    if epsg is not None:
+        attributes["proj:code"] = f"EPSG:{epsg}"
+    else:
+        attributes["proj:wkt2"] = dst_crs.to_wkt()
+
+    return DataArray(
+        var,
+        coords=Coordinates(
+            {"band": resolved_bands, "time": time_coord, "spatial_ref": spatial_ref},
+        )
+        | spatial_coords,
+        attrs=attributes,
+    )
 
 
 def open(  # noqa: A001
@@ -385,7 +444,7 @@ def open(  # noqa: A001
     max_concurrent_reads: int = 32,
     path_from_href: Callable[[str], str] | None = None,
     duckdb_client: DuckdbClient | None = None,
-) -> xr.DataArray:
+) -> DataArray:
     """Open a mosaic of STAC items as a lazy ``(band, time, y, x)`` DataArray.
 
     ``href`` must be a path to a geoparquet file (``.parquet`` or

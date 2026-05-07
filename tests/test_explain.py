@@ -99,13 +99,9 @@ def _make_da_with_backends(
     time_coord = np.array(time_coords, dtype="datetime64[D]")
     resolution = affine.a
 
-    # Build coordinates matching the grid convention: x ascending, y ascending
+    # Build coordinates matching the grid convention: x ascending, y descending
     x_coords = np.array([affine.c + (i + 0.5) * resolution for i in range(width)])
-    y_coords = np.array(
-        [affine.f + (height - 1 - i + 0.5) * affine.e for i in range(height)],
-    )
-    # y ascending (south to north)
-    y_coords = np.sort(y_coords)
+    y_coords = np.array([affine.f + (i + 0.5) * affine.e for i in range(height)])
 
     da = xr.DataArray(
         np.zeros((len(bands), len(dates), height, width), dtype="float32"),
