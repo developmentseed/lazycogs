@@ -414,8 +414,6 @@ def _build_dataarray(
     else:
         attributes["proj:wkt2"] = dst_crs.to_wkt()
 
-    # Store explain metadata so that da.lazycogs.explain() can reconstruct
-    # which DuckDB queries to run without re-specifying all open() parameters.
     return DataArray(
         var,
         coords=Coordinates(
