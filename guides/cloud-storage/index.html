@@ -710,8 +710,83 @@
   
   
   
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NASA HLS
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    NASA HLS
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
     <li class="md-nav__item">
-      <a href="../../notebooks/hls/" class="md-nav__link">
+      <a href="../../notebooks/hls-https/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HLS Example (https)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../notebooks/hls-s3/" class="md-nav__link">
         
   
   
@@ -719,6 +794,42 @@
     
   
     HLS Example (us-west-2 only)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../notebooks/cmr-lpcloud-fix-assets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Working with CMR STAC
   
 
     
@@ -1187,7 +1298,7 @@
 <a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="n">da</span> <span class="o">=</span> <span class="n">lazycogs</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s2">&quot;items.parquet&quot;</span><span class="p">,</span> <span class="o">...</span><span class="p">,</span> <span class="n">store</span><span class="o">=</span><span class="n">store</span><span class="p">)</span>
 </code></pre></div>
 <p><code>NasaEarthdataAsyncCredentialProvider</code> is not supported. It creates an <code>aiohttp</code> session bound to the event loop active when it is constructed. lazycogs runs each chunk read in a short-lived event loop (and in Jupyter, in a separate thread with its own loop), so the session ends up attached to the wrong loop and raises a runtime error. The synchronous provider uses <code>requests</code>, which is event-loop-agnostic and works correctly in all contexts.</p>
-<p>See <a href="../../notebooks/hls/">NASA HLS example notebook</a> for a full worked example with direct S3 access.</p>
+<p>See <a href="../../notebooks/hls-s3/">NASA HLS S3 example notebook</a> for a full worked example with direct S3 access.</p>
 <p>See also: <a href="../../api/open/">API reference for open()</a>, <a href="../../api/utils/">API reference for store_for()</a>, <a href="../stac-search/">STAC item queries guide</a></p>
 
 

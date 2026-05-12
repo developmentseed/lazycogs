@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://developmentseed.org/lazycogs/notebooks/hls/">
+        <link rel="canonical" href="https://developmentseed.org/lazycogs/notebooks/hls-s3/">
       
       
-        <link rel="prev" href="../demo_southwest_monthly/">
+        <link rel="prev" href="../hls-https/">
       
       
-        <link rel="next" href="../async-workflow/">
+        <link rel="next" href="../cmr-lpcloud-fix-assets/">
       
       
         
@@ -610,6 +610,83 @@
   
   
   
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NASA HLS
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    NASA HLS
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hls-https/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HLS Example (https)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
     <li class="md-nav__item md-nav__item--active">
       
       <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
@@ -738,6 +815,42 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cmr-lpcloud-fix-assets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Working with CMR STAC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -1866,7 +1979,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h1 id="hls-example-us-west-2-only">HLS Example (us-west-2 only)<a class="anchor-link" href="#hls-example-us-west-2-only">¶</a></h1><p>The Harmonized Landsat Sentinel 2 dataset contains grid-aligned cloud-optimized geotiffs that are great for deep time series analysis because it contains the combined archives from Landsat 8/9 and Sentinel 2A/B/C. NASA MAAP maintains a <a href="https://maap-project.github.io/hls-stac-geoparquet-archive/">stac-geoparquet archive</a> of all of the HLS STAC records. This archive solves a common bottleneck that users have encountered when trying to work with HLS STAC records at scale by eliminating the need to query the CMR STAC API!</p>
 <p>This notebook demonstrates how to use lazycogs to interact with the HLS STAC Geoparquet Archive in the optimal way.</p>
-<p><strong>Note:</strong> This will only work in the AWS us-west-2 region! The tutorial relies on direct bucket access to the <code>lp-prod-protected</code> S3 bucket which is accessible if you have NASA Earthdata credentials in your environment, but you can only do direct S3 access if your code is running in us-west-2.</p>
+<p><strong>Note:</strong> This will only work in the AWS us-west-2 region! The tutorial relies on direct bucket access to the <code>lp-prod-protected</code> S3 bucket which is accessible if you have NASA Earthdata credentials in your environment, but you can only do direct S3 access if your code is running in us-west-2. If you are <strong>not</strong> able to run your compute in the AWS us-west-2 region, try the method outlined in <a href="./hls-https.ipynb">HLS Example (https)</a>.</p>
 </div>
 </div>
 </div>
