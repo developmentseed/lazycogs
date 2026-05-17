@@ -1,6 +1,7 @@
 """Tests for _backend helpers and _async_getitem / _sync_getitem."""
 
 import asyncio
+import threading
 from unittest.mock import AsyncMock, patch
 
 import numpy as np
@@ -11,7 +12,20 @@ from rustac import DuckdbClient
 from xarray.core import indexing
 
 from lazycogs._backend import MultiBandStacBackendArray
+from lazycogs._executor import (
+    _reset_executor_state_for_tests,
+    _run_coroutine,
+    run_on_loop,
+)
 from lazycogs._mosaic_methods import FirstMethod
+
+
+@pytest.fixture(autouse=True)
+def reset_executor_state() -> None:
+    """Reset shared executor state between tests."""
+    _reset_executor_state_for_tests()
+    yield
+    _reset_executor_state_for_tests()
 
 
 @pytest.fixture
@@ -307,3 +321,42 @@ def test_async_getitem_concurrent_chunk_reads(wgs84):
     assert isinstance(out2, np.ndarray)
     assert out1.shape == (1, 1, 1, 2)
     assert out2.shape == (1, 1, 1, 2)
+
+
+# ---------------------------------------------------------------------------
+# lazycogs._executor bridge behavior
+# ---------------------------------------------------------------------------
+
+
+def test_run_coroutine_uses_one_shared_loop_thread():
+    """Concurrent sync callers all submit to the same lazycogs loop thread."""
+    thread_ids: list[int] = []
+
+    def worker() -> None:
+        async def capture_thread_id() -> int:
+            return threading.get_ident()
+
+        thread_ids.append(_run_coroutine(capture_thread_id()))
+
+    threads = [threading.Thread(target=worker) for _ in range(6)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert len(thread_ids) == 6
+    assert len(set(thread_ids)) == 1
+
+
+def test_run_coroutine_raises_on_lazycogs_loop_thread():
+    """The sync bridge raises instead of deadlocking on the lazycogs loop."""
+
+    async def call_sync_bridge_from_loop() -> str:
+        try:
+            _run_coroutine(asyncio.sleep(0))
+        except RuntimeError as exc:
+            return str(exc)
+        return "did not raise"
+
+    message = run_on_loop(call_sync_bridge_from_loop())
+    assert "Cannot call sync lazycogs bridge" in message

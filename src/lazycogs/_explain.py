@@ -15,7 +15,7 @@ from pandas import DataFrame
 from pyproj import CRS, Transformer
 
 from lazycogs._chunk_reader import _ChunkContext, _open_and_window
-from lazycogs._executor import _DUCKDB_EXECUTOR, _run_coroutine
+from lazycogs._executor import _run_coroutine, get_duckdb_pool
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -603,7 +603,7 @@ async def _explain_async(
         )
         loop = asyncio.get_running_loop()
         items = await loop.run_in_executor(
-            _DUCKDB_EXECUTOR,
+            get_duckdb_pool(),
             lambda: backend.duckdb_client.search(
                 backend.parquet_path,
                 bbox=chunk_bbox_4326,

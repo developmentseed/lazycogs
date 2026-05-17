@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 
 import pytest
@@ -13,7 +14,16 @@ from lazycogs._storage_ext import (
     _extract_store_kwargs_v2,
     _storage_extension_version,
 )
-from lazycogs._store import resolve, store_for
+from lazycogs._store import _clear_store_cache_for_tests, resolve, store_for
+
+
+@pytest.fixture(autouse=True)
+def clear_store_cache() -> None:
+    """Clear the shared store cache between tests."""
+    _clear_store_cache_for_tests()
+    yield
+    _clear_store_cache_for_tests()
+
 
 
 class _ProtocolStore:
@@ -86,6 +96,19 @@ def test_thread_local_cache_same_https_host():
     store_a, _ = resolve("https://cdn.example.com/img/a.tif")
     store_b, _ = resolve("https://cdn.example.com/img/b.tif")
     assert store_a is store_b
+
+
+def test_shared_cache_is_thread_safe():
+    """Concurrent callers reuse the same cached store instance."""
+
+    def resolve_store():
+        store, _ = resolve("s3://shared-bucket/thread-safe.tif")
+        return store
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        stores = list(executor.map(lambda _: resolve_store(), range(16)))
+
+    assert len({id(store) for store in stores}) == 1
 
 
 def test_user_supplied_store_is_returned_unchanged():

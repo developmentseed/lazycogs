@@ -16,10 +16,7 @@ from xarray.core import indexing
 
 from lazycogs._chunk_reader import read_chunk_async
 from lazycogs._cql2 import _extract_filter_fields, _sortby_fields
-from lazycogs._executor import (
-    _DUCKDB_EXECUTOR,
-    _run_coroutine,
-)
+from lazycogs._executor import _run_coroutine, get_duckdb_pool
 
 logger = logging.getLogger(__name__)
 
@@ -225,7 +222,7 @@ async def _search_items_async(
 
     """
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(_DUCKDB_EXECUTOR, _search_items_sync, plan, date)
+    return await loop.run_in_executor(get_duckdb_pool(), _search_items_sync, plan, date)
 
 
 async def _run_one_date(
