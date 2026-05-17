@@ -100,7 +100,7 @@ def _ensure_loop() -> asyncio.AbstractEventLoop:
         return loop
 
 
-def _ensure_reproject_pool() -> concurrent.futures.ThreadPoolExecutor:
+def get_reproject_pool() -> concurrent.futures.ThreadPoolExecutor:
     """Return the shared bounded reprojection executor."""
     with _LOCK:
         if _STATE.reproject_pool is None:
@@ -111,7 +111,7 @@ def _ensure_reproject_pool() -> concurrent.futures.ThreadPoolExecutor:
         return _STATE.reproject_pool
 
 
-def _ensure_duckdb_pool() -> concurrent.futures.ThreadPoolExecutor:
+def get_duckdb_pool() -> concurrent.futures.ThreadPoolExecutor:
     """Return the shared bounded DuckDB executor."""
     with _LOCK:
         if _STATE.duckdb_pool is None:
@@ -120,16 +120,6 @@ def _ensure_duckdb_pool() -> concurrent.futures.ThreadPoolExecutor:
                 thread_name_prefix="lazycogs-duckdb",
             )
         return _STATE.duckdb_pool
-
-
-def get_reproject_pool() -> concurrent.futures.ThreadPoolExecutor:
-    """Return the shared reprojection executor."""
-    return _ensure_reproject_pool()
-
-
-def get_duckdb_pool() -> concurrent.futures.ThreadPoolExecutor:
-    """Return the shared DuckDB executor."""
-    return _ensure_duckdb_pool()
 
 
 def _submit_to_loop[T](
