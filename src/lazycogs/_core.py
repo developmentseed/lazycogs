@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from arro3.core import Table
-    from async_tiff import ObspecInput
+    from async_geotiff import Store
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +107,7 @@ def _discover_bands(
     return data_bands or other_bands or list(assets)
 
 
-async def _open_store_sample(path: str, *, store: ObspecInput) -> None:
+async def _open_store_sample(path: str, *, store: Store) -> None:
     """Open one representative asset through ``GeoTIFF.open`` for validation."""
     await GeoTIFF.open(path, store=store)
 
@@ -121,7 +121,7 @@ def _smoketest_store(
     filter: str | dict[str, Any] | None = None,
     ids: list[str] | None = None,
     bands: list[str] | None = None,
-    store: ObspecInput | None = None,
+    store: Store | None = None,
     path_from_href: Callable[[str], str] | None = None,
 ) -> None:
     """Verify the configured store can open a sample asset from the parquet.
@@ -306,7 +306,7 @@ def _build_dataarray(
     out_dtype: np.dtype,
     method_cls: type[MosaicMethodBase],
     chunks: dict[str, int] | None,
-    store: ObspecInput | None = None,
+    store: Store | None = None,
     max_concurrent_reads: int = 32,
     path_from_href: Callable[[str], str] | None = None,
 ) -> DataArray:
@@ -336,7 +336,7 @@ def _build_dataarray(
         out_dtype: Output array dtype.
         method_cls: Mosaic method class.
         chunks: Passed to ``DataArray.chunk()`` if not ``None``.
-        store: Pre-configured obspec-compatible store accepted by
+        store: Pre-configured :class:`async_geotiff.Store` accepted by
             ``GeoTIFF.open``. When provided, it is used directly for all asset
             reads instead of resolving an obstore-backed store from each HREF.
         max_concurrent_reads: Maximum number of COG reads to run concurrently
@@ -477,7 +477,7 @@ def open(  # noqa: A001
     dtype: str | np.dtype | None = None,
     mosaic_method: type[MosaicMethodBase] | None = None,
     time_period: str = "P1D",
-    store: ObspecInput | None = None,
+    store: Store | None = None,
     max_concurrent_reads: int = 32,
     path_from_href: Callable[[str], str] | None = None,
     duckdb_client: DuckdbClient | None = None,
@@ -519,7 +519,7 @@ def open(  # noqa: A001
             (calendar year).  Defaults to ``"P1D"`` (one step per calendar
             day), which preserves the previous behaviour.  Multi-day windows
             such as ``"P16D"`` are aligned to an epoch of 2000-01-01.
-        store: Pre-configured obspec-compatible store accepted by
+        store: Pre-configured :class:`async_geotiff.Store` accepted by
             ``GeoTIFF.open`` to use for all asset reads. Useful when
             credentials, custom endpoints, or non-default options are needed
             without relying on automatic store resolution from each HREF. When

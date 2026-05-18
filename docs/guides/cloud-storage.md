@@ -12,7 +12,7 @@ For public buckets that do not require signed requests, pass `skip_signature=Tru
 
 ## Custom store contract
 
-When you pass `store=` explicitly, lazycogs forwards that object to `async-geotiff`. The object does not need to be an obstore `ObjectStore`; it only needs to satisfy the obspec-compatible async range-read contract accepted by `GeoTIFF.open()`.
+When you pass `store=` explicitly, lazycogs forwards that object to `async-geotiff`. The object does not need to be an obstore `ObjectStore`; it only needs to satisfy the [obspec-compatible async range-read contract](https://developmentseed.org/async-geotiff/latest/api/geotiff/#async_geotiff.Store) accepted by [`GeoTIFF.open()`](https://developmentseed.org/async-geotiff/latest/api/geotiff/#async_geotiff.GeoTIFF.open).
 
 For most users, obstore is still the recommended path because `store=None` auto-resolves it for each asset HREF and `lazycogs.store_for()` constructs it for you.
 

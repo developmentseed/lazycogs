@@ -15,7 +15,7 @@ from lazycogs._storage_ext import _extract_store_kwargs
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from async_tiff import ObspecInput
+    from async_geotiff import Store
     from obstore.store import ObjectStore
 
 logger = logging.getLogger(__name__)
@@ -32,15 +32,15 @@ def _cache() -> dict[str, ObjectStore]:
 
 def resolve(
     href: str,
-    store: ObspecInput | None = None,
+    store: Store | None = None,
     path_fn: Callable[[str], str] | None = None,
-) -> tuple[ObspecInput, str]:
+) -> tuple[Store, str]:
     """Resolve an HREF into a ``(store, path)`` pair.
 
     When ``store`` is supplied, it is returned unchanged and only the object
     path is extracted from the HREF. The caller is responsible for ensuring
-    the store satisfies the obspec read contract accepted by
-    ``GeoTIFF.open`` and is rooted at the same ``scheme://netloc`` the HREF
+    the store satisfies the :class:`async_geotiff.Store` read contract
+    accepted by ``GeoTIFF.open`` and is rooted at the same ``scheme://netloc`` the HREF
     points to; no introspection is performed on the provided store.
 
     When ``store`` is ``None``, a store is auto-constructed via
@@ -55,8 +55,8 @@ def resolve(
         href: A storage URL supported by :func:`obstore.store.from_url`
             (``s3``, ``s3a``, ``gs``, Azure variants, ``http``, ``https``,
             ``file``, ``memory``).
-        store: Optional pre-configured obspec-compatible store accepted by
-            ``GeoTIFF.open``.
+        store: Optional pre-configured :class:`async_geotiff.Store`
+            accepted by ``GeoTIFF.open``.
         path_fn: Optional callable that takes the full HREF and returns the
             object path to use with the store.  When provided, it replaces the
             default ``urlparse``-based path extraction.  Only meaningful when

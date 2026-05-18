@@ -398,7 +398,7 @@ def test_chunked_spatial_selection_full_compute_succeeds(opened_dataarray):
 
 
 class _ProtocolStore:
-    """Minimal non-obstore store that satisfies the async_tiff protocol shape."""
+    """Minimal non-obstore store that satisfies the async_geotiff.Store shape."""
 
     async def get_range_async(self, _start: int, _end: int):
         return b""

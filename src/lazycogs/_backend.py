@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from async_tiff import ObspecInput
+    from async_geotiff import Store
     from rustac import DuckdbClient
 
     from lazycogs._mosaic_methods import MosaicMethodBase
@@ -62,7 +62,7 @@ class _ChunkReadPlan:
         chunk_height: Chunk height in pixels.
         nodata: No-data fill value, or ``None``.
         mosaic_method_cls: Mosaic method class, or ``None`` for the default.
-        store: Pre-configured obspec-compatible store accepted by
+        store: Pre-configured :class:`async_geotiff.Store` accepted by
             ``GeoTIFF.open``, or ``None``.
         max_concurrent_reads: Maximum concurrent COG reads per chunk.
         warp_cache: Shared warp map cache across time steps.
@@ -85,7 +85,7 @@ class _ChunkReadPlan:
     chunk_height: int
     nodata: float | None
     mosaic_method_cls: type[MosaicMethodBase] | None
-    store: ObspecInput | None
+    store: Store | None
     max_concurrent_reads: int
     warp_cache: dict
     path_fn: Callable[[str], str] | None
@@ -337,7 +337,7 @@ class MultiBandStacBackendArray(BackendArray):
         mosaic_method_cls: Mosaic method class instantiated per chunk, or
             ``None`` to use the default
             :class:`~lazycogs._mosaic_methods.FirstMethod`.
-        store: Pre-configured obspec-compatible store accepted by
+        store: Pre-configured :class:`async_geotiff.Store` accepted by
             ``GeoTIFF.open`` and shared across all chunk reads. When ``None``,
             each asset HREF is resolved to an obstore-backed store via the
             thread-local cache in :func:`~lazycogs._store.resolve`.
@@ -371,7 +371,7 @@ class MultiBandStacBackendArray(BackendArray):
     dtype: np.dtype
     nodata: float | None
     mosaic_method_cls: type[MosaicMethodBase] | None = field(default=None)
-    store: ObspecInput | None = field(default=None)
+    store: Store | None = field(default=None)
     max_concurrent_reads: int = field(default=32)
     path_from_href: Callable[[str], str] | None = field(default=None)
     shape: tuple[int, ...] = field(init=False)

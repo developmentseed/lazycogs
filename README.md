@@ -23,7 +23,7 @@ One constraint worth naming: lazycogs only reads Cloud Optimized GeoTIFFs. If yo
 |---|---|
 | STAC search + spatial indexing | `rustac` (DuckDB + geoparquet) |
 | COG I/O | `async-geotiff` (Rust, no GDAL) |
-| Cloud storage | `obstore` by default; any `async-geotiff`/obspec-compatible store when passed via `store=` |
+| Cloud storage | `obstore` by default; any `async_geotiff.Store` when passed via `store=` |
 | Reprojection | `pyproj` + numpy |
 | Lazy dataset construction | xarray `BackendEntrypoint` + `LazilyIndexedArray` |
 
@@ -99,7 +99,7 @@ reading many chunks inside an already-running loop.
 
 ## Custom stores
 
-`lazycogs.open(..., store=...)` accepts any store object that satisfies the async range-read contract consumed by `async-geotiff`.
+`lazycogs.open(..., store=...)` accepts any store object that satisfies `async_geotiff.Store`.
 For most users, the recommended path is still obstore: leave `store=None` to auto-resolve per-asset stores, or call `lazycogs.store_for()` to build one explicitly.
 
 ## Documentation

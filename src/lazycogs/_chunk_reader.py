@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from async_geotiff import GeoTIFF, Overview, RasterArray, Window
+from async_geotiff import GeoTIFF, Window
 from numpy import ma
 
 from lazycogs._executor import _run_coroutine
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from affine import Affine
-    from async_tiff import ObspecInput
+    from async_geotiff import Overview, RasterArray, Store
     from pyproj import CRS, Transformer
 
 logger = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ class _ChunkContext:
     chunk_width: int
     chunk_height: int
     nodata: float | None
-    store: ObspecInput | None
+    store: Store | None
     path_fn: Callable[[str], str] | None
     warp_cache: dict[tuple[tuple[float, ...], CRS], WarpMap] | None
 
@@ -378,7 +378,7 @@ async def _read_item_band(
     async def _open_band(
         band: str,
         href: str,
-    ) -> tuple[str, GeoTIFF, ObspecInput]:
+    ) -> tuple[str, GeoTIFF, Store]:
         band_store, path = _resolve_store(href, ctx.store, ctx.path_fn)
         geotiff = await GeoTIFF.open(path, store=band_store)
         return band, geotiff, band_store
@@ -523,7 +523,7 @@ async def read_chunk_async(
     chunk_height: int,
     nodata: float | None = None,
     mosaic_method_cls: type[MosaicMethodBase] | None = None,
-    store: ObspecInput | None = None,
+    store: Store | None = None,
     max_concurrent_reads: int = 32,
     warp_cache: dict | None = None,
     path_fn: Callable[[str], str] | None = None,
@@ -547,8 +547,8 @@ async def read_chunk_async(
         nodata: No-data fill value.
         mosaic_method_cls: Mosaic method class instantiated once per band.
             Defaults to :class:`~lazycogs._mosaic_methods.FirstMethod`.
-        store: Optional pre-configured obspec-compatible store accepted by
-            ``GeoTIFF.open``.
+        store: Optional pre-configured :class:`async_geotiff.Store`
+            accepted by ``GeoTIFF.open``.
         max_concurrent_reads: Maximum number of COG reads to run concurrently.
         warp_cache: Optional cache shared across calls for reusing warp maps
             from earlier time steps.
@@ -630,7 +630,7 @@ def read_chunk(
     chunk_height: int,
     nodata: float | None = None,
     mosaic_method_cls: type[MosaicMethodBase] | None = None,
-    store: ObspecInput | None = None,
+    store: Store | None = None,
     max_concurrent_reads: int = 32,
     warp_cache: dict | None = None,
     path_fn: Callable[[str], str] | None = None,
@@ -649,8 +649,8 @@ def read_chunk(
         nodata: No-data fill value.
         mosaic_method_cls: Mosaic method class instantiated once per band.
             Defaults to :class:`~lazycogs._mosaic_methods.FirstMethod`.
-        store: Optional pre-configured obspec-compatible store accepted by
-            ``GeoTIFF.open``.
+        store: Optional pre-configured :class:`async_geotiff.Store`
+            accepted by ``GeoTIFF.open``.
         max_concurrent_reads: Maximum number of COG reads to run concurrently.
         warp_cache: Optional cache shared across calls for reusing warp maps
             from earlier time steps.

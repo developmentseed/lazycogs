@@ -248,7 +248,7 @@ mean that requires all weeks to be present before reducing).
 
 ## Store caching and the `store` parameter
 
-`lazycogs.open(..., store=...)` accepts the same obspec-compatible async range-read contract that `async-geotiff` consumes. In practice, any object that satisfies `async_tiff.ObspecInput` can be passed through and will be forwarded unchanged to `GeoTIFF.open(...)`.
+`lazycogs.open(..., store=...)` accepts the same store contract that `async-geotiff` consumes. In practice, any object that satisfies `async_geotiff.Store` can be passed through and will be forwarded unchanged to `GeoTIFF.open(...)`.
 
 `resolve()` in `_store.py` remains the default convenience layer. When `store=None`, it defers to `obstore.store.from_url` for scheme detection — including the special-case HTTPS routing for `amazonaws.com`, `r2.cloudflarestorage.com`, and Azure hosts — rather than maintaining its own list of known object-store domains. The constructed obstore-backed store is cached per thread in a `dict[str, ObjectStore]` keyed by root URL (`scheme://netloc`). Because dask tasks run in threads, this avoids repeated connection setup within a single task while remaining safe across concurrent tasks.
 
