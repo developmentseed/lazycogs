@@ -575,10 +575,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#set_reproject_workers" class="md-nav__link">
+  <a href="#lazycogs_reproject_workers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        set_reproject_workers
+        LAZYCOGS_REPROJECT_WORKERS
       
     </span>
   </a>
@@ -1196,10 +1196,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#set_reproject_workers" class="md-nav__link">
+  <a href="#lazycogs_reproject_workers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        set_reproject_workers
+        LAZYCOGS_REPROJECT_WORKERS
       
     </span>
   </a>
@@ -1241,7 +1241,7 @@
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">vals</span> <span class="o">=</span> <span class="n">da</span><span class="o">.</span><span class="n">sel</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="mi">299965</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="mi">2653947</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s2">&quot;nearest&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">sel</span><span class="p">(</span><span class="n">time</span><span class="o">=</span><span class="nb">slice</span><span class="p">(</span><span class="s2">&quot;2025-06&quot;</span><span class="p">,</span> <span class="s2">&quot;2025-08&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">compute</span><span class="p">()</span>
 </code></pre></div>
 <h2 id="when-to-add-chunks">When to add chunks<a class="headerlink" href="#when-to-add-chunks" title="Permanent link">&para;</a></h2>
-<p>Add <code>chunks={"time": 1}</code> when you want dask to distribute work across multiple workers. Without chunks, all time steps share one event loop and one reprojection thread pool. I/O is concurrent but CPU-bound reprojection is serialized within that pool. With temporal chunks, each time step becomes an independent dask task with its own event loop and thread pool, so reprojection work can run in true parallel across workers:</p>
+<p>Add <code>chunks={"time": 1}</code> when you want dask to distribute work across multiple workers. Without chunks, all time steps share one lazycogs event loop and one bounded reprojection pool. I/O is concurrent but CPU-bound reprojection is bounded by that shared pool. With temporal chunks, dask can run multiple chunk tasks in parallel across worker threads, all submitting to the same lazycogs loop while still sharing the same bounded reprojection pool:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">da</span> <span class="o">=</span> <span class="n">lazycogs</span><span class="o">.</span><span class="n">open</span><span class="p">(</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="s2">&quot;items.parquet&quot;</span><span class="p">,</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="n">bbox</span><span class="o">=</span><span class="n">dst_bbox</span><span class="p">,</span>
@@ -1252,7 +1252,7 @@
 <a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">da</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="s2">&quot;time&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">compute</span><span class="p">()</span>  <span class="c1"># each time step runs in its own dask task</span>
 </code></pre></div>
 <h2 id="spatial-chunks">Spatial chunks<a class="headerlink" href="#spatial-chunks" title="Permanent link">&para;</a></h2>
-<p>Avoid spatial chunks unless you are under memory pressure. lazycogs handles spatial I/O concurrency internally through its async event loop — adding spatial dask tasks layers DuckDB query overhead on top of I/O that was already happening concurrently.</p>
+<p>Avoid spatial chunks unless you are under memory pressure. lazycogs handles spatial I/O concurrency internally through its async event loop — adding spatial dask tasks layers extra DuckDB query overhead on top of I/O that was already happening concurrently.</p>
 <p>The one case where spatial chunks are useful is when a single time step is too large to fit in memory even at <code>max_concurrent_reads=1</code>. In that case, small spatial chunks limit how many pixels are in flight at once.</p>
 <h2 id="max_concurrent_reads"><code>max_concurrent_reads</code><a class="headerlink" href="#max_concurrent_reads" title="Permanent link">&para;</a></h2>
 <p>Controls how many COG files are opened and read simultaneously within a single chunk. This is pure async I/O — it does not create threads. The default is 32.</p>
@@ -1267,12 +1267,11 @@
 <a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="n">max_concurrent_reads</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>   <span class="c1"># lower if hitting S3 throttling</span>
 <a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="p">)</span>
 </code></pre></div>
-<h2 id="set_reproject_workers"><code>set_reproject_workers</code><a class="headerlink" href="#set_reproject_workers" title="Permanent link">&para;</a></h2>
-<p>Controls how many threads each chunk's event loop uses for CPU-bound reprojection (pyproj + numpy). The default is <code>min(os.cpu_count(), 4)</code>.</p>
+<h2 id="lazycogs_reproject_workers"><code>LAZYCOGS_REPROJECT_WORKERS</code><a class="headerlink" href="#lazycogs_reproject_workers" title="Permanent link">&para;</a></h2>
+<p>Controls how many threads the shared reprojection pool uses for CPU-bound reprojection (pyproj + numpy). The default is <code>min(os.cpu_count(), 4)</code>.</p>
 <p>Reprojection is memory-bandwidth-bound rather than compute-bound. Benchmarks show diminishing returns above 4 threads because concurrent large-array operations saturate the memory bus rather than adding throughput. Raising this beyond 4 is rarely useful.</p>
-<p>Each chunk gets its own independent thread pool, so dask tasks do not queue behind each other for reprojection.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">lazycogs</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">lazycogs</span><span class="o">.</span><span class="n">set_reproject_workers</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>   <span class="c1"># reduce from default if memory-constrained</span>
+<p>Set the environment variable before the first lazycogs chunk read:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">LAZYCOGS_REPROJECT_WORKERS</span><span class="o">=</span><span class="m">2</span>
 </code></pre></div>
 <p>See also: <a href="../../api/open/">API reference for open()</a>, <a href="../../api/utils/">API reference for utilities</a>, <a href="../../architecture/">Architecture</a></p>
 

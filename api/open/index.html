@@ -1449,7 +1449,7 @@ such as <code>"P16D"</code> are aligned to an epoch of 2000-01-01.</p>
 credentials, custom endpoints, or non-default options are needed
 without relying on automatic store resolution from each HREF. When
 <code>None</code> (default), each asset URL is parsed to create or reuse a
-per-thread cached obstore-backed store.</p>
+shared cached obstore-backed store behind a small lock.</p>
               </div>
             </td>
             <td>
@@ -1466,9 +1466,9 @@ per-thread cached obstore-backed store.</p>
             <td>
               <div class="doc-md-description">
                 <p>Maximum number of COG reads to run concurrently
-per chunk.  Items are processed in batches of this size, which
-bounds peak in-flight memory when a chunk overlaps many files.
-Methods that support early exit (e.g. the default
+per chunk.  Concurrency is bounded to this size with an
+<code>asyncio.Semaphore</code>, which bounds peak in-flight memory when a
+chunk overlaps many files. Methods that support early exit (e.g. the default
 :class:<code>~lazycogs._mosaic_methods.FirstMethod</code>) will stop
 reading once every output pixel is filled, so lower values also
 reduce unnecessary I/O on dense datasets.  Defaults to 32.</p>

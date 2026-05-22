@@ -1023,10 +1023,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#lazycogs.set_reproject_workers" class="md-nav__link">
+  <a href="#lazycogs.run_on_loop" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;set_reproject_workers
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;run_on_loop
       
     </span>
   </a>
@@ -1313,10 +1313,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#lazycogs.set_reproject_workers" class="md-nav__link">
+  <a href="#lazycogs.run_on_loop" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;set_reproject_workers
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;run_on_loop
       
     </span>
   </a>
@@ -1794,82 +1794,20 @@ any inferred values.</p>
 <div class="doc doc-object doc-function">
 
 
-<h2 id="lazycogs.set_reproject_workers" class="doc doc-heading">
-            <span class="doc doc-object-name doc-function-name">lazycogs.set_reproject_workers</span>
+<h2 id="lazycogs.run_on_loop" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">lazycogs.run_on_loop</span>
 
 
-<a href="#lazycogs.set_reproject_workers" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">set_reproject_workers</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="n"><span title="int">int</span></span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+<a href="#lazycogs.run_on_loop" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">run_on_loop</span><span class="p">(</span><span class="n">coro</span><span class="p">:</span> <span class="n"><span title="collections.abc.Coroutine">Coroutine</span></span><span class="p">[</span><span class="n"><span title="object">object</span></span><span class="p">,</span> <span class="n"><span title="object">object</span></span><span class="p">,</span> <span class="n"><span title="lazycogs._executor.run_on_loop[T]">T</span></span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n"><span title="lazycogs._executor.run_on_loop[T]">T</span></span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
 
-        <p>Set the number of threads each thread's event loop uses for reprojection.</p>
-<p>Each thread (dask worker, Jupyter kernel callback thread, etc.) gets one
-persistent background event loop with one bounded reprojection
-<code>ThreadPoolExecutor</code>.  All chunk reads on that thread share the same loop
-and executor.  Dask tasks on different threads do not compete for a shared
-pool.  Total reprojection threads at any moment is at most
-<code>n x active_thread_count</code>.</p>
-<p>Reprojection is memory-bandwidth-bound rather than compute-bound, so values
-above 4 typically offer no benefit and can hurt throughput due to memory
-contention. The default is <code>min(os.cpu_count(), 4)</code>.</p>
-<p>To improve overall throughput, prefer adding time or band parallelism via
-dask (<code>chunks={"time": 1}</code>) over raising this value.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>n</code>
-            </td>
-            <td>
-                  <code><span title="int">int</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Number of worker threads per event loop.  Must be &gt;= 1.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-<p><span class="doc-section-title">Raises:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="ValueError">ValueError</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>If <code>n</code> is less than 1.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
+        <p>Run <code>coro</code> on the shared lazycogs event loop and return its result.</p>
+<p>This is the supported helper for sync code that must execute a coroutine on
+the lazycogs background loop, including callers that need to construct
+loop-bound resources on that loop.</p>
 
 
     </div>
@@ -2654,7 +2592,7 @@ Only populated when <code>fetch_headers=True</code>.</p>
 
 
         <p>xarray accessor adding explain functionality to lazycogs DataArrays.</p>
-<p>Registered as the <code>stac_cog</code> namespace on all <code>xr.DataArray</code> objects.
+<p>Registered as the <code>lazycogs</code> namespace on all <code>xr.DataArray</code> objects.
 The :meth:<code>explain</code> method is only useful on DataArrays produced by
 :func:<code>lazycogs.open</code>.</p>
 
