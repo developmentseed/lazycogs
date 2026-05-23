@@ -18,7 +18,7 @@ Work is split sharply into two phases.
 
 **Phase 1 — compute time** runs inside a dask worker when a chunk is actually computed. `MultiBandStacBackendArray.__getitem__` receives the exact `(band, time, y, x)` index for the chunk, derives the chunk's spatial footprint, queries DuckDB for only the COGs that overlap that footprint and time step, reads and reprojects all selected bands concurrently with `asyncio`, and mosaics the results.
 
-This split means that `open()` is nearly instant even for large queries, and the DuckDB spatial filter runs once per chunk rather than over the entire bbox at open time. The startup inspection is still deliberately small: one representative item and one `GeoTIFF.open(...)` per requested band, just enough to validate store access and infer the output dtype/nodata contract.
+This split means that `open()` is nearly instant even for large queries, and the DuckDB spatial filter runs once per chunk rather than over the entire bbox at open time. The startup inspection is still deliberately small: one representative item and one `GeoTIFF.open(...)` per requested band, just enough to validate store access and infer the output dtype/nodata contract. That contract is enforced later during chunk reads unless the caller passed `dtype=` or `nodata=` explicitly.
 
 ## Module overview
 
@@ -50,6 +50,7 @@ src/lazycogs/
    - `dtype`: explicit `dtype=` wins, otherwise `_promote_dtypes(...)`
    - `nodata`: explicit `nodata=` wins, otherwise `_resolve_output_nodata(...)`
    - float-only mosaic methods (`MeanMethod`, `MedianMethod`, `StdevMethod`) fail early unless the resolved dtype is floating
+   - inferred `dtype` and `nodata` are runtime-validated during chunk reads so later heterogeneous assets fail loudly instead of truncating or silently remapping nodata
 6. Calls `_build_time_steps()`: queries the parquet source via `duckdb_client.search_to_arrow(...)` to obtain an Arrow table containing only the `datetime` and `start_datetime` columns (plus any filter/sort fields). Extracts timestamps from the Arrow columns without Python-level dict walking, buckets them with the `_TemporalGrouper`, deduplicates, and returns sorted `(filter_strings, time_coords)` pairs. Only groups with at least one item produce a time step.
 7. Calls `compute_output_grid()` to get the output affine transform and dimensions (width, height). No eager coordinate arrays are produced.
 8. Creates a single `MultiBandStacBackendArray` (a dataclass) with shape `(band, time, y, x)` holding all the parameters needed to materialise any chunk later, then wraps it in one `xarray.core.indexing.LazilyIndexedArray`. This avoids `xr.concat` (used internally by `ds.to_array()`), which would eagerly load `LazilyIndexedArray`-backed objects.
@@ -109,7 +110,7 @@ A `rasterix.RasterIndex` is attached to every DataArray returned by `open()`. Th
 
 ## Per-chunk read and resample pipeline
 
-Each call to `_read_item_band()` in `_chunk_reader.py` follows a four-step pipeline to turn a remote COG into a correctly-sized, correctly-projected numpy array for one destination chunk.
+Each call to `_read_item_band()` in `_chunk_reader.py` first validates the source asset against the inferred output contract, then follows a four-step pipeline to turn a remote COG into a correctly-sized, correctly-projected numpy array for one destination chunk.
 
 ### 1. Overview selection
 

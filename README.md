@@ -73,8 +73,8 @@ await rustac.search_to(
 
 # Open a fully lazy (band, time, y, x) DataArray. No pixel data is read yet.
 # lazycogs does inspect one representative item here: it picks preferred data
-# assets, opens one COG per requested band concurrently, infers a default
-# dtype, and advertises nodata only when the sampled bands agree on one.
+# assets, opens one COG per requested band concurrently, and infers a default
+# dtype/nodata contract from that representative sample.
 da = lazycogs.open(
     "items.parquet",
     bbox=dst_bbox,
@@ -109,7 +109,9 @@ For most users, the recommended path is still obstore: leave `store=None` to aut
 
 When you omit `dtype=`, `lazycogs.open()` samples one representative COG per
 requested band and infers one safe output dtype instead of defaulting to
-`float32`.
+`float32`. That inferred dtype is then enforced at chunk-read time: if a later
+asset has a source dtype that cannot be safely represented, compute raises and
+asks you to pass `dtype=` explicitly.
 
 When you omit `nodata=`:
 
@@ -120,6 +122,11 @@ When you omit `nodata=`:
   `nodata=` explicitly
 - if sampled bands have no nodata sentinel, no nodata attrs are attached and
   `0` remains only an implementation fill value for uncovered regions
+- if later chunk reads encounter a conflicting source nodata value, compute
+  raises and asks you to pass `nodata=` explicitly
+
+Explicit `dtype=` and `nodata=` stay authoritative even when source assets are
+heterogeneous.
 
 Float-only mosaic methods such as `MeanMethod`, `MedianMethod`, and
 `StdevMethod` require a floating output dtype. If inference stays integer,

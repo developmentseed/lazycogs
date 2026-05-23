@@ -253,21 +253,36 @@ def _promote_dtypes(dtypes: list[np.dtype]) -> np.dtype:
     return _promote_integer_dtypes(normalized)
 
 
+def _dtype_is_compatible(source: np.dtype, resolved: np.dtype) -> bool:
+    """Return True when *source* can be represented safely by *resolved*."""
+    return bool(np.can_cast(source, resolved, casting="safe"))
+
+
 def _resolve_output_nodata(
     nodata_values: list[float | int | None],
 ) -> float | int | None:
     """Resolve sampled nodata values to one scalar output sentinel."""
-    seen = {
-        value.item() if isinstance(value, np.generic) else value
-        for value in nodata_values
-        if value is not None
-    }
-    if not seen:
+    saw_nan = False
+    scalars: set[float | int] = set()
+
+    for value in nodata_values:
+        if value is None:
+            continue
+        scalar = value.item() if isinstance(value, np.generic) else value
+        if isinstance(scalar, float) and np.isnan(scalar):
+            saw_nan = True
+            continue
+        scalars.add(scalar)
+
+    if not scalars and not saw_nan:
         return None
-    if len(seen) == 1:
-        return next(iter(seen))
+    if not scalars and saw_nan:
+        return np.nan
+    if len(scalars) == 1 and not saw_nan:
+        return next(iter(scalars))
+
     raise ValueError(
-        f"Conflicting sampled nodata values {sorted(seen)!r}; pass nodata= explicitly.",
+        "Conflicting sampled nodata values; pass nodata= explicitly.",
     )
 
 
@@ -389,6 +404,8 @@ def _build_dataarray(
     ids: list[str] | None,
     nodata: float | None,
     out_dtype: np.dtype,
+    dtype_was_explicit: bool,
+    nodata_was_explicit: bool,
     method_cls: type[MosaicMethodBase],
     chunks: dict[str, int] | None,
     store: Store | None = None,
@@ -419,6 +436,8 @@ def _build_dataarray(
         ids: STAC item IDs forwarded to per-chunk DuckDB queries.
         nodata: No-data fill value.
         out_dtype: Output array dtype.
+        dtype_was_explicit: Whether the caller passed ``dtype=`` explicitly.
+        nodata_was_explicit: Whether the caller passed ``nodata=`` explicitly.
         method_cls: Mosaic method class.
         chunks: Passed to ``DataArray.chunk()`` if not ``None``.
         store: Pre-configured :class:`async_geotiff.Store` accepted by
@@ -454,6 +473,8 @@ def _build_dataarray(
         dst_height=dst_height,
         dtype=out_dtype,
         nodata=nodata,
+        dtype_was_explicit=dtype_was_explicit,
+        nodata_was_explicit=nodata_was_explicit,
         mosaic_method_cls=method_cls,
         store=store,
         max_concurrent_reads=max_concurrent_reads,
@@ -755,14 +776,16 @@ def open(  # noqa: A001
             f"(bbox={bbox_4326}, datetime={datetime}).",
         )
 
+    dtype_was_explicit = dtype is not None
+    nodata_was_explicit = nodata is not None
     out_dtype = (
         np.dtype(dtype)
-        if dtype is not None
+        if dtype_was_explicit
         else _promote_dtypes([inspection.dtypes[band] for band in resolved_bands])
     )
     resolved_nodata = (
         nodata
-        if nodata is not None
+        if nodata_was_explicit
         else _resolve_output_nodata(
             [inspection.nodata_values[band] for band in resolved_bands],
         )
@@ -795,6 +818,8 @@ def open(  # noqa: A001
         ids=ids,
         nodata=resolved_nodata,
         out_dtype=out_dtype,
+        dtype_was_explicit=dtype_was_explicit,
+        nodata_was_explicit=nodata_was_explicit,
         method_cls=method_cls,
         chunks=chunks,
         store=store,

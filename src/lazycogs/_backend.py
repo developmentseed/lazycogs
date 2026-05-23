@@ -58,6 +58,9 @@ class _ChunkReadPlan:
         chunk_width: Chunk width in pixels.
         chunk_height: Chunk height in pixels.
         nodata: No-data fill value, or ``None``.
+        out_dtype: Output array dtype for the chunk.
+        dtype_was_explicit: Whether the caller passed ``dtype=`` explicitly.
+        nodata_was_explicit: Whether the caller passed ``nodata=`` explicitly.
         mosaic_method_cls: Mosaic method class, or ``None`` for the default.
         store: Pre-configured :class:`async_geotiff.Store` accepted by
             ``GeoTIFF.open``, or ``None``.
@@ -80,7 +83,10 @@ class _ChunkReadPlan:
     dst_crs: CRS
     chunk_width: int
     chunk_height: int
-    nodata: float | None
+    nodata: float | int | None
+    out_dtype: np.dtype
+    dtype_was_explicit: bool
+    nodata_was_explicit: bool
     mosaic_method_cls: type[MosaicMethodBase] | None
     store: Store | None
     max_concurrent_reads: int
@@ -256,6 +262,9 @@ async def _run_one_date(
         chunk_width=plan.chunk_width,
         chunk_height=plan.chunk_height,
         nodata=plan.nodata,
+        out_dtype=plan.out_dtype,
+        dtype_was_explicit=plan.dtype_was_explicit,
+        nodata_was_explicit=plan.nodata_was_explicit,
         mosaic_method_cls=plan.mosaic_method_cls,
         store=plan.store,
         max_concurrent_reads=plan.max_concurrent_reads,
@@ -330,6 +339,8 @@ class MultiBandStacBackendArray(BackendArray):
         dst_height: Full output grid height in pixels.
         dtype: NumPy dtype of the output array.
         nodata: No-data fill value, or ``None``.
+        dtype_was_explicit: Whether the caller passed ``dtype=`` explicitly.
+        nodata_was_explicit: Whether the caller passed ``nodata=`` explicitly.
         mosaic_method_cls: Mosaic method class instantiated per chunk, or
             ``None`` to use the default
             :class:`~lazycogs._mosaic_methods.FirstMethod`.
@@ -365,7 +376,9 @@ class MultiBandStacBackendArray(BackendArray):
     dst_width: int
     dst_height: int
     dtype: np.dtype
-    nodata: float | None
+    nodata: float | int | None
+    dtype_was_explicit: bool
+    nodata_was_explicit: bool
     mosaic_method_cls: type[MosaicMethodBase] | None = field(default=None)
     store: Store | None = field(default=None)
     max_concurrent_reads: int = field(default=32)
@@ -556,6 +569,9 @@ class MultiBandStacBackendArray(BackendArray):
             chunk_width=win.chunk_width,
             chunk_height=win.chunk_height,
             nodata=self.nodata,
+            out_dtype=self.dtype,
+            dtype_was_explicit=self.dtype_was_explicit,
+            nodata_was_explicit=self.nodata_was_explicit,
             mosaic_method_cls=self.mosaic_method_cls,
             store=self.store,
             max_concurrent_reads=self.max_concurrent_reads,

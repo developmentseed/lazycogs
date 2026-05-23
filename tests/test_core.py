@@ -15,6 +15,7 @@ import lazycogs
 from lazycogs._backend import MultiBandStacBackendArray
 from lazycogs._core import (
     _build_time_steps,
+    _dtype_is_compatible,
     _inspect_first_item,
     _promote_dtypes,
     _resolve_output_nodata,
@@ -466,17 +467,40 @@ def test_promote_dtypes_rejects_uint64_plus_int64():
 
 @pytest.mark.parametrize(
     ("sampled", "expected"),
-    [([None, None], None), ([0, np.int16(0)], 0), ([-9999, -9999], -9999)],
+    [
+        ([None, None], None),
+        ([0, np.int16(0)], 0),
+        ([-9999, -9999], -9999),
+        ([np.nan, np.nan], np.nan),
+    ],
 )
 def test_resolve_output_nodata(sampled, expected):
     """Coherent sampled nodata values resolve to one scalar or None."""
-    assert _resolve_output_nodata(sampled) == expected
+    resolved = _resolve_output_nodata(sampled)
+    if isinstance(expected, float) and np.isnan(expected):
+        assert isinstance(resolved, float)
+        assert np.isnan(resolved)
+        return
+    assert resolved == expected
 
 
 def test_resolve_output_nodata_rejects_conflicts():
     """Conflicting sampled nodata values raise instead of guessing."""
     with pytest.raises(ValueError, match="Conflicting sampled nodata values"):
         _resolve_output_nodata([0, -9999])
+
+    with pytest.raises(ValueError, match="Conflicting sampled nodata values"):
+        _resolve_output_nodata([0, np.nan])
+
+
+def test_dtype_is_compatible_accepts_equal_dtype():
+    """A dtype is always compatible with itself."""
+    assert _dtype_is_compatible(np.dtype("uint16"), np.dtype("uint16")) is True
+
+
+def test_dtype_is_compatible_rejects_unsafe_cast():
+    """Unsafe inferred output dtypes are rejected."""
+    assert _dtype_is_compatible(np.dtype("float32"), np.dtype("uint16")) is False
 
 
 def test_inspect_first_item_returns_dtype_and_nodata_metadata():

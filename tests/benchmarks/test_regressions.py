@@ -38,16 +38,32 @@ def _write_asset_variant(
     *,
     nodata: float | None,
     pixel_updates: list[tuple[int, int, int]] | None = None,
+    dtype: str | None = None,
 ) -> str:
     """Copy one benchmark GeoTIFF and apply metadata/data tweaks in place."""
     dest.parent.mkdir(parents=True, exist_ok=True)
-    copy2(_path_from_href(source_href), dest)
 
-    with rasterio.open(dest, "r+", IGNORE_COG_LAYOUT_BREAK="YES") as dataset:
+    if dtype is None:
+        copy2(_path_from_href(source_href), dest)
+        with rasterio.open(dest, "r+", IGNORE_COG_LAYOUT_BREAK="YES") as dataset:
+            dataset.nodata = nodata
+            if pixel_updates:
+                for row, col, value in pixel_updates:
+                    patch = np.array([[value]], dtype=dataset.dtypes[0])
+                    dataset.write(patch, 1, window=Window(col, row, 1, 1))
+        return dest.as_uri()
+
+    with rasterio.open(_path_from_href(source_href)) as source:
+        profile = source.profile.copy()
+        profile.update(dtype=dtype, tiled=True)
+        data = source.read().astype(dtype)
+
+    with rasterio.open(dest, "w", **profile) as dataset:
+        dataset.write(data)
         dataset.nodata = nodata
         if pixel_updates:
             for row, col, value in pixel_updates:
-                patch = np.array([[value]], dtype=dataset.dtypes[0])
+                patch = np.array([[value]], dtype=dtype)
                 dataset.write(patch, 1, window=Window(col, row, 1, 1))
 
     return dest.as_uri()
@@ -172,14 +188,181 @@ def test_open_accepts_conflicting_sampled_nodata_with_explicit_override(
     assert da.attrs["missing_value"] == -9999
 
 
-def test_chunk_reads_still_mask_per_cog_nodata_when_output_nodata_is_unknown(
+def test_compute_raises_on_later_incompatible_auto_inferred_dtype(
     tmp_path: Path,
     benchmark_items: list[dict[str, Any]],
 ) -> None:
-    """Chunk reads still honor per-COG nodata.
+    """Compute fails loudly when a later item violates inferred dtype."""
+    first_item = deepcopy(benchmark_items[0])
+    row, col = _item_center_pixel(first_item, "red")
+    pixel_bbox = _pixel_bbox(first_item["assets"]["red"]["href"], row=row, col=col)
+    first_item["assets"]["red"]["href"] = _write_asset_variant(
+        first_item["assets"]["red"]["href"],
+        tmp_path / "dtype-conflict" / "red-masked-first.tif",
+        nodata=0,
+        pixel_updates=[(row, col, 0)],
+    )
 
-    This still works even when no output nodata is advertised.
-    """
+    second_item = deepcopy(first_item)
+    second_item["id"] = f"{first_item['id']}-float32"
+    second_item["assets"]["red"]["href"] = _write_asset_variant(
+        benchmark_items[0]["assets"]["red"]["href"],
+        tmp_path / "dtype-conflict" / "red-float32.tif",
+        nodata=0,
+        dtype="float32",
+    )
+
+    parquet_path = _write_items_parquet(
+        tmp_path / "dtype-conflict.parquet",
+        [first_item, second_item],
+    )
+
+    da = lazycogs.open(
+        parquet_path,
+        bbox=pixel_bbox,
+        crs=BENCHMARK_NATIVE_CRS,
+        resolution=10.0,
+        bands=BENCHMARK_SINGLE_BAND,
+    )
+
+    with pytest.raises(ValueError, match="Auto-inferred output dtype"):
+        da.compute()
+
+
+def test_compute_accepts_mixed_dtypes_with_explicit_dtype(
+    tmp_path: Path,
+    benchmark_items: list[dict[str, Any]],
+) -> None:
+    """Explicit output dtype remains authoritative for mixed source dtypes."""
+    first_item = deepcopy(benchmark_items[0])
+    row, col = _item_center_pixel(first_item, "red")
+    pixel_bbox = _pixel_bbox(first_item["assets"]["red"]["href"], row=row, col=col)
+    first_item["assets"]["red"]["href"] = _write_asset_variant(
+        first_item["assets"]["red"]["href"],
+        tmp_path / "dtype-explicit" / "red-masked-first.tif",
+        nodata=0,
+        pixel_updates=[(row, col, 0)],
+    )
+
+    second_item = deepcopy(first_item)
+    second_item["id"] = f"{first_item['id']}-float32"
+    second_item["assets"]["red"]["href"] = _write_asset_variant(
+        benchmark_items[0]["assets"]["red"]["href"],
+        tmp_path / "dtype-explicit" / "red-float32.tif",
+        nodata=0,
+        dtype="float32",
+        pixel_updates=[(row, col, 5)],
+    )
+
+    parquet_path = _write_items_parquet(
+        tmp_path / "dtype-explicit.parquet",
+        [first_item, second_item],
+    )
+
+    da = lazycogs.open(
+        parquet_path,
+        bbox=pixel_bbox,
+        crs=BENCHMARK_NATIVE_CRS,
+        resolution=10.0,
+        bands=BENCHMARK_SINGLE_BAND,
+        dtype="float32",
+    )
+
+    data = da.compute()
+
+    assert data.dtype == np.dtype("float32")
+    assert data.item() == pytest.approx(5.0)
+
+
+def test_compute_raises_on_later_conflicting_auto_inferred_nodata(
+    tmp_path: Path,
+    benchmark_items: list[dict[str, Any]],
+) -> None:
+    """Compute fails loudly when a later item violates inferred nodata."""
+    first_item = deepcopy(benchmark_items[0])
+    row, col = _item_center_pixel(first_item, "red")
+    pixel_bbox = _pixel_bbox(first_item["assets"]["red"]["href"], row=row, col=col)
+    first_item["assets"]["red"]["href"] = _write_asset_variant(
+        first_item["assets"]["red"]["href"],
+        tmp_path / "nodata-conflict" / "red-masked-first.tif",
+        nodata=0,
+        pixel_updates=[(row, col, 0)],
+    )
+
+    second_item = deepcopy(first_item)
+    second_item["id"] = f"{first_item['id']}-nodata-conflict"
+    second_item["assets"]["red"]["href"] = _write_asset_variant(
+        benchmark_items[0]["assets"]["red"]["href"],
+        tmp_path / "nodata-conflict" / "red-nodata-conflict.tif",
+        nodata=-9999,
+        pixel_updates=[(row, col, 7)],
+    )
+
+    parquet_path = _write_items_parquet(
+        tmp_path / "nodata-conflict.parquet",
+        [first_item, second_item],
+    )
+
+    da = lazycogs.open(
+        parquet_path,
+        bbox=pixel_bbox,
+        crs=BENCHMARK_NATIVE_CRS,
+        resolution=10.0,
+        bands=BENCHMARK_SINGLE_BAND,
+    )
+
+    with pytest.raises(ValueError, match="Auto-inferred output nodata"):
+        da.compute()
+
+
+def test_compute_accepts_conflicting_nodata_with_explicit_override(
+    tmp_path: Path,
+    benchmark_items: list[dict[str, Any]],
+) -> None:
+    """Explicit output nodata remains authoritative for mixed source nodata."""
+    first_item = deepcopy(benchmark_items[0])
+    row, col = _item_center_pixel(first_item, "red")
+    pixel_bbox = _pixel_bbox(first_item["assets"]["red"]["href"], row=row, col=col)
+    first_item["assets"]["red"]["href"] = _write_asset_variant(
+        first_item["assets"]["red"]["href"],
+        tmp_path / "nodata-explicit" / "red-masked-first.tif",
+        nodata=0,
+        pixel_updates=[(row, col, 0)],
+    )
+
+    second_item = deepcopy(first_item)
+    second_item["id"] = f"{first_item['id']}-nodata-conflict"
+    second_item["assets"]["red"]["href"] = _write_asset_variant(
+        benchmark_items[0]["assets"]["red"]["href"],
+        tmp_path / "nodata-explicit" / "red-nodata-conflict.tif",
+        nodata=-9999,
+        pixel_updates=[(row, col, 7)],
+    )
+
+    da = lazycogs.open(
+        _write_items_parquet(
+            tmp_path / "nodata-explicit.parquet",
+            [first_item, second_item],
+        ),
+        bbox=pixel_bbox,
+        crs=BENCHMARK_NATIVE_CRS,
+        resolution=10.0,
+        bands=BENCHMARK_SINGLE_BAND,
+        nodata=0,
+    )
+
+    data = da.compute()
+
+    assert data.shape == (1, 1, 1, 1)
+    assert data.item() == 7
+    assert da.attrs["nodata"] == 0
+
+
+def test_chunk_reads_still_mask_per_cog_nodata_with_explicit_override(
+    tmp_path: Path,
+    benchmark_items: list[dict[str, Any]],
+) -> None:
+    """Chunk reads still honor masked source pixels with explicit nodata."""
     base_item = deepcopy(benchmark_items[0])
     first_href = base_item["assets"]["red"]["href"]
     test_row, test_col = _item_center_pixel(base_item, "red")
@@ -225,10 +408,11 @@ def test_chunk_reads_still_mask_per_cog_nodata_when_output_nodata_is_unknown(
         resolution=10.0,
         bands=BENCHMARK_SINGLE_BAND,
         mosaic_method=LowestMethod,
+        nodata=0,
     )
     value = da.compute().item()
 
-    assert "nodata" not in da.attrs
-    assert "_FillValue" not in da.attrs
-    assert "missing_value" not in da.attrs
+    assert da.attrs["nodata"] == 0
+    assert da.attrs["_FillValue"] == 0
+    assert da.attrs["missing_value"] == 0
     assert value == 10
