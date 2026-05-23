@@ -4,8 +4,10 @@ Run ``uv run python scripts/prepare_benchmark_data.py`` before using these fixtu
 """
 
 from pathlib import Path
+from typing import Any
 
 import pytest
+import rustac
 
 _DATA_DIR = Path(__file__).parents[2] / ".benchmark_data"
 _PARQUET = _DATA_DIR / "benchmark_items.parquet"
@@ -59,3 +61,9 @@ def expanded_benchmark_parquet() -> str:
             "Run `uv run python scripts/prepare_benchmark_data.py` first.",
         )
     return str(_EXPANDED_PARQUET)
+
+
+@pytest.fixture(scope="session")
+def benchmark_items(benchmark_parquet: str) -> list[dict[str, Any]]:
+    """Load the local benchmark STAC items used by offline regression tests."""
+    return rustac.search_sync(benchmark_parquet, use_duckdb=True)

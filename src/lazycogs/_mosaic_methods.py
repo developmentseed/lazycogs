@@ -19,6 +19,8 @@ from numpy import ma
 class MosaicMethodBase(ABC):
     """Abstract base class for pixel-selection mosaic methods."""
 
+    requires_float: bool = False
+
     def __init__(self) -> None:
         """Initialise an empty mosaic accumulator."""
         self._mosaic: ma.MaskedArray | None = None
@@ -117,6 +119,8 @@ class LowestMethod(MosaicMethodBase):
 class MeanMethod(MosaicMethodBase):
     """Use the mean of all valid pixel values across tiles."""
 
+    requires_float = True
+
     def __init__(self) -> None:
         """Initialise accumulators for incremental mean computation."""
         super().__init__()
@@ -161,6 +165,8 @@ class MeanMethod(MosaicMethodBase):
 class MedianMethod(MosaicMethodBase):
     """Use the median of all valid pixel values across tiles."""
 
+    requires_float = True
+
     def __init__(self) -> None:
         """Initialise the tile stack."""
         super().__init__()
@@ -200,6 +206,8 @@ class MedianMethod(MosaicMethodBase):
 
 class StdevMethod(MosaicMethodBase):
     """Use the standard deviation of all valid pixel values across tiles."""
+
+    requires_float = True
 
     def __init__(self) -> None:
         """Initialise the tile stack."""

@@ -72,8 +72,9 @@ await rustac.search_to(
 )
 
 # Open a fully lazy (band, time, y, x) DataArray. No pixel data is read yet.
-# lazycogs does perform a small storage-access smoketest here so auth or
-# object-store misconfiguration fails early instead of on the first chunk read.
+# lazycogs does inspect one representative item here: it picks preferred data
+# assets, opens one COG per requested band concurrently, infers a default
+# dtype, and advertises nodata only when the sampled bands agree on one.
 da = lazycogs.open(
     "items.parquet",
     bbox=dst_bbox,
@@ -104,6 +105,26 @@ reading many chunks inside an already-running loop.
 `lazycogs.open(..., store=...)` accepts any store object that satisfies `async_geotiff.Store`.
 For most users, the recommended path is still obstore: leave `store=None` to auto-resolve per-asset stores, or call `lazycogs.store_for()` to build one explicitly.
 
+## Dtype and nodata semantics
+
+When you omit `dtype=`, `lazycogs.open()` samples one representative COG per
+requested band and infers one safe output dtype instead of defaulting to
+`float32`.
+
+When you omit `nodata=`:
+
+- if sampled bands all agree on one scalar nodata sentinel, the returned
+  `DataArray` gets `attrs["nodata"]`, `attrs["_FillValue"]`, and
+  `attrs["missing_value"]`
+- if sampled bands disagree, `open()` raises `ValueError` and asks you to pass
+  `nodata=` explicitly
+- if sampled bands have no nodata sentinel, no nodata attrs are attached and
+  `0` remains only an implementation fill value for uncovered regions
+
+Float-only mosaic methods such as `MeanMethod`, `MedianMethod`, and
+`StdevMethod` require a floating output dtype. If inference stays integer,
+pass `dtype="float32"` or `dtype="float64"` explicitly.
+
 ### Concurrency notes
 
 - Sync callers submit work to one shared persistent lazycogs event loop.
@@ -116,6 +137,9 @@ For most users, the recommended path is still obstore: leave `store=None` to aut
   thread. On the local benchmark fixture, DuckDB stayed under 2% of
   per-date chunk wall time, so there is no separate per-thread DuckDB
   client pool today.
+- `scripts/prepare_benchmark_data.py` also powers offline regression coverage
+  under `tests/benchmarks/`, so the contract tests run on local cached files
+  instead of live network reads.
 - If you need to construct a loop-bound resource for lazycogs internals,
   use `lazycogs.run_on_loop(...)`.
 - Low-level callers should use `await lazycogs.read_chunk_async(...)`.

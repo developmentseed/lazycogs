@@ -13,7 +13,13 @@ from rustac import DuckdbClient
 
 import lazycogs
 from lazycogs._backend import MultiBandStacBackendArray
-from lazycogs._core import _build_time_steps, _smoketest_store
+from lazycogs._core import (
+    _build_time_steps,
+    _inspect_first_item,
+    _promote_dtypes,
+    _resolve_output_nodata,
+)
+from lazycogs._mosaic_methods import MeanMethod
 from lazycogs._temporal import _DayGrouper, _FixedDayGrouper, _MonthGrouper
 
 
@@ -312,8 +318,12 @@ def opened_dataarray(tmp_path):
 
     table = _items_to_arrow([{"properties": {"datetime": "2023-01-15T10:00:00Z"}}])
 
+    class _FakeGeoTIFF:
+        dtype = np.dtype("uint16")
+        nodata = 0
+
     async def fake_open(path: str, *, store):
-        return object()
+        return _FakeGeoTIFF()
 
     with (
         patch("rustac.DuckdbClient.search", return_value=[_fake_open_item()]),
@@ -361,6 +371,12 @@ def test_open_sets_expected_dataarray_attributes(opened_dataarray):
     assert "spatial:" in names
     assert "proj:" in names
 
+    # Inferred output contract
+    assert da.dtype == np.dtype("uint16")
+    assert da.attrs["nodata"] == 0
+    assert da.attrs["_FillValue"] == 0
+    assert da.attrs["missing_value"] == 0
+
     # Internal bookkeeping attributes
     assert isinstance(da.attrs["_stac_backend"], MultiBandStacBackendArray)
     assert da.attrs["_stac_time_coords"].dtype == np.dtype("datetime64[D]")
@@ -393,7 +409,7 @@ def test_chunked_spatial_selection_full_compute_succeeds(opened_dataarray):
 
 
 # ---------------------------------------------------------------------------
-# _smoketest_store
+# Startup inspection and output contract helpers
 # ---------------------------------------------------------------------------
 
 
@@ -407,13 +423,19 @@ class _ProtocolStore:
         return [b"" for _ in starts_ends]
 
 
-_SMOKETEST_ITEM = {
+_INSPECTION_ITEM = {
     "id": "smoke-item",
     "stac_extensions": [],
     "properties": {"datetime": "2023-06-01T00:00:00Z"},
     "assets": {
+        "preview": {"href": "s3://my-bucket/preview.jpg", "type": "image/jpeg"},
         "B04": {
             "href": "s3://my-bucket/B04.tif",
+            "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+            "roles": ["data"],
+        },
+        "B08": {
+            "href": "s3://my-bucket/B08.tif",
             "type": "image/tiff; application=geotiff; profile=cloud-optimized",
             "roles": ["data"],
         },
@@ -421,52 +443,149 @@ _SMOKETEST_ITEM = {
 }
 
 
-def test_smoketest_passes_when_geotiff_open_succeeds():
-    """_smoketest_store does not raise when GeoTIFF.open succeeds."""
+@pytest.mark.parametrize(
+    ("sampled", "expected"),
+    [
+        ([np.dtype("uint16")], np.dtype("uint16")),
+        ([np.dtype("uint8"), np.dtype("int16")], np.dtype("int16")),
+        ([np.dtype("uint16"), np.dtype("int16")], np.dtype("int32")),
+        ([np.dtype("float32"), np.dtype("uint16")], np.dtype("float32")),
+        ([np.dtype("float64"), np.dtype("uint16")], np.dtype("float64")),
+    ],
+)
+def test_promote_dtypes(sampled, expected):
+    """Sampled dtypes promote to the expected output dtype."""
+    assert _promote_dtypes(sampled) == expected
+
+
+def test_promote_dtypes_rejects_uint64_plus_int64():
+    """The unsupported uint64 + int64 case fails explicitly."""
+    with pytest.raises(ValueError, match="uint64 and int64"):
+        _promote_dtypes([np.dtype("uint64"), np.dtype("int64")])
+
+
+@pytest.mark.parametrize(
+    ("sampled", "expected"),
+    [([None, None], None), ([0, np.int16(0)], 0), ([-9999, -9999], -9999)],
+)
+def test_resolve_output_nodata(sampled, expected):
+    """Coherent sampled nodata values resolve to one scalar or None."""
+    assert _resolve_output_nodata(sampled) == expected
+
+
+def test_resolve_output_nodata_rejects_conflicts():
+    """Conflicting sampled nodata values raise instead of guessing."""
+    with pytest.raises(ValueError, match="Conflicting sampled nodata values"):
+        _resolve_output_nodata([0, -9999])
+
+
+def test_inspect_first_item_returns_dtype_and_nodata_metadata():
+    """Representative-item inspection returns ordered bands and sampled metadata."""
 
     store = MemoryStore()
     store.put("B04.tif", b"dummy")
+    store.put("B08.tif", b"dummy")
+
+    class _FakeGeoTIFF:
+        def __init__(self, dtype: str, nodata: int | None) -> None:
+            self.dtype = np.dtype(dtype)
+            self.nodata = nodata
 
     async def fake_open(path: str, *, store):
-        assert path == "B04.tif"
-        assert store is store_obj
-        return object()
+        if path == "B04.tif":
+            return _FakeGeoTIFF("uint16", 0)
+        if path == "B08.tif":
+            return _FakeGeoTIFF("int16", 0)
+        raise AssertionError(path)
 
-    store_obj = store
     with (
-        patch("rustac.DuckdbClient.search", return_value=[_SMOKETEST_ITEM]),
+        patch("rustac.DuckdbClient.search", return_value=[_INSPECTION_ITEM]),
         patch("lazycogs._core.GeoTIFF.open", side_effect=fake_open),
     ):
-        _smoketest_store(
+        inspection = _inspect_first_item(
             "items.parquet",
             duckdb_client=DuckdbClient(),
             store=store,
             path_from_href=lambda href: href.split("/", 3)[-1],
         )
 
+    assert inspection.item_found is True
+    assert inspection.bands == ["B04", "B08"]
+    assert inspection.dtypes["B04"] == np.dtype("uint16")
+    assert inspection.dtypes["B08"] == np.dtype("int16")
+    assert inspection.nodata_values["B04"] == 0
+    assert inspection.nodata_values["B08"] == 0
 
-def test_smoketest_raises_runtime_error_on_geotiff_open_failure():
-    """_smoketest_store raises RuntimeError when GeoTIFF.open fails."""
+
+def test_inspect_first_item_includes_filter_fields_in_probe_query():
+    """Representative-item inspection includes filter fields needed by rustac."""
 
     store = MemoryStore()
+    store.put("B04.tif", b"dummy")
+
+    class _FakeGeoTIFF:
+        dtype = np.dtype("uint16")
+        nodata = 0
+
+    async def fake_open(path: str, *, store):
+        assert path == "B04.tif"
+        return _FakeGeoTIFF()
+
+    def fake_search(*args, **kwargs):
+        assert "proj:epsg" in kwargs["include"]
+        return [_fake_open_item()]
+
+    with (
+        patch("rustac.DuckdbClient.search", side_effect=fake_search),
+        patch("lazycogs._core.GeoTIFF.open", side_effect=fake_open),
+    ):
+        inspection = _inspect_first_item(
+            "items.parquet",
+            duckdb_client=DuckdbClient(),
+            filter={"op": "=", "args": [{"property": "proj:epsg"}, "32615"]},
+            bands=["B04"],
+            store=store,
+            path_from_href=lambda href: href.split("/", 3)[-1],
+        )
+
+    assert inspection.item_found is True
+    assert inspection.bands == ["B04"]
+
+
+def test_inspect_first_item_returns_no_item_without_opening_geotiff():
+    """No matching items returns item_found=False and skips GeoTIFF.open."""
+    with (
+        patch("rustac.DuckdbClient.search", return_value=[]),
+        patch("lazycogs._core.GeoTIFF.open") as mock_open,
+    ):
+        inspection = _inspect_first_item("items.parquet", duckdb_client=DuckdbClient())
+
+    assert inspection.item_found is False
+    assert inspection.bands == []
+    mock_open.assert_not_called()
+
+
+def test_inspect_first_item_wraps_store_open_failures():
+    """Store-open failures keep the public authentication guidance."""
 
     async def fake_open(path: str, *, store):
         raise FileNotFoundError(path)
 
     with (
-        patch("rustac.DuckdbClient.search", return_value=[_SMOKETEST_ITEM]),
+        patch("rustac.DuckdbClient.search", return_value=[_INSPECTION_ITEM]),
         patch("lazycogs._core.GeoTIFF.open", side_effect=fake_open),
         pytest.raises(RuntimeError, match=r"GeoTIFF\.open"),
     ):
-        _smoketest_store(
+        _inspect_first_item(
             "items.parquet",
             duckdb_client=DuckdbClient(),
-            store=store,
+            bands=["B04"],
+            store=MemoryStore(),
             path_from_href=lambda href: href.split("/", 3)[-1],
         )
 
 
-def test_smoketest_accepts_protocol_store_without_head(tmp_path):
+def test_open_accepts_protocol_store_without_head(tmp_path):
     """A custom protocol store without head() still passes startup validation."""
 
     parquet = tmp_path / "items.parquet"
@@ -474,10 +593,14 @@ def test_smoketest_accepts_protocol_store_without_head(tmp_path):
     store = _ProtocolStore()
     table = _items_to_arrow([{"properties": {"datetime": "2023-01-15T10:00:00Z"}}])
 
+    class _FakeGeoTIFF:
+        dtype = np.dtype("uint16")
+        nodata = 0
+
     async def fake_open(path: str, *, store):
         assert path == "B04.tif"
         assert store is protocol_store
-        return object()
+        return _FakeGeoTIFF()
 
     protocol_store = store
     with (
@@ -497,43 +620,32 @@ def test_smoketest_accepts_protocol_store_without_head(tmp_path):
     assert da.attrs["_stac_backend"].store is store
 
 
-def test_smoketest_no_op_when_no_items():
-    """_smoketest_store does nothing when the query returns no items."""
-    with patch("rustac.DuckdbClient.search", return_value=[]):
-        _smoketest_store("items.parquet", duckdb_client=DuckdbClient())
+def test_open_rejects_float_required_method_with_inferred_integer_dtype(tmp_path):
+    """Float-only mosaic methods fail early when dtype inference stays integer."""
 
+    parquet = tmp_path / "items.parquet"
+    parquet.write_bytes(b"")
+    table = _items_to_arrow([{"properties": {"datetime": "2023-01-15T10:00:00Z"}}])
 
-def test_smoketest_prefers_specified_band():
-    """_smoketest_store uses the first specified band when bands= is given."""
-
-    store = MemoryStore()
-
-    item = {
-        "id": "multi-band-item",
-        "stac_extensions": [],
-        "properties": {"datetime": "2023-06-01T00:00:00Z"},
-        "assets": {
-            "B04": {"href": "s3://bucket/B04.tif", "roles": ["data"]},
-            "B08": {"href": "s3://bucket/B08.tif", "roles": ["data"]},
-        },
-    }
-
-    seen: list[str] = []
+    class _FakeGeoTIFF:
+        dtype = np.dtype("uint16")
+        nodata = 0
 
     async def fake_open(path: str, *, store):
-        seen.append(path)
-        return object()
+        return _FakeGeoTIFF()
 
     with (
-        patch("rustac.DuckdbClient.search", return_value=[item]),
+        patch("rustac.DuckdbClient.search", return_value=[_fake_open_item()]),
+        patch("rustac.DuckdbClient.search_to_arrow", return_value=table),
         patch("lazycogs._core.GeoTIFF.open", side_effect=fake_open),
+        pytest.raises(ValueError, match="requires a floating-point dtype"),
     ):
-        _smoketest_store(
-            "items.parquet",
-            duckdb_client=DuckdbClient(),
-            bands=["B08"],
-            store=store,
+        lazycogs.open(
+            str(parquet),
+            bbox=(0.0, 0.0, 100.0, 100.0),
+            crs="EPSG:32632",
+            resolution=10.0,
+            mosaic_method=MeanMethod,
+            store=MemoryStore(),
             path_from_href=lambda href: href.split("/", 3)[-1],
         )
-
-    assert seen == ["B08.tif"]
