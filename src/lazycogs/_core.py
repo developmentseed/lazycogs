@@ -253,6 +253,30 @@ def _promote_dtypes(dtypes: list[np.dtype]) -> np.dtype:
     return _promote_integer_dtypes(normalized)
 
 
+def _resolve_output_dtype(
+    sampled_dtypes: list[np.dtype],
+    *,
+    dtype: str | np.dtype | None,
+    method_cls: type[MosaicMethodBase],
+) -> tuple[np.dtype, bool]:
+    """Resolve the output dtype, auto-promoting to float when required."""
+    if dtype is not None:
+        resolved = np.dtype(dtype)
+        if method_cls.requires_float and not np.issubdtype(resolved, np.floating):
+            raise ValueError(
+                f"{method_cls.__name__} requires a floating-point dtype, "
+                f"but got explicit dtype {resolved}. "
+                "Pass dtype='float32' or dtype='float64', or omit dtype= to "
+                "let lazycogs choose a float dtype automatically.",
+            )
+        return resolved, True
+
+    resolved = _promote_dtypes(sampled_dtypes)
+    if method_cls.requires_float and not np.issubdtype(resolved, np.floating):
+        return np.dtype("float32"), False
+    return resolved, False
+
+
 def _dtype_is_compatible(source: np.dtype, resolved: np.dtype) -> bool:
     """Return True when *source* can be represented safely by *resolved*."""
     return bool(np.can_cast(source, resolved, casting="safe"))
@@ -624,7 +648,9 @@ def open(  # noqa: A001
             lazycogs advertises a scalar nodata sentinel only when sampled
             bands agree on one.
         dtype: Output array dtype. When omitted, inferred from sampled asset
-            dtypes on the first matching item.
+            dtypes on the first matching item. Float-only mosaic methods may
+            auto-promote inferred integer outputs to ``float32``. Explicit
+            integer ``dtype=`` still raises for those methods.
         mosaic_method: Mosaic method class (not instance) to use.  Defaults
             to :class:`~lazycogs._mosaic_methods.FirstMethod`.
         time_period: ISO 8601 duration string controlling how items are
@@ -776,13 +802,13 @@ def open(  # noqa: A001
             f"(bbox={bbox_4326}, datetime={datetime}).",
         )
 
-    dtype_was_explicit = dtype is not None
-    nodata_was_explicit = nodata is not None
-    out_dtype = (
-        np.dtype(dtype)
-        if dtype_was_explicit
-        else _promote_dtypes([inspection.dtypes[band] for band in resolved_bands])
+    method_cls = mosaic_method if mosaic_method is not None else FirstMethod
+    out_dtype, dtype_was_explicit = _resolve_output_dtype(
+        [inspection.dtypes[band] for band in resolved_bands],
+        dtype=dtype,
+        method_cls=method_cls,
     )
+    nodata_was_explicit = nodata is not None
     resolved_nodata = (
         nodata
         if nodata_was_explicit
@@ -790,12 +816,6 @@ def open(  # noqa: A001
             [inspection.nodata_values[band] for band in resolved_bands],
         )
     )
-    method_cls = mosaic_method if mosaic_method is not None else FirstMethod
-    if method_cls.requires_float and not np.issubdtype(out_dtype, np.floating):
-        raise ValueError(
-            f"{method_cls.__name__} requires a floating-point dtype, "
-            f"but got {out_dtype}. Pass dtype='float32' or dtype='float64'.",
-        )
 
     logger.info(
         "Discovered %d bands and %d time steps.",

@@ -18,9 +18,10 @@ from lazycogs._core import (
     _dtype_is_compatible,
     _inspect_first_item,
     _promote_dtypes,
+    _resolve_output_dtype,
     _resolve_output_nodata,
 )
-from lazycogs._mosaic_methods import MeanMethod
+from lazycogs._mosaic_methods import MeanMethod, MedianMethod
 from lazycogs._temporal import _DayGrouper, _FixedDayGrouper, _MonthGrouper
 
 
@@ -465,6 +466,28 @@ def test_promote_dtypes_rejects_uint64_plus_int64():
         _promote_dtypes([np.dtype("uint64"), np.dtype("int64")])
 
 
+def test_resolve_output_dtype_auto_promotes_integer_inference_for_float_method():
+    """Float-only methods auto-promote inferred integer outputs to float32."""
+    resolved, was_explicit = _resolve_output_dtype(
+        [np.dtype("uint16")],
+        dtype=None,
+        method_cls=MedianMethod,
+    )
+
+    assert resolved == np.dtype("float32")
+    assert was_explicit is False
+
+
+def test_resolve_output_dtype_rejects_explicit_integer_for_float_method():
+    """Explicit integer output dtypes stay authoritative and fail loudly."""
+    with pytest.raises(ValueError, match="explicit dtype uint16"):
+        _resolve_output_dtype(
+            [np.dtype("uint16")],
+            dtype="uint16",
+            method_cls=MeanMethod,
+        )
+
+
 @pytest.mark.parametrize(
     ("sampled", "expected"),
     [
@@ -644,8 +667,8 @@ def test_open_accepts_protocol_store_without_head(tmp_path):
     assert da.attrs["_stac_backend"].store is store
 
 
-def test_open_rejects_float_required_method_with_inferred_integer_dtype(tmp_path):
-    """Float-only mosaic methods fail early when dtype inference stays integer."""
+def test_open_auto_promotes_inferred_integer_dtype_for_float_method(tmp_path):
+    """Float-only mosaic methods auto-resolve inferred integer dtypes to float32."""
 
     parquet = tmp_path / "items.parquet"
     parquet.write_bytes(b"")
@@ -662,13 +685,46 @@ def test_open_rejects_float_required_method_with_inferred_integer_dtype(tmp_path
         patch("rustac.DuckdbClient.search", return_value=[_fake_open_item()]),
         patch("rustac.DuckdbClient.search_to_arrow", return_value=table),
         patch("lazycogs._core.GeoTIFF.open", side_effect=fake_open),
-        pytest.raises(ValueError, match="requires a floating-point dtype"),
+    ):
+        da = lazycogs.open(
+            str(parquet),
+            bbox=(0.0, 0.0, 100.0, 100.0),
+            crs="EPSG:32632",
+            resolution=10.0,
+            mosaic_method=MeanMethod,
+            store=MemoryStore(),
+            path_from_href=lambda href: href.split("/", 3)[-1],
+        )
+
+    assert da.dtype == np.dtype("float32")
+
+
+def test_open_rejects_explicit_integer_dtype_for_float_method(tmp_path):
+    """Float-only mosaic methods reject explicit integer output dtypes."""
+
+    parquet = tmp_path / "items.parquet"
+    parquet.write_bytes(b"")
+    table = _items_to_arrow([{"properties": {"datetime": "2023-01-15T10:00:00Z"}}])
+
+    class _FakeGeoTIFF:
+        dtype = np.dtype("uint16")
+        nodata = 0
+
+    async def fake_open(path: str, *, store):
+        return _FakeGeoTIFF()
+
+    with (
+        patch("rustac.DuckdbClient.search", return_value=[_fake_open_item()]),
+        patch("rustac.DuckdbClient.search_to_arrow", return_value=table),
+        patch("lazycogs._core.GeoTIFF.open", side_effect=fake_open),
+        pytest.raises(ValueError, match="explicit dtype uint16"),
     ):
         lazycogs.open(
             str(parquet),
             bbox=(0.0, 0.0, 100.0, 100.0),
             crs="EPSG:32632",
             resolution=10.0,
+            dtype="uint16",
             mosaic_method=MeanMethod,
             store=MemoryStore(),
             path_from_href=lambda href: href.split("/", 3)[-1],

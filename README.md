@@ -129,8 +129,9 @@ Explicit `dtype=` and `nodata=` stay authoritative even when source assets are
 heterogeneous.
 
 Float-only mosaic methods such as `MeanMethod`, `MedianMethod`, and
-`StdevMethod` require a floating output dtype. If inference stays integer,
-pass `dtype="float32"` or `dtype="float64"` explicitly.
+`StdevMethod` auto-promote inferred integer outputs to `float32`. If you pass
+an explicit integer `dtype=` with one of those methods, `open()` raises and
+asks for `dtype="float32"` or `dtype="float64"` instead.
 
 ### Concurrency notes
 

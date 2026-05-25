@@ -47,9 +47,9 @@ src/lazycogs/
 4. Calls `_inspect_first_item()`: queries the parquet source via `duckdb_client.search(..., max_items=1)` to fetch one representative item, resolves preferred data assets (or caller-requested `bands=`), and opens one COG per requested band concurrently through `run_on_loop(...)`.
 5. Resolves the output contract from that inspection result:
    - `bands`: explicit `bands=` wins, otherwise the inspected preferred-band order
-   - `dtype`: explicit `dtype=` wins, otherwise `_promote_dtypes(...)`
+   - `dtype`: explicit `dtype=` wins unless it is an integer paired with a float-only mosaic method; otherwise lazycogs infers from `_promote_dtypes(...)` and auto-promotes integer inference to `float32` for float-only methods
    - `nodata`: explicit `nodata=` wins, otherwise `_resolve_output_nodata(...)`
-   - float-only mosaic methods (`MeanMethod`, `MedianMethod`, `StdevMethod`) fail early unless the resolved dtype is floating
+   - float-only mosaic methods (`MeanMethod`, `MedianMethod`, `StdevMethod`) fail early only when the caller explicitly forces an integer dtype
    - inferred `dtype` and `nodata` are runtime-validated during chunk reads so later heterogeneous assets fail loudly instead of truncating or silently remapping nodata
 6. Calls `_build_time_steps()`: queries the parquet source via `duckdb_client.search_to_arrow(...)` to obtain an Arrow table containing only the `datetime` and `start_datetime` columns (plus any filter/sort fields). Extracts timestamps from the Arrow columns without Python-level dict walking, buckets them with the `_TemporalGrouper`, deduplicates, and returns sorted `(filter_strings, time_coords)` pairs. Only groups with at least one item produce a time step.
 7. Calls `compute_output_grid()` to get the output affine transform and dimensions (width, height). No eager coordinate arrays are produced.
@@ -212,7 +212,7 @@ Each grouper provides three methods: `group_key()` maps a datetime string to a s
 
 - `FirstMethod`: Returns the first valid pixel seen. Short-circuits when all pixels are filled.
 - `HighestMethod` / `LowestMethod`: Tracks the running max / min across items.
-- `MeanMethod` / `MedianMethod` / `StdevMethod`: Accumulates all arrays and reduces at the end. These methods advertise `requires_float = True`, so `open()` rejects inferred integer outputs unless the caller opts into a floating `dtype=`.
+- `MeanMethod` / `MedianMethod` / `StdevMethod`: Accumulates all arrays and reduces at the end. These methods advertise `requires_float = True`, so `open()` auto-promotes inferred integer outputs to `float32` and rejects explicit integer `dtype=` overrides.
 - `CountMethod`: Counts valid (non-masked) observations per pixel.
 
 These are copied from `rio-tiler` (MIT licence, zero GDAL imports) to avoid pulling in rasterio as a transitive dependency.
