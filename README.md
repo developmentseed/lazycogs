@@ -72,8 +72,9 @@ await rustac.search_to(
 )
 
 # Open a fully lazy (band, time, y, x) DataArray. No pixel data is read yet.
-# lazycogs does perform a small storage-access smoketest here so auth or
-# object-store misconfiguration fails early instead of on the first chunk read.
+# lazycogs does inspect one representative item here: it picks preferred data
+# assets, opens one COG per requested band concurrently, and infers a default
+# dtype/nodata contract from that representative sample.
 da = lazycogs.open(
     "items.parquet",
     bbox=dst_bbox,
@@ -104,6 +105,37 @@ reading many chunks inside an already-running loop.
 `lazycogs.open(..., store=...)` accepts any store object that satisfies `async_geotiff.Store`.
 For most users, the recommended path is still obstore: leave `store=None` to auto-resolve per-asset stores, or call `lazycogs.store_for()` to build one explicitly.
 
+## Dtype and nodata semantics
+
+See also: [docs guide on dtype and nodata handling](docs/guides/dtype-nodata.md).
+
+When you omit `dtype=`, `lazycogs.open()` samples one representative COG per
+requested band and infers one safe output dtype instead of defaulting to
+`float32`. That inferred dtype is then enforced at chunk-read time: if a later
+asset has a source dtype that cannot be safely represented, compute raises and
+asks you to pass `dtype=` explicitly.
+
+When you omit `nodata=`:
+
+- if sampled bands all agree on one scalar nodata sentinel, the returned
+  `DataArray` sets `attrs["_FillValue"]` and `encoding["_FillValue"]`, and
+  masked mosaic output materializes with that same sentinel instead of zero
+- if sampled bands disagree, `open()` raises `ValueError` and asks you to pass
+  `nodata=` explicitly
+- if sampled bands have no nodata sentinel, no `_FillValue` encoding is
+  attached and `0` remains only an implementation fill value for uncovered
+  regions
+- if later chunk reads encounter a conflicting source nodata value, compute
+  raises and asks you to pass `nodata=` explicitly
+
+Explicit `dtype=` and `nodata=` stay authoritative even when source assets are
+heterogeneous.
+
+Float-only mosaic methods such as `MeanMethod`, `MedianMethod`, and
+`StdevMethod` auto-promote inferred integer outputs to `float32`. If you pass
+an explicit integer `dtype=` with one of those methods, `open()` raises and
+asks for `dtype="float32"` or `dtype="float64"` instead.
+
 ### Concurrency notes
 
 - Sync callers submit work to one shared persistent lazycogs event loop.
@@ -116,6 +148,9 @@ For most users, the recommended path is still obstore: leave `store=None` to aut
   thread. On the local benchmark fixture, DuckDB stayed under 2% of
   per-date chunk wall time, so there is no separate per-thread DuckDB
   client pool today.
+- `scripts/prepare_benchmark_data.py` also powers offline regression coverage
+  under `tests/benchmarks/`, so the contract tests run on local cached files
+  instead of live network reads.
 - If you need to construct a loop-bound resource for lazycogs internals,
   use `lazycogs.run_on_loop(...)`.
 - Low-level callers should use `await lazycogs.read_chunk_async(...)`.
@@ -125,5 +160,6 @@ For most users, the recommended path is still obstore: leave `store=None` to aut
 - [Home](https://developmentseed.github.io/lazycogs/) — quickstart and full usage guide
 - [Example: Midwest US daily Sentinel-2 array](https://developmentseed.org/lazycogs/notebooks/demo_midwest_daily/)
 - [Example: Southwest US monthly low-cloud Sentinel-2 array](https://developmentseed.org/lazycogs/notebooks/demo_southwest_monthly/)
+- [Guide: dtype and nodata handling](https://developmentseed.org/lazycogs/guides/dtype-nodata/)
 - [Architecture](https://developmentseed.org/lazycogs/architecture/)
 - [Contributing](CONTRIBUTING.md)

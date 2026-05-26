@@ -45,7 +45,10 @@ class _ChunkContext:
     dst_crs: CRS
     chunk_width: int
     chunk_height: int
-    nodata: float | None
+    nodata: float | int | None
+    out_dtype: np.dtype
+    dtype_was_explicit: bool
+    nodata_was_explicit: bool
     store: Store | None
     path_fn: Callable[[str], str] | None
     warp_cache: dict[tuple[tuple[float, ...], CRS], WarpMap] | None
@@ -66,6 +69,95 @@ def _log_read_failure(
         err,
         exc_info=err,
     )
+
+
+def _dtype_is_compatible(source: np.dtype, resolved: np.dtype) -> bool:
+    """Return True when *source* can be represented safely by *resolved*."""
+    return bool(np.can_cast(source, resolved, casting="safe"))
+
+
+def _nodata_matches(
+    source: float | None,
+    resolved: float | None,
+) -> bool:
+    """Return True when source and resolved nodata agree, including NaN."""
+    if source is None or resolved is None:
+        return source is None and resolved is None
+
+    source_scalar = source.item() if isinstance(source, np.generic) else source
+    resolved_scalar = resolved.item() if isinstance(resolved, np.generic) else resolved
+
+    source_is_nan = isinstance(source_scalar, float) and np.isnan(source_scalar)
+    resolved_is_nan = isinstance(resolved_scalar, float) and np.isnan(resolved_scalar)
+    if source_is_nan or resolved_is_nan:
+        return source_is_nan and resolved_is_nan
+    return bool(source_scalar == resolved_scalar)
+
+
+def _validate_source_contract(
+    item: dict,
+    band: str,
+    geotiff: GeoTIFF,
+    ctx: _ChunkContext,
+) -> float | int | None:
+    """Validate one source asset against the resolved output contract."""
+    source_dtype = np.dtype(geotiff.dtype)
+    if not ctx.dtype_was_explicit and not _dtype_is_compatible(
+        source_dtype,
+        ctx.out_dtype,
+    ):
+        raise ValueError(
+            "Auto-inferred output dtype "
+            f"{ctx.out_dtype} from representative assets, but encountered "
+            f"{source_dtype} in asset {band!r} for item "
+            f"{item.get('id', '<unknown>')!r}. Pass dtype='float32', "
+            "dtype='float64', or another explicit dtype if mixed source "
+            "dtypes are expected.",
+        )
+
+    source_nodata = geotiff.nodata
+    if not ctx.nodata_was_explicit and not _nodata_matches(
+        source_nodata,
+        ctx.nodata,
+    ):
+        raise ValueError(
+            "Auto-inferred output nodata "
+            f"{ctx.nodata!r} from representative assets, but encountered "
+            f"conflicting nodata {source_nodata!r} in asset {band!r} for "
+            f"item {item.get('id', '<unknown>')!r}. Pass nodata= explicitly "
+            "if mixed source nodata values are expected.",
+        )
+
+    return ctx.nodata if ctx.nodata is not None else source_nodata
+
+
+def _build_band_read_entry(
+    band: str,
+    geotiff: GeoTIFF,
+    ctx: _ChunkContext,
+    effective_nodata: float | None,
+) -> tuple[str, GeoTIFF, GeoTIFF | Overview, Window, float | None, CRS] | None:
+    """Build the read plan entry for one band, or ``None`` if no overlap."""
+    src_crs = geotiff.crs
+    target_res_native, transformer = _target_res_and_transformer(
+        ctx.chunk_affine,
+        ctx.chunk_width,
+        ctx.chunk_height,
+        ctx.dst_crs,
+        src_crs,
+    )
+    overview = _select_overview(geotiff, target_res_native)
+    reader = overview if overview is not None else geotiff
+    bbox_native = _chunk_bbox_native(
+        ctx.chunk_affine,
+        ctx.chunk_width,
+        ctx.chunk_height,
+        transformer,
+    )
+    window = _native_window(reader, bbox_native, reader.width, reader.height)
+    if window is None:
+        return None
+    return (band, geotiff, reader, window, effective_nodata, src_crs)
 
 
 def _target_res_and_transformer(
@@ -391,33 +483,13 @@ async def _read_item_band(
     # Each band is handled independently so differing native resolutions or
     # extents are handled correctly.
     band_read_plan: list[
-        tuple[str, GeoTIFF, GeoTIFF | Overview, Window, float | None, CRS]
+        tuple[str, GeoTIFF, GeoTIFF | Overview, Window, float | int | None, CRS]
     ] = []
     for band, geotiff, _ in open_results:
-        effective_nodata = ctx.nodata if ctx.nodata is not None else geotiff.nodata
-        src_crs = geotiff.crs
-        target_res_native, t = _target_res_and_transformer(
-            ctx.chunk_affine,
-            ctx.chunk_width,
-            ctx.chunk_height,
-            ctx.dst_crs,
-            src_crs,
-        )
-        overview = _select_overview(geotiff, target_res_native)
-        reader = overview if overview is not None else geotiff
-        bbox_native = _chunk_bbox_native(
-            ctx.chunk_affine,
-            ctx.chunk_width,
-            ctx.chunk_height,
-            t,
-        )
-        window = _native_window(reader, bbox_native, reader.width, reader.height)
-        if window is None:
-            continue
-
-        band_read_plan.append(
-            (band, geotiff, reader, window, effective_nodata, src_crs),
-        )
+        effective_nodata = _validate_source_contract(item, band, geotiff, ctx)
+        plan_entry = _build_band_read_entry(band, geotiff, ctx, effective_nodata)
+        if plan_entry is not None:
+            band_read_plan.append(plan_entry)
 
     if not band_read_plan:
         return None
@@ -514,14 +586,18 @@ async def _drain_in_order(
         await asyncio.gather(*tasks, return_exceptions=True)
 
 
-async def read_chunk_async(
+async def read_chunk_async(  # noqa: C901
     items: list[dict],
     bands: list[str],
     chunk_affine: Affine,
     dst_crs: CRS,
     chunk_width: int,
     chunk_height: int,
+    *,
     nodata: float | None = None,
+    out_dtype: np.dtype | None = None,
+    dtype_was_explicit: bool = False,
+    nodata_was_explicit: bool = False,
     mosaic_method_cls: type[MosaicMethodBase] | None = None,
     store: Store | None = None,
     max_concurrent_reads: int = 32,
@@ -546,6 +622,9 @@ async def read_chunk_async(
         chunk_width: Width of the destination chunk in pixels.
         chunk_height: Height of the destination chunk in pixels.
         nodata: No-data fill value.
+        out_dtype: Output array dtype inferred or supplied at ``open()`` time.
+        dtype_was_explicit: Whether the caller passed ``dtype=`` explicitly.
+        nodata_was_explicit: Whether the caller passed ``nodata=`` explicitly.
         mosaic_method_cls: Mosaic method class instantiated once per band.
             Defaults to :class:`~lazycogs._mosaic_methods.FirstMethod`.
         store: Optional pre-configured :class:`async_geotiff.Store`
@@ -566,25 +645,33 @@ async def read_chunk_async(
     if mosaic_method_cls is None:
         mosaic_method_cls = FirstMethod
 
+    resolved_out_dtype = (
+        np.dtype(out_dtype) if out_dtype is not None else np.dtype("float32")
+    )
+
     ctx = _ChunkContext(
         chunk_affine=chunk_affine,
         dst_crs=dst_crs,
         chunk_width=chunk_width,
         chunk_height=chunk_height,
         nodata=nodata,
+        out_dtype=resolved_out_dtype,
+        dtype_was_explicit=dtype_was_explicit,
+        nodata_was_explicit=nodata_was_explicit,
         store=store,
         path_fn=path_fn,
         warp_cache=warp_cache,
     )
 
     semaphore = asyncio.Semaphore(max_concurrent_reads)
+    fill = nodata if nodata is not None else 0
 
     async def _guarded(item: dict) -> dict[str, tuple[np.ndarray, float | None]] | None:
         async with semaphore:
             return await _read_item_band(item, bands, ctx)
 
     mosaic_methods: dict[str, MosaicMethodBase] = {
-        b: mosaic_method_cls() for b in bands
+        b: mosaic_method_cls(fill_value=fill) for b in bands
     }
 
     task_list: list[asyncio.Task] = [
@@ -604,11 +691,12 @@ async def read_chunk_async(
         return all(m.is_done for m in mosaic_methods.values())
 
     def _error(idx: int, exc: BaseException) -> None:
+        if isinstance(exc, ValueError):
+            raise exc
         _log_read_failure("bands", bands, items[idx].get("id", "<unknown>"), exc)
 
     await _drain_in_order(task_list, _feed, _done, _error)
 
-    fill = nodata if nodata is not None else 0
     output: dict[str, np.ndarray] = {}
     for band in bands:
         try:

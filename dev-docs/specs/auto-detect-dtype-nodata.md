@@ -1,111 +1,138 @@
-# Spec: Auto-Detect dtype and nodata from Sample COGs in `lazycogs.open()`
+# Spec: Auto-detect dtype and define nodata semantics in `lazycogs.open()`
 
 ## Context
 
-Currently `lazycogs.open()` defaults to `float32` for both output `dtype` and `None` for `nodata`. The actual COG's internal nodata is used at chunk-read time if the user doesn't provide one, but the output DataArray is still `float32`. This is wasteful when all requested bands are integer types (e.g. `uint8` or `int16`). Users can override these defaults, but they must inspect the collection manually.
+The concurrency refactor described in `TECH_DEBT.md` has landed. `open()` no longer needs to invent a short-lived event loop for startup inspection work; sync callers can reuse the shared lazycogs loop via `run_on_loop(...)`.
 
-The library already queries the first matching item for band discovery (`_discover_bands`) and storage smoketesting (`_smoketest_store`). We can piggyback on this by opening one COG per requested band via `GeoTIFF.open` and extracting its dtype and nodata metadata with minimal overhead.
+That makes it a good time to revisit `dtype` and `nodata` defaults together.
 
-This spec replaces the internal `_discover_bands` / `_smoketest_store` split with a unified inspection helper and defines deterministic dtype promotion rules for multi-band reads.
+Today `lazycogs.open()` still defaults the output array dtype to `float32` and the output `nodata` to `None` unless the caller overrides them. At chunk-read time, lazycogs already consults the COG's internal `geotiff.nodata` when `ctx.nodata` is `None`, so internal masking is often more correct than the output array contract. The gap is at the xarray boundary: callers cannot reliably inspect the returned `DataArray` and know what dtype or nodata semantics it represents.
+
+This spec does two things:
+
+1. Auto-detect the default output dtype from sample COGs.
+2. Make the output nodata contract explicit and testable.
 
 ## Goals
 
-- Automatically infer the output `dtype` from sample COGs when the caller does not explicitly pass `dtype=`.
-- Automatically infer the output `nodata` value from sample COGs when the caller does not explicitly pass `nodata=`.
-- Choose a single output dtype that can represent all requested bands without overflowing or losing precision.
-- Keep `open()` latency acceptable (the sample hit should be done concurrently per-band from a single item).
-- Reject incompatible configurations (`MeanMethod` / `MedianMethod` / `StdevMethod` paired with an integer dtype) with a clear `ValueError`.
+- Infer the output `dtype` from sample COGs when the caller does not pass `dtype=`.
+- Infer a single output `nodata` value when the caller does not pass `nodata=` and the sampled bands support a coherent scalar sentinel.
+- Keep `open()` latency acceptable by sampling one matching item and opening one COG per requested band concurrently.
+- Reject incompatible configurations such as float-required mosaic methods with an inferred integer dtype.
+- Document exactly what the returned `DataArray` means when nodata is known, conflicting, or unknown.
 
-## Non-Goals
+## Non-goals
 
-- Per-band dtype in the output DataArray (xarray requires a single dtype).
-- Changing the existing explicit `dtype=` or `nodata=` behaviour (these remain user overrides).
-- Sampling multiple items statistically (one item per band is enough for 99% of collections).
+- Per-band dtype in the returned `DataArray`.
+- Per-band nodata metadata in the returned `DataArray`.
+- Returning masked xarray arrays instead of plain numeric arrays.
+- Changing explicit `dtype=` or `nodata=` overrides.
+- Solving semantic cloud masking or QA masking.
 
-## Constraints & Assumptions
+## Current behavior
 
-- `async_geotiff.GeoTIFF.open` is available and fast enough for metadata-only access (no pixel reads).
-- The first matching STAC item is representative of the collection's data types. Mixed-dtype collections are rare enough that sampling one item is sufficient.
-- The asyncio event loop isn't running inside the main thread at `open()` time, so we'll need either synchronous metadata helpers or a short-lived event loop.
-- The existing `_smoketest_store` and `_discover_bands` calls already hit the first item; we should merge these into a single helper to avoid redundant queries.
+The current implementation has three different nodata layers:
 
-## Architecture Overview
+1. `open()` stores one scalar `nodata` value on the backend plan, defaulting to `None`.
+2. `_chunk_reader.py` computes `effective_nodata = ctx.nodata if ctx.nodata is not None else geotiff.nodata` per asset read.
+3. Internal mosaic methods operate on `MaskedArray`s built from `effective_nodata`.
 
-```
-open()
-  └── _inspect_first_item()          [replaces _discover_bands + _smoketest_store]
-        ├── DuckDB: first item query
-        ├── per-band: _resolve_store + GeoTIFF.open (concurrent)
-        └── returns _ItemInspection
-  ├── dtype inference
-  │     └── _promote_dtypes()
-  ├── nodata inference
-  ├── mosaic method / dtype validation
-  ├── _build_time_steps()
-  └── return DataArray
-```
+A few consequences matter here:
 
-A single inspection call yields:
+- Source COG nodata is already respected for internal masking when the caller does not override it.
+- Empty chunks and out-of-bounds reprojection pixels are filled with `ctx.nodata` when known, otherwise `0`.
+- The returned `DataArray` does not currently expose a clear nodata contract.
+- `float32` remains the output dtype default even for obviously integer collections.
 
-1. Band order (data bands first, restricted by caller-provided `bands=`).
-2. Sampled dtype per band.
-3. Sampled nodata per band.
-4. A store-connectivity flag.
+## Proposed output contract
 
-This replaces two separate internal helpers (`_discover_bands` and `_smoketest_store`) with one coherent pass, eliminating a redundant DuckDB query.
+### 1. Returned arrays stay plain numeric arrays
 
-## API / Interface Design
+`lazycogs.open()` should continue to return a normal numeric `xr.DataArray`, not a masked array. Internal masking remains an implementation detail used while mosaicking overlapping inputs.
 
-### Public API — `lazycogs.open()`
+### 2. Nodata is a single scalar output sentinel when it is knowable
 
-No signature changes. The `dtype` and `nodata` parameters remain optional:
+When lazycogs can determine one scalar output nodata value, that value means:
 
-```python
-def open(
-    parquet_path: str,
-    *,
-    bbox: list[float] | None = None,
-    datetime: str | None = None,
-    filter: str | dict[str, Any] | None = None,
-    ids: list[str] | None = None,
-    bands: list[str] | None = None,
-    sortby: str | list[str | dict[str, str]] | None = None,
-    dtype: str | None = None,          # still optional; now auto-detected when None
-    nodata: float | None = None,       # still optional; now auto-detected when None
-    tilesize: int = 512,
-    resolution: float | None = None,
-    resolution_unit: str = "meters",
-    store: ObjectStore | None = None,
-    path_from_href: Callable[[str], str] | None = None,
-    mosaic_filter: MosaicFilter | None = None,
-    mosaic_method: type[MosaicMethodBase] = FirstMethod,
-    overviews: list[int] | None = None,
-    max_items: int = 100,
-    groupby_solar_day: bool = False,
-) -> xr.DataArray:
-    ...
-```
+- uncovered pixels in empty chunks
+- out-of-bounds pixels introduced by reprojection
+- pixels that remain invalid after mosaicking because every contributing input pixel was nodata
 
-Behavioural contract:
+When nodata is known, the returned `DataArray` should advertise it via:
 
-- If `dtype` is passed, it is used exactly as before (user override).
-- If `dtype` is omitted, `open()` samples one COG per requested band, extracts each band's native dtype, and promotes them to a single safe dtype via `_promote_dtypes()`.
-- If `nodata` is passed, it is authoritative.
-- If `nodata` is omitted, `open()` uses the first non-`None` nodata found among the sampled band COGs. If all sampled COGs report `None`, the DataArray's nodata stays `None`.
+- `attrs["_FillValue"]`
+- `encoding["_FillValue"]`
 
-### Internal Data Model
+This keeps the contract lean and aligns with downstream serialization tools such as rioxarray.
+
+### 3. Auto-detected nodata must be coherent, not guessed
+
+If the caller omits `nodata=`:
+
+- If all sampled non-`None` nodata values are identical, use that value.
+- If all sampled nodata values are `None`, keep output nodata as `None`.
+- If sampled bands disagree on non-`None` nodata values, raise `ValueError` and require the caller to pass `nodata=` explicitly.
+
+Do not silently pick the first nodata value. The output array only has room for one scalar sentinel, so conflicting sampled values are a real contract problem, not a warning-level detail.
+
+### 4. `nodata=None` remains allowed, but its meaning is narrow
+
+If output nodata is `None`, lazycogs is saying:
+
+- it does not know a scalar nodata sentinel for the returned array
+- no nodata metadata is attached to the `DataArray`
+- `0` may still appear in uncovered regions as an implementation fill value
+
+That last bullet is ugly but honest. In this mode, `0` is **not** declared as semantic nodata. If callers need a stable sentinel for downstream analysis, they must pass `nodata=` explicitly.
+
+This keeps the current runtime behavior while finally documenting it clearly.
+
+## Proposed dtype contract
+
+### Explicit override wins
+
+If the caller passes `dtype=`, lazycogs uses it exactly as today.
+
+### Auto-detect when omitted
+
+If `dtype` is omitted, `open()` samples one COG per requested band from the first matching item and promotes the sampled dtypes to one safe output dtype.
+
+### Promotion rules
+
+`_promote_dtypes()` should obey these rules in order:
+
+1. All identical -> return that dtype.
+2. Any float present -> return `float32`, or `float64` if any sampled dtype is `float64`.
+3. Mixed integer widths -> use the wider width when one dtype can safely contain the other.
+4. Mixed unsigned/signed integers -> promote to the smallest signed dtype that can represent both ranges.
+5. `uint64 + int64` -> raise `ValueError` because there is no wider integer type.
+
+Selected examples:
+
+| Unsigned | Signed | Promoted |
+|---|---|---|
+| `uint8` | `int8` | `int16` |
+| `uint8` | `int16` | `int16` |
+| `uint16` | `int16` | `int32` |
+| `uint32` | `int32` | `int64` |
+| `uint64` | `int64` | `ValueError` |
+
+## Startup inspection design
+
+The existing `_discover_bands` and `_smoketest_store` split should be replaced by one coherent inspection helper.
+
+### Internal model
 
 ```python
 @dataclass(frozen=True)
 class _ItemInspection:
     bands: list[str]
-    dtypes: dict[str, np.dtype]          # per-band sample dtype
-    nodata_values: dict[str, float | None]  # per-band sample nodata
-    store_check_passed: bool
+    dtypes: dict[str, np.dtype]
+    nodata_values: dict[str, float | None]
     item_found: bool
 ```
 
-### Internal Helpers
+### Async helper
 
 ```python
 async def _inspect_first_item_async(
@@ -118,148 +145,186 @@ async def _inspect_first_item_async(
     ids: list[str] | None = None,
     bands: list[str] | None = None,
     sortby: str | list[str | dict[str, str]] | None = None,
-    store: ObjectStore | None = None,
+    store: Store | None = None,
     path_from_href: Callable[[str], str] | None = None,
 ) -> _ItemInspection:
     ...
-
-
-def _promote_dtypes(dtypes: list[np.dtype]) -> np.dtype:
-    """Return a single dtype that can safely hold all input dtypes."""
-    ...
 ```
 
-`_inspect_first_item_async` runs these steps:
+### Sync wrapper
 
-1. Query DuckDB for the first item (same as `_discover_bands`).
-2. If no items found, return an empty inspection (`item_found=False`).
-3. Build band order (data bands first, fallback to all keys).
-4. If `bands` is provided, restrict to the intersection.
-5. For each requested band, resolve the asset `href`.
-6. Call `_resolve_store(href, store, path_from_href)` for each band.
-7. Concurrently `await GeoTIFF.open(path, store=resolved_store)` for each band.
-8. Extract `geotiff.dtype` and `geotiff.nodata` from each result.
-9. Return an `_ItemInspection` with all metadata.
+`open()` remains sync, so it should call a thin sync wrapper that uses `run_on_loop(...)` to execute `_inspect_first_item_async(...)` on the shared background loop.
 
-### Mosaic Method Contract
+Do not use `asyncio.run` here. That was reasonable before the concurrency cleanup, but it is the wrong fit for the current architecture.
+
+### Inspection steps
+
+1. Query DuckDB for the first matching item.
+2. If no item matches, return `item_found=False`.
+3. Determine band order using the same current preference for `roles=["data"]` or TIFF-like assets.
+4. Restrict to caller-provided `bands=` when present.
+5. Resolve one asset HREF per requested band.
+6. Resolve the store/path for each HREF.
+7. Concurrently `await GeoTIFF.open(path, store=resolved_store)` for all requested bands.
+8. Extract `geotiff.dtype` and `geotiff.nodata`.
+9. Return `_ItemInspection`.
+
+This preserves the current fail-early store validation while eliminating redundant startup queries.
+
+## `open()` flow after the change
+
+```text
+open()
+  └── _inspect_first_item()          # replaces _discover_bands + _smoketest_store
+        ├── one DuckDB first-item query
+        └── concurrent GeoTIFF metadata opens on the shared loop
+  ├── resolve output bands
+  ├── resolve output dtype
+  ├── resolve output nodata
+  ├── validate mosaic method vs dtype
+  ├── _build_time_steps()
+  └── _build_dataarray()
+```
+
+Resolution rules inside `open()`:
+
+- `bands`
+  - explicit `bands=` wins
+  - otherwise use `inspection.bands`
+- `dtype`
+  - explicit `dtype=` wins
+  - otherwise `out_dtype = _promote_dtypes(...)`
+- `nodata`
+  - explicit `nodata=` wins
+  - otherwise `out_nodata = _resolve_output_nodata(inspection.nodata_values)`
+
+## Mosaic-method validation
+
+Some mosaic methods only make sense with floating-point output.
+
+Add a class attribute:
 
 ```python
 class MosaicMethodBase(ABC):
     requires_float: bool = False
-    ...
 ```
 
-`MeanMethod`, `MedianMethod`, and `StdevMethod` override `requires_float = True`.
+Set `requires_float = True` on:
 
-During `open()`, after dtype is resolved:
+- `MeanMethod`
+- `MedianMethod`
+- `StdevMethod`
+
+Validation in `open()`:
 
 ```python
-if mosaic_method_cls.requires_float and not np.issubdtype(out_dtype, np.floating):
+if method_cls.requires_float and not np.issubdtype(out_dtype, np.floating):
     raise ValueError(
-        f"{mosaic_method_cls.__name__} requires a floating-point dtype, "
-        f"but got {out_dtype}. Pass dtype='float32' or dtype='float64' explicitly."
+        f"{method_cls.__name__} requires a floating-point dtype, "
+        f"but got {out_dtype}. Pass dtype='float32' or dtype='float64'."
     )
 ```
 
-### Dtype Promotion Rules
+## Integration with current chunk-read behavior
 
-`_promote_dtypes` must obey these rules, in order:
+The chunk-read path does not need a semantic rewrite.
 
-1. **All identical** -> return that dtype (zero overhead).
-2. **Any float present** -> return `float32`, or `float64` if `float64` is present.
-3. **Mixed unsigned/signed integers** -> promote to signed with one extra bit when necessary.
-4. **Mixed integer widths** -> use the wider width.
-
-Promotion table (selected cases):
-
-| Unsigned | Signed | Promoted |
-|----------|--------|----------|
-| uint8    | int8   | int16    |
-| uint8    | int16  | int16    |
-| uint16   | int16  | int32    |
-| uint32   | int32  | int64    |
-| uint64   | int64  | `ValueError` (overflow) |
-| uint8    | int64  | int64    |
-| uint16   | uint32 | uint32   |
-| int8     | int16  | int16    |
-
-Rationale for blocking `uint64 + int64`: there is no wider signed integer type. Promoting to `float64` silently would lose integer semantics. We raise `ValueError` so the caller must explicitly opt into `float64` or choose a different representation.
-
-## Integration Points
-
-### `_chunk_reader.py`
-
-The existing fallback logic remains unchanged:
+This line stays the source of truth for per-asset masking:
 
 ```python
 effective_nodata = ctx.nodata if ctx.nodata is not None else geotiff.nodata
 ```
 
-When the user provides `nodata`, it is authoritative at read time. When they don't, the per-COG nodata is consulted. The DataArray default nodata (now auto-detected) is used as the initial fill value in `_raw_getitem` and `async_mosaic_chunk`.
+That means:
 
-Note: `async_mosaic_chunk` fills uncovered chunks with `0` when `nodata is None`. This is still safe because those pixels represent "no items covered this chunk," not "the COG declared these as nodata."
+- explicit user `nodata=` remains authoritative
+- otherwise per-COG nodata still drives internal masking
+- the new output-level nodata contract simply makes the xarray boundary honest
 
-### DuckDB Client
+What changes is the startup contract and metadata, not the basic masking algorithm.
 
-The inspection helper reuses the same DuckDB search pattern as `_discover_bands`. No query format changes.
+## DataArray attrs
 
-### `async_geotiff`
+When output nodata is known, `_build_dataarray()` should attach:
 
-Metadata-only reads via `GeoTIFF.open` + reading `.dtype` and `.nodata`. No pixel buffers are fetched.
+```python
+da.encoding["_FillValue"] = out_nodata
+```
 
-## Migration Path
+When output nodata is `None`, no `_FillValue` encoding should be set.
 
-This is an internal refactor. `_discover_bands` and `_smoketest_store` are replaced by `_inspect_first_item` (sync wrapper) and deleted from the codebase. Callers of `open()` see no breaking change: explicit `dtype=` and `nodata=` behave exactly as before. Callers who previously relied on defaults will now see integer dtypes when the sampled COGs are integer, and more accurate nodata values.
+This spec does not require xarray encoding changes yet.
 
-## Testing Strategy
+## Failure modes
 
-### Unit Tests — `test_dtype_promotion.py`
+Raise `ValueError` when:
 
-- `_promote_dtypes` for every pairwise combination of `uint8/16/32/64`, `int8/16/32/64`, `float32`, `float64`.
-- Edge cases: single dtype list, empty list, overflowing `uint64 + int64`.
+- no matching STAC items exist
+- sampled dtypes cannot be promoted safely (`uint64 + int64`)
+- sampled nodata values conflict across requested bands and the caller did not pass `nodata=`
+- a float-required mosaic method is paired with a non-floating output dtype
 
-### Unit Tests — `_inspect_first_item`
+## Testing strategy
 
-- Mock DuckDB response + mock `GeoTIFF.open` coroutines.
-- Verify concurrent opens (one per band).
-- Verify `store_check_passed` flag.
-- Verify empty result when no items match.
+### Unit tests
 
-### Integration Tests
+Add focused unit coverage for:
 
-- `open(..., mosaic_method=MeanMethod)` with auto-detected `int16` raises `ValueError`.
-- `open(..., mosaic_method=FirstMethod)` with auto-detected `int16` succeeds.
-- Real-world parquet: open a COG collection without passing `dtype` or `nodata`; assert the resulting DataArray has the expected dtype and nodata.
-- Update existing tests that assert `dtype="float32"` to accept the new auto-detected values or pass `dtype="float32"` explicitly.
+- `_promote_dtypes()` across integer and float combinations
+- `_resolve_output_nodata()` for:
+  - all `None`
+  - one repeated scalar value
+  - conflicting scalar values
+- `_inspect_first_item_async()` with mocked DuckDB + mocked `GeoTIFF.open`
+- sync wrapper using `run_on_loop(...)`
 
-### Regression Tests
+### Integration tests
 
-- All existing tests continue to pass.
+Add integration coverage for:
 
-## Decision Log
+- integer collection -> inferred integer dtype
+- inferred nodata attached to `da.encoding["_FillValue"]`
+- conflicting sampled nodata -> `ValueError` unless `nodata=` is passed
+- `MeanMethod` with inferred integer dtype -> `ValueError`
+- explicit `dtype="float32"` still works with float-required methods
 
-| Decision | Options Considered | Rationale |
-|----------|-------------------|-----------|
-| Merge band discovery, smoketest, and metadata sampling into one helper (Option B) | Option A: extend `_smoketest_store` only | Avoids redundant DuckDB round-trips and keeps the flow coherent. `_smoketest_store` only touched one band anyway. |
-| Custom integer promotion instead of `numpy.result_type` | Use `np.result_type` directly | Numpy promotes `uint16 + int16 -> float64`, which is overly conservative. A custom table preserves integer semantics in more cases. |
-| Raise `ValueError` on `uint64 + int64` overflow | Silently promote to `float64` | Losing integer semantics silently is dangerous. The error forces an explicit `dtype=` override. |
-| One item per band is sufficient | Statistical sampling across many items | Metadata-only COG opens are fast. Mixed-dtype collections within one band are extremely rare. One sample is the right latency/accuracy trade-off. |
-| `requires_float` class attribute on `MosaicMethodBase` | Method-specific validation inside `open()` | A declarative attribute keeps `open()` logic generic and makes it easy for users to write custom mosaic methods that self-declare float requirements. |
-| `asyncio.run` inside `open()` for concurrent metadata opens | Sequential sync opens | Concurrent opens cut latency linearly with band count. `open()` is typically a top-level call with no pre-existing event loop. |
+### Regression expectations
 
-## Open Questions
+Existing behavior should remain true for:
 
-- **Jupyter event loop**: `asyncio.run` inside `open()` may clash with Jupyter's running event loop. If this surfaces, we may need to detect `get_running_loop()` and fall back to sequential opens or a thread-pool wrapper.
-- **Per-item dtype variance**: If the first item is `uint8` but later items in the same collection are `int16`, the DataArray may overflow. This is documented as an assumed risk; users can override with `dtype=`.
-- **Inspection caching**: Should repeated `open()` calls on the same parquet (different bboxes) cache the `_ItemInspection` result? Out of scope for the initial implementation, but a potential future optimization.
+- per-COG nodata masking during mosaicking
+- empty-chunk fill behavior
+- reprojection fill behavior
+- explicit caller overrides
+
+## Decision log
+
+| Decision | Rationale |
+|---|---|
+| Use `run_on_loop(...)` instead of `asyncio.run(...)` | Matches the post-refactor concurrency model and avoids nested-loop nonsense. |
+| Replace `_discover_bands` + `_smoketest_store` with one inspection helper | One startup query, one coherent control point. |
+| Raise on conflicting sampled nodata values | One output array cannot honestly advertise multiple scalar sentinels. |
+| Keep returning plain numeric arrays | Preserves the current API and avoids forcing xarray masked-array semantics into the public contract. |
+| Treat `0` as implementation fill when output nodata is unknown | Matches current behavior without pretending it is semantic nodata. |
+
+## Open questions
+
+- Should `CountMethod` force an integer output dtype when `dtype` is omitted, or should it continue to respect the generic promotion result? For now this spec leaves `CountMethod` alone.
+- Should lazycogs eventually offer an explicit nodata decoding mode for in-memory analysis, rather than only advertising `_FillValue` for downstream serialization?
+- If a collection has no source nodata and the user omits `nodata=`, should lazycogs eventually promote integer outputs to float and use `NaN` for uncovered pixels? That would be a larger behavioral change and is not part of this pass.
+
+## Recommended next implementation order
+
+1. Add `_ItemInspection`, `_inspect_first_item_async`, and the sync wrapper.
+2. Add `_promote_dtypes()` and `_resolve_output_nodata()`.
+3. Wire startup inspection into `open()`.
+4. Add `requires_float` validation to mosaic methods.
+5. Set nodata attrs in `_build_dataarray()`.
+6. Update `README.md` and `ARCHITECTURE.md` once behavior lands.
 
 ## Status
 
-- [ ] Designing
-- [ ] Approved -- ready to plan
+- [x] Designing
+- [x] Approved -- ready to implement
 - [ ] Implementing
 - [ ] Implemented
-
-## References
-
-- Plan document: `dev-docs/plans/dtypes.md`

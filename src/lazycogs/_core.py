@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Self
 
 import numpy as np
@@ -29,6 +31,7 @@ if TYPE_CHECKING:
     from async_geotiff import Store
 
 logger = logging.getLogger(__name__)
+_INT_WIDTHS = (8, 16, 32, 64)
 
 
 class _CompactDateArray(np.ndarray):
@@ -48,52 +51,40 @@ class _CompactDateArray(np.ndarray):
         return self.__str__()
 
 
-def _discover_bands(
-    parquet_path: str,
+@dataclass(frozen=True)
+class _ItemInspection:
+    """Sampled startup metadata from one representative STAC item."""
+
+    bands: list[str]
+    dtypes: dict[str, np.dtype]
+    nodata_values: dict[str, float | int | None]
+    item_found: bool
+
+
+class _StoreInspectionError(RuntimeError):
+    """Internal error carrying the HREF that failed startup inspection."""
+
+    def __init__(self, href: str, original: BaseException) -> None:
+        super().__init__(str(original))
+        self.href = href
+        self.original = original
+
+
+def _ordered_bands(
+    assets: dict[str, Any],
     *,
-    duckdb_client: DuckdbClient,
-    bbox: list[float] | None = None,
-    datetime: str | None = None,
-    filter: str | dict[str, Any] | None = None,
-    ids: list[str] | None = None,
-    sortby: str | list[str | dict[str, str]] | None = None,
+    bands: list[str] | None = None,
 ) -> list[str]:
-    """Return the asset keys present in the first matching item of the parquet file.
+    """Return asset keys in caller or preferred inspection order."""
+    if bands is not None:
+        missing = [band for band in bands if band not in assets]
+        if missing:
+            raise ValueError(
+                "Requested bands "
+                f"{missing!r} were not present on the first matching item.",
+            )
+        return bands
 
-    Asset keys whose media type contains ``"image/tiff"`` or whose roles
-    include ``"data"`` are returned first; all others follow.
-
-    Args:
-        parquet_path: Path to a geoparquet file or hive-partitioned directory.
-        duckdb_client: ``DuckdbClient`` used to query the parquet source.
-        bbox: Bounding box ``[minx, miny, maxx, maxy]`` in EPSG:4326 to
-            filter the parquet before selecting a representative item.
-        datetime: RFC 3339 datetime or range to filter items.
-        filter: CQL2 filter expression (text string or JSON dict).
-        ids: List of STAC item IDs to restrict results to.
-        sortby: Sort keys forwarded to the DuckDB query.
-
-    Returns:
-        Ordered list of asset key strings.
-
-    Raises:
-        ValueError: If no matching STAC items are found in the parquet file.
-
-    """
-    items = duckdb_client.search(
-        parquet_path,
-        max_items=1,
-        bbox=bbox,
-        datetime=datetime,
-        sortby=sortby,
-        filter=filter,
-        ids=ids,
-        include=list({"assets"}.union(_sortby_fields(sortby))),
-    )
-    if not items:
-        raise ValueError(f"No STAC items found in {parquet_path!r}")
-
-    assets: dict[str, Any] = items[0].get("assets", {})
     data_bands: list[str] = []
     other_bands: list[str] = []
     for key, asset in assets.items():
@@ -107,12 +98,7 @@ def _discover_bands(
     return data_bands or other_bands or list(assets)
 
 
-async def _open_store_sample(path: str, *, store: Store) -> None:
-    """Open one representative asset through ``GeoTIFF.open`` for validation."""
-    await GeoTIFF.open(path, store=store)
-
-
-def _smoketest_store(
+async def _inspect_first_item_async(
     parquet_path: str,
     *,
     duckdb_client: DuckdbClient,
@@ -121,62 +107,99 @@ def _smoketest_store(
     filter: str | dict[str, Any] | None = None,
     ids: list[str] | None = None,
     bands: list[str] | None = None,
+    sortby: str | list[str | dict[str, str]] | None = None,
     store: Store | None = None,
     path_from_href: Callable[[str], str] | None = None,
-) -> None:
-    """Verify the configured store can open a sample asset from the parquet.
-
-    Fetches one item, resolves the store for a representative data asset HREF,
-    and validates it by calling ``GeoTIFF.open`` on the resolved path. Raises
-    ``RuntimeError`` if the store cannot reach the asset so misconfiguration is
-    caught at :func:`open` time rather than deferred to the first chunk read.
-    """
+) -> _ItemInspection:
+    """Inspect one representative item and sample metadata for requested bands."""
+    filter_fields = _extract_filter_fields(filter) if filter else set()
     items = duckdb_client.search(
         parquet_path,
         max_items=1,
         bbox=bbox,
         datetime=datetime,
+        sortby=sortby,
         filter=filter,
         ids=ids,
-        include=["assets"],
+        include=list({"assets"}.union(filter_fields).union(_sortby_fields(sortby))),
     )
     if not items:
-        return
+        return _ItemInspection(
+            bands=[],
+            dtypes={},
+            nodata_values={},
+            item_found=False,
+        )
 
     assets: dict[str, Any] = items[0].get("assets", {})
-    if not assets:
-        return
+    resolved_bands = _ordered_bands(assets, bands=bands)
+    if not resolved_bands:
+        return _ItemInspection(
+            bands=[],
+            dtypes={},
+            nodata_values={},
+            item_found=True,
+        )
 
-    href: str | None = None
-    if bands:
-        for key in bands:
-            h = assets.get(key, {}).get("href", "")
-            if h:
-                href = h
-                break
-    if not href:
-        data_keys = [
-            k
-            for k, v in assets.items()
-            if "data" in v.get("roles", []) or "image/tiff" in v.get("type", "")
-        ]
-        key = data_keys[0] if data_keys else next(iter(assets))
-        href = assets[key].get("href", "")
+    async def _inspect_band(
+        band: str,
+    ) -> tuple[str, np.dtype, float | int | None]:
+        href = assets[band].get("href", "")
+        if not href:
+            raise ValueError(
+                f"Asset {band!r} on the first matching item does not have an href.",
+            )
+        resolved_store, path = resolve(href, store=store, path_fn=path_from_href)
+        try:
+            geotiff = await GeoTIFF.open(path, store=resolved_store)
+        except Exception as exc:
+            raise _StoreInspectionError(href, exc) from exc
+        return band, np.dtype(geotiff.dtype), geotiff.nodata
 
-    if not href:
-        return
+    results = await asyncio.gather(*[_inspect_band(band) for band in resolved_bands])
+    return _ItemInspection(
+        bands=resolved_bands,
+        dtypes={band: dtype for band, dtype, _ in results},
+        nodata_values={band: nodata for band, _, nodata in results},
+        item_found=True,
+    )
 
-    resolved_store, path = resolve(href, store=store, path_fn=path_from_href)
+
+def _inspect_first_item(
+    parquet_path: str,
+    *,
+    duckdb_client: DuckdbClient,
+    bbox: list[float] | None = None,
+    datetime: str | None = None,
+    filter: str | dict[str, Any] | None = None,
+    ids: list[str] | None = None,
+    bands: list[str] | None = None,
+    sortby: str | list[str | dict[str, str]] | None = None,
+    store: Store | None = None,
+    path_from_href: Callable[[str], str] | None = None,
+) -> _ItemInspection:
+    """Run representative-item inspection on the shared lazycogs event loop."""
     try:
-        run_on_loop(_open_store_sample(path, store=resolved_store))
-    except Exception as e:
+        return run_on_loop(
+            _inspect_first_item_async(
+                parquet_path,
+                duckdb_client=duckdb_client,
+                bbox=bbox,
+                datetime=datetime,
+                filter=filter,
+                ids=ids,
+                bands=bands,
+                sortby=sortby,
+                store=store,
+                path_from_href=path_from_href,
+            ),
+        )
+    except _StoreInspectionError as exc:
         raise RuntimeError(
-            f"Store cannot open {href!r} through GeoTIFF.open: {e}. "
+            f"Store cannot open {exc.href!r} through GeoTIFF.open: {exc.original}. "
             "Pass a configured store= argument to lazycogs.open() to authenticate. "
             "See the cloud storage guide for examples.",
-        ) from e
-
-    logger.debug("Storage smoketest passed for %r", href)
+        ) from exc.original
 
 
 def _arrow_col(table: Table, name: str) -> list:
@@ -184,6 +207,107 @@ def _arrow_col(table: Table, name: str) -> list:
     if name in table.schema.names:
         return table.column(name).to_pylist()
     return [None] * len(table)
+
+
+def _promote_integer_dtypes(dtypes: list[np.dtype]) -> np.dtype:
+    """Resolve sampled integer dtypes to one safe integer dtype."""
+    signed = [dtype for dtype in dtypes if np.issubdtype(dtype, np.signedinteger)]
+    unsigned = [dtype for dtype in dtypes if np.issubdtype(dtype, np.unsignedinteger)]
+
+    if not signed:
+        return max(unsigned, key=lambda dtype: dtype.itemsize)
+    if not unsigned:
+        return max(signed, key=lambda dtype: dtype.itemsize)
+
+    max_signed_bits = max(dtype.itemsize * 8 for dtype in signed)
+    max_unsigned_bits = max(dtype.itemsize * 8 for dtype in unsigned)
+    required_bits = max(max_signed_bits, max_unsigned_bits + 1)
+    if required_bits > max(_INT_WIDTHS):
+        raise ValueError(
+            "Cannot safely promote sampled dtypes containing both uint64 and int64.",
+        )
+
+    for candidate_bits in _INT_WIDTHS:
+        if candidate_bits >= required_bits:
+            return np.dtype(f"int{candidate_bits}")
+
+    raise ValueError(f"Cannot safely promote sampled dtypes: {dtypes!r}")
+
+
+def _promote_dtypes(dtypes: list[np.dtype]) -> np.dtype:
+    """Resolve sampled dtypes to one safe output dtype."""
+    normalized = [np.dtype(dtype) for dtype in dtypes]
+    if not normalized:
+        raise ValueError("Cannot infer dtype without at least one sampled band.")
+    if len(set(normalized)) == 1:
+        return normalized[0]
+
+    if any(np.issubdtype(dtype, np.floating) for dtype in normalized):
+        if any(dtype == np.dtype("float64") for dtype in normalized):
+            return np.dtype("float64")
+        return np.dtype("float32")
+
+    if not all(np.issubdtype(dtype, np.integer) for dtype in normalized):
+        raise ValueError(f"Unsupported sampled dtypes: {normalized!r}")
+
+    return _promote_integer_dtypes(normalized)
+
+
+def _resolve_output_dtype(
+    sampled_dtypes: list[np.dtype],
+    *,
+    dtype: str | np.dtype | None,
+    method_cls: type[MosaicMethodBase],
+) -> tuple[np.dtype, bool]:
+    """Resolve the output dtype, auto-promoting to float when required."""
+    if dtype is not None:
+        resolved = np.dtype(dtype)
+        if method_cls.requires_float and not np.issubdtype(resolved, np.floating):
+            raise ValueError(
+                f"{method_cls.__name__} requires a floating-point dtype, "
+                f"but got explicit dtype {resolved}. "
+                "Pass dtype='float32' or dtype='float64', or omit dtype= to "
+                "let lazycogs choose a float dtype automatically.",
+            )
+        return resolved, True
+
+    resolved = _promote_dtypes(sampled_dtypes)
+    if method_cls.requires_float and not np.issubdtype(resolved, np.floating):
+        return np.dtype("float32"), False
+    return resolved, False
+
+
+def _dtype_is_compatible(source: np.dtype, resolved: np.dtype) -> bool:
+    """Return True when *source* can be represented safely by *resolved*."""
+    return bool(np.can_cast(source, resolved, casting="safe"))
+
+
+def _resolve_output_nodata(
+    nodata_values: list[float | int | None],
+) -> float | int | None:
+    """Resolve sampled nodata values to one scalar output sentinel."""
+    saw_nan = False
+    scalars: set[float | int] = set()
+
+    for value in nodata_values:
+        if value is None:
+            continue
+        scalar = value.item() if isinstance(value, np.generic) else value
+        if isinstance(scalar, float) and np.isnan(scalar):
+            saw_nan = True
+            continue
+        scalars.add(scalar)
+
+    if not scalars and not saw_nan:
+        return None
+    if not scalars and saw_nan:
+        return np.nan
+    if len(scalars) == 1 and not saw_nan:
+        return next(iter(scalars))
+
+    raise ValueError(
+        "Conflicting sampled nodata values; pass nodata= explicitly.",
+    )
 
 
 def _build_time_steps(
@@ -304,6 +428,8 @@ def _build_dataarray(
     ids: list[str] | None,
     nodata: float | None,
     out_dtype: np.dtype,
+    dtype_was_explicit: bool,
+    nodata_was_explicit: bool,
     method_cls: type[MosaicMethodBase],
     chunks: dict[str, int] | None,
     store: Store | None = None,
@@ -334,6 +460,8 @@ def _build_dataarray(
         ids: STAC item IDs forwarded to per-chunk DuckDB queries.
         nodata: No-data fill value.
         out_dtype: Output array dtype.
+        dtype_was_explicit: Whether the caller passed ``dtype=`` explicitly.
+        nodata_was_explicit: Whether the caller passed ``nodata=`` explicitly.
         method_cls: Mosaic method class.
         chunks: Passed to ``DataArray.chunk()`` if not ``None``.
         store: Pre-configured :class:`async_geotiff.Store` accepted by
@@ -369,6 +497,8 @@ def _build_dataarray(
         dst_height=dst_height,
         dtype=out_dtype,
         nodata=nodata,
+        dtype_was_explicit=dtype_was_explicit,
+        nodata_was_explicit=nodata_was_explicit,
         mosaic_method_cls=method_cls,
         store=store,
         max_concurrent_reads=max_concurrent_reads,
@@ -451,7 +581,7 @@ def _build_dataarray(
     else:
         attributes["proj:wkt2"] = dst_crs.to_wkt()
 
-    return DataArray(
+    data_array = DataArray(
         var,
         coords=Coordinates(
             {"band": resolved_bands, "time": time_coord, "spatial_ref": spatial_ref},
@@ -459,6 +589,12 @@ def _build_dataarray(
         | spatial_coords,
         attrs=attributes,
     )
+
+    if nodata is not None:
+        data_array.attrs["_FillValue"] = nodata
+        data_array.encoding["_FillValue"] = nodata
+
+    return data_array
 
 
 def open(  # noqa: A001
@@ -500,8 +636,8 @@ def open(  # noqa: A001
         filter: CQL2 filter expression (text string or JSON dict) forwarded
             to DuckDB queries, e.g. ``"eo:cloud_cover < 20"``.
         ids: STAC item IDs to restrict the search to.
-        bands: Asset keys to include.  If ``None``, auto-detected from the
-            first matching item.
+        bands: Asset keys to include. If ``None``, inferred from the first
+            matching item's preferred data assets.
         chunks: Chunk sizes passed to ``DataArray.chunk()``.  If ``None``
             (default), returns a ``LazilyIndexedArray``-backed DataArray
             where only the requested pixels are fetched on each access —
@@ -509,8 +645,13 @@ def open(  # noqa: A001
             to convert to a dask-backed array for parallel computation over
             larger regions.
         sortby: Sort keys forwarded to DuckDB queries.
-        nodata: No-data fill value for output arrays.
-        dtype: Output array dtype.  Defaults to ``float32``.
+        nodata: No-data fill value for output arrays. When omitted,
+            lazycogs advertises a scalar nodata sentinel only when sampled
+            bands agree on one.
+        dtype: Output array dtype. When omitted, inferred from sampled asset
+            dtypes on the first matching item. Float-only mosaic methods may
+            auto-promote inferred integer outputs to ``float32``. Explicit
+            integer ``dtype=`` still raises for those methods.
         mosaic_method: Mosaic method class (not instance) to use.  Defaults
             to :class:`~lazycogs._mosaic_methods.FirstMethod`.
         time_period: ISO 8601 duration string controlling how items are
@@ -612,26 +753,8 @@ def open(  # noqa: A001
         )
         bbox_4326 = [float(min(xs)), float(min(ys)), float(max(xs)), float(max(ys))]
 
-    if bands is not None:
-        resolved_bands = bands
-    else:
-        t0 = time.perf_counter()
-        resolved_bands = _discover_bands(
-            href,
-            duckdb_client=duckdb_client,
-            bbox=bbox_4326,
-            datetime=datetime,
-            filter=filter,
-            ids=ids,
-            sortby=sortby,
-        )
-        logger.debug(
-            "_discover_bands took %.3fs, found %d bands",
-            time.perf_counter() - t0,
-            len(resolved_bands),
-        )
-
-    _smoketest_store(
+    t0 = time.perf_counter()
+    inspection = _inspect_first_item(
         href,
         duckdb_client=duckdb_client,
         bbox=bbox_4326,
@@ -639,9 +762,23 @@ def open(  # noqa: A001
         filter=filter,
         ids=ids,
         bands=bands,
+        sortby=sortby,
         store=store,
         path_from_href=path_from_href,
     )
+    logger.debug(
+        "_inspect_first_item took %.3fs, found %d bands",
+        time.perf_counter() - t0,
+        len(inspection.bands),
+    )
+
+    if not inspection.item_found:
+        raise ValueError(
+            f"No STAC items matched the query in {href!r} "
+            f"(bbox={bbox_4326}, datetime={datetime}).",
+        )
+
+    resolved_bands = bands if bands is not None else inspection.bands
 
     t0 = time.perf_counter()
     filter_strings, time_coords = _build_time_steps(
@@ -666,14 +803,26 @@ def open(  # noqa: A001
             f"(bbox={bbox_4326}, datetime={datetime}).",
         )
 
+    method_cls = mosaic_method if mosaic_method is not None else FirstMethod
+    out_dtype, dtype_was_explicit = _resolve_output_dtype(
+        [inspection.dtypes[band] for band in resolved_bands],
+        dtype=dtype,
+        method_cls=method_cls,
+    )
+    nodata_was_explicit = nodata is not None
+    resolved_nodata = (
+        nodata
+        if nodata_was_explicit
+        else _resolve_output_nodata(
+            [inspection.nodata_values[band] for band in resolved_bands],
+        )
+    )
+
     logger.info(
         "Discovered %d bands and %d time steps.",
         len(resolved_bands),
         len(filter_strings),
     )
-
-    out_dtype = np.dtype(dtype) if dtype is not None else np.dtype("float32")
-    method_cls = mosaic_method if mosaic_method is not None else FirstMethod
 
     return _build_dataarray(
         parquet_path=href,
@@ -688,8 +837,10 @@ def open(  # noqa: A001
         sortby=sortby,
         filter=filter,
         ids=ids,
-        nodata=nodata,
+        nodata=resolved_nodata,
         out_dtype=out_dtype,
+        dtype_was_explicit=dtype_was_explicit,
+        nodata_was_explicit=nodata_was_explicit,
         method_cls=method_cls,
         chunks=chunks,
         store=store,

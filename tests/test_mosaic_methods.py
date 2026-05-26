@@ -11,6 +11,7 @@ from lazycogs._mosaic_methods import (
     LowestMethod,
     MeanMethod,
     MedianMethod,
+    MosaicMethodBase,
     StdevMethod,
 )
 
@@ -204,3 +205,15 @@ def test_count_always_done():
     m = CountMethod()
     m.feed(ma.MaskedArray(np.ones((1, 2, 2), dtype=np.uint16), mask=False))
     assert m.is_done
+
+
+def test_requires_float_flags():
+    """Only float-valued aggregation methods advertise float-only output."""
+    assert MosaicMethodBase.requires_float is False
+    assert FirstMethod.requires_float is False
+    assert HighestMethod.requires_float is False
+    assert LowestMethod.requires_float is False
+    assert CountMethod.requires_float is False
+    assert MeanMethod.requires_float is True
+    assert MedianMethod.requires_float is True
+    assert StdevMethod.requires_float is True

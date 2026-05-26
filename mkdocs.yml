@@ -24,6 +24,7 @@ nav:
       - STAC item queries: guides/stac-search.md
       - Mosaic methods: guides/mosaic-methods.md
       - Temporal grouping: guides/temporal-grouping.md
+      - dtype and nodata handling: guides/dtype-nodata.md
       - Inspecting read plans: notebooks/explain.ipynb
       - Cloud storage: guides/cloud-storage.md
       - Chunking and concurrency: guides/chunking.md
@@ -33,6 +34,7 @@ nav:
       - NASA HLS:
           - notebooks/hls-https.ipynb
           - notebooks/hls-s3.ipynb
+          - notebooks/hls-analysis.ipynb
       - CMR STAC example: notebooks/cmr-lpcloud-fix-assets.ipynb
       - Experimental async workflow: notebooks/async-workflow.ipynb
       - lazycogs vs odc-stac: notebooks/lazycogs-odc-stac.ipynb
