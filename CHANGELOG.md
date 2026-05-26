@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/developmentseed/lazycogs/compare/v0.3.1...v0.4.0) (2026-05-26)
+
+
+### Features
+
+* improve nodata and dtype handling ([#63](https://github.com/developmentseed/lazycogs/issues/63)) ([4dbd618](https://github.com/developmentseed/lazycogs/commit/4dbd618bf1d0e2af9ec8ef36b81639831fc08fb5))
+
+
+### Bug Fixes
+
+* replace ObjectStore type requirement with async_geotiff.Store ([#60](https://github.com/developmentseed/lazycogs/issues/60)) ([ea2837a](https://github.com/developmentseed/lazycogs/commit/ea2837a8d7260a6c3890b4723a83c1230bde8a3e))
+
 ## [0.3.1](https://github.com/developmentseed/lazycogs/compare/v0.3.0...v0.3.1) (2026-05-15)
 
 
