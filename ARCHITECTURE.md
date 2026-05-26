@@ -55,7 +55,7 @@ src/lazycogs/
 7. Calls `compute_output_grid()` to get the output affine transform and dimensions (width, height). No eager coordinate arrays are produced.
 8. Creates a single `MultiBandStacBackendArray` (a dataclass) with shape `(band, time, y, x)` holding all the parameters needed to materialise any chunk later, then wraps it in one `xarray.core.indexing.LazilyIndexedArray`. This avoids `xr.concat` (used internally by `ds.to_array()`), which would eagerly load `LazilyIndexedArray`-backed objects.
 9. Uses `rasterix.RasterIndex` for spatial indexing, but materialises the x/y coordinate variables eagerly as numpy arrays so chunked scalar spatial selections compute reliably.
-10. Constructs the `xr.DataArray` directly from the 4-D variable. If `chunks` is provided, calls `.chunk(chunks)` to convert to a dask-backed array; otherwise the `LazilyIndexedArray` remains in play so narrow slices (e.g. a single pixel) translate to minimal I/O. When output nodata is known, the returned array advertises it via `attrs["nodata"]`, `attrs["_FillValue"]`, and `attrs["missing_value"]`; when unknown, none of those attrs are attached.
+10. Constructs the `xr.DataArray` directly from the 4-D variable. If `chunks` is provided, calls `.chunk(chunks)` to convert to a dask-backed array; otherwise the `LazilyIndexedArray` remains in play so narrow slices (e.g. a single pixel) translate to minimal I/O. When output nodata is known, the returned array sets `da.attrs["_FillValue"]` and `da.encoding["_FillValue"]` for downstream serialization. When unknown, no `_FillValue` metadata is attached.
 11. Stores `_stac_backend` (the `MultiBandStacBackendArray` instance) and `_stac_time_coords` (the full time coordinate array) in `da.attrs` so that `da.lazycogs.explain()` can reconstruct the explain plan without re-specifying `open()` parameters.
 
 ## Explain: dry-run read estimator
@@ -215,6 +215,8 @@ Each grouper provides three methods: `group_key()` maps a datetime string to a s
 - `MeanMethod` / `MedianMethod` / `StdevMethod`: Accumulates all arrays and reduces at the end. These methods advertise `requires_float = True`, so `open()` auto-promotes inferred integer outputs to `float32` and rejects explicit integer `dtype=` overrides.
 - `CountMethod`: Counts valid (non-masked) observations per pixel.
 
+For nodata-aware methods, any pixels that remain masked after mosaicking are materialized with the resolved output nodata sentinel when one is known, or with `0` only when output nodata is unknown.
+
 These are copied from `rio-tiler` (MIT licence, zero GDAL imports) to avoid pulling in rasterio as a transitive dependency.
 
 ## Temporal compositing
@@ -282,5 +284,6 @@ The documentation site is built with [mkdocs-material](https://squidfunk.github.
 - **Introduction**: rendered from `README.md` (symlinked as `docs/index.md`)
 - **Examples**: two Jupyter notebooks rendered by `mkdocs-jupyter` — `docs/demo_midwest_daily.ipynb` (daily Sentinel-2 array over the Midwest US) and `docs/demo_southwest_monthly.ipynb` (monthly low-cloud composite over the US Southwest)
 - **API Reference**: auto-generated from docstrings by `mkdocstrings[python]`
+- **Guides**: focused docs for topics like STAC queries, chunking, cloud storage, and dtype/nodata handling
 
 To preview locally: `uv run mkdocs serve`

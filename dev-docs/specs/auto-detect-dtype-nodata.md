@@ -58,13 +58,12 @@ When lazycogs can determine one scalar output nodata value, that value means:
 - out-of-bounds pixels introduced by reprojection
 - pixels that remain invalid after mosaicking because every contributing input pixel was nodata
 
-When nodata is known, the returned `DataArray` should advertise it in attrs:
+When nodata is known, the returned `DataArray` should advertise it via:
 
-- `nodata`
-- `_FillValue`
-- `missing_value`
+- `attrs["_FillValue"]`
+- `encoding["_FillValue"]`
 
-This is intentionally boring. It gives callers one obvious place to inspect and gives future serialization work a clear contract.
+This keeps the contract lean and aligns with downstream serialization tools such as rioxarray.
 
 ### 3. Auto-detected nodata must be coherent, not guessed
 
@@ -249,12 +248,10 @@ What changes is the startup contract and metadata, not the basic masking algorit
 When output nodata is known, `_build_dataarray()` should attach:
 
 ```python
-attrs["nodata"] = out_nodata
-attrs["_FillValue"] = out_nodata
-attrs["missing_value"] = out_nodata
+da.encoding["_FillValue"] = out_nodata
 ```
 
-When output nodata is `None`, none of those attrs should be set.
+When output nodata is `None`, no `_FillValue` encoding should be set.
 
 This spec does not require xarray encoding changes yet.
 
@@ -286,7 +283,7 @@ Add focused unit coverage for:
 Add integration coverage for:
 
 - integer collection -> inferred integer dtype
-- inferred nodata attached to `da.attrs`
+- inferred nodata attached to `da.encoding["_FillValue"]`
 - conflicting sampled nodata -> `ValueError` unless `nodata=` is passed
 - `MeanMethod` with inferred integer dtype -> `ValueError`
 - explicit `dtype="float32"` still works with float-required methods
@@ -313,7 +310,7 @@ Existing behavior should remain true for:
 ## Open questions
 
 - Should `CountMethod` force an integer output dtype when `dtype` is omitted, or should it continue to respect the generic promotion result? For now this spec leaves `CountMethod` alone.
-- Should future serialization work move `_FillValue` / `missing_value` into xarray encoding as well as attrs? Probably yes, but that is out of scope here.
+- Should lazycogs eventually offer an explicit nodata decoding mode for in-memory analysis, rather than only advertising `_FillValue` for downstream serialization?
 - If a collection has no source nodata and the user omits `nodata=`, should lazycogs eventually promote integer outputs to float and use `NaN` for uncovered pixels? That would be a larger behavioral change and is not part of this pass.
 
 ## Recommended next implementation order

@@ -107,6 +107,8 @@ For most users, the recommended path is still obstore: leave `store=None` to aut
 
 ## Dtype and nodata semantics
 
+See also: [docs guide on dtype and nodata handling](docs/guides/dtype-nodata.md).
+
 When you omit `dtype=`, `lazycogs.open()` samples one representative COG per
 requested band and infers one safe output dtype instead of defaulting to
 `float32`. That inferred dtype is then enforced at chunk-read time: if a later
@@ -116,12 +118,13 @@ asks you to pass `dtype=` explicitly.
 When you omit `nodata=`:
 
 - if sampled bands all agree on one scalar nodata sentinel, the returned
-  `DataArray` gets `attrs["nodata"]`, `attrs["_FillValue"]`, and
-  `attrs["missing_value"]`
+  `DataArray` sets `attrs["_FillValue"]` and `encoding["_FillValue"]`, and
+  masked mosaic output materializes with that same sentinel instead of zero
 - if sampled bands disagree, `open()` raises `ValueError` and asks you to pass
   `nodata=` explicitly
-- if sampled bands have no nodata sentinel, no nodata attrs are attached and
-  `0` remains only an implementation fill value for uncovered regions
+- if sampled bands have no nodata sentinel, no `_FillValue` encoding is
+  attached and `0` remains only an implementation fill value for uncovered
+  regions
 - if later chunk reads encounter a conflicting source nodata value, compute
   raises and asks you to pass `nodata=` explicitly
 
@@ -157,5 +160,6 @@ asks for `dtype="float32"` or `dtype="float64"` instead.
 - [Home](https://developmentseed.github.io/lazycogs/) — quickstart and full usage guide
 - [Example: Midwest US daily Sentinel-2 array](https://developmentseed.org/lazycogs/notebooks/demo_midwest_daily/)
 - [Example: Southwest US monthly low-cloud Sentinel-2 array](https://developmentseed.org/lazycogs/notebooks/demo_southwest_monthly/)
+- [Guide: dtype and nodata handling](https://developmentseed.org/lazycogs/guides/dtype-nodata/)
 - [Architecture](https://developmentseed.org/lazycogs/architecture/)
 - [Contributing](CONTRIBUTING.md)
