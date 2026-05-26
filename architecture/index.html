@@ -413,6 +413,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../guides/dtype-nodata/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    dtype and nodata handling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../notebooks/explain/" class="md-nav__link">
         
   
@@ -690,6 +718,34 @@
     
   
     HLS Example (us-west-2 only)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../notebooks/hls-analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HLS NDVI Analysis
   
 
     
@@ -1652,12 +1708,12 @@
 <p>For large pre-existing STAC archives stored as hive-partitioned parquet directories (e.g. <code>year=2023/month=01/...</code>), pass a <code>DuckdbClient(use_hive_partitioning=True)</code> via the <code>duckdb_client</code> parameter to enable DuckDB partition pruning. All internal queries in <code>open()</code> use <code>duckdb_client.search()</code>. When <code>duckdb_client</code> is <code>None</code>, a plain <code>DuckdbClient()</code> is created automatically.</p>
 <h2 id="two-phase-execution-model">Two-phase execution model<a class="headerlink" href="#two-phase-execution-model" title="Permanent link">&para;</a></h2>
 <p>Work is split sharply into two phases.</p>
-<p><strong>Phase 0 — open time</strong> runs at <code>open()</code> call time. It does the minimum needed to build a fully-described lazy DataArray: one DuckDB query to discover bands, one DuckDB query to build the time axis, a small object-store access smoketest, and a grid computation. No pixel I/O happens. No dask task graph is built. A single <code>MultiBandStacBackendArray</code> is wrapped in an xarray <code>LazilyIndexedArray</code>.</p>
+<p><strong>Phase 0 — open time</strong> runs at <code>open()</code> call time. It does the minimum needed to build a fully-described lazy DataArray: one DuckDB query to inspect the first matching item, one DuckDB query to build the time axis, concurrent COG metadata opens for the requested bands, and a grid computation. No pixel windows are read. No dask task graph is built. A single <code>MultiBandStacBackendArray</code> is wrapped in an xarray <code>LazilyIndexedArray</code>.</p>
 <p><strong>Phase 1 — compute time</strong> runs inside a dask worker when a chunk is actually computed. <code>MultiBandStacBackendArray.__getitem__</code> receives the exact <code>(band, time, y, x)</code> index for the chunk, derives the chunk's spatial footprint, queries DuckDB for only the COGs that overlap that footprint and time step, reads and reprojects all selected bands concurrently with <code>asyncio</code>, and mosaics the results.</p>
-<p>This split means that <code>open()</code> is nearly instant even for large queries, and the DuckDB spatial filter runs once per chunk rather than over the entire bbox at open time. The one exception to the "metadata-only" story is the storage smoketest: <code>open()</code> issues a single <code>head()</code> against one representative asset so authentication and object-store wiring fail early with a clear error.</p>
+<p>This split means that <code>open()</code> is nearly instant even for large queries, and the DuckDB spatial filter runs once per chunk rather than over the entire bbox at open time. The startup inspection is still deliberately small: one representative item and one <code>GeoTIFF.open(...)</code> per requested band, just enough to validate store access and infer the output dtype/nodata contract. That contract is enforced later during chunk reads unless the caller passed <code>dtype=</code> or <code>nodata=</code> explicitly.</p>
 <h2 id="module-overview">Module overview<a class="headerlink" href="#module-overview" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>src/lazycogs/
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  _core.py           Entry point. open(), band discovery, time-step building.
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  _core.py           Entry point. open(), representative-item inspection, dtype/nodata resolution, time-step building.
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>  _backend.py        MultiBandStacBackendArray — xarray BackendArray implementation that bridges xarray indexing to chunk reads.
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>  _chunk_reader.py   Async mosaic logic: open COGs, select overviews, read windows, reproject, mosaic.
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>  _executor.py       Shared background loop and bounded executors. Exposes run_on_loop().
@@ -1675,13 +1731,18 @@
 <li>Resolves <code>duckdb_client</code>: if not provided, creates a plain <code>DuckdbClient()</code>. Validates that <code>href</code> ends in <code>.parquet</code>/<code>.geoparquet</code> when no client is supplied (a directory path is accepted when a custom client is passed).</li>
 <li>Parses <code>time_period</code> into a <code>_TemporalGrouper</code> (see <code>_temporal.py</code>).</li>
 <li>Converts <code>bbox</code> from the target CRS to EPSG:4326 using <code>pyproj.Transformer</code>.</li>
-<li>Calls <code>_discover_bands()</code>: queries the parquet source via <code>duckdb_client.search(..., max_items=1)</code> to find asset keys. Assets with role <code>"data"</code> or media type <code>"image/tiff"</code> are returned first.</li>
-<li>Calls <code>_smoketest_store()</code>: fetches one sample item from the parquet, resolves the store for a representative data asset HREF, and calls <code>GeoTIFF.open(path, store=...)</code> to confirm that the configured store satisfies the same read contract the real chunk reader uses. Raises <code>RuntimeError</code> immediately with a clear message if the store cannot reach the asset, so misconfiguration is surfaced at <code>open()</code> time rather than deferred to the first chunk read.</li>
+<li>Calls <code>_inspect_first_item()</code>: queries the parquet source via <code>duckdb_client.search(..., max_items=1)</code> to fetch one representative item, resolves preferred data assets (or caller-requested <code>bands=</code>), and opens one COG per requested band concurrently through <code>run_on_loop(...)</code>.</li>
+<li>Resolves the output contract from that inspection result:</li>
+<li><code>bands</code>: explicit <code>bands=</code> wins, otherwise the inspected preferred-band order</li>
+<li><code>dtype</code>: explicit <code>dtype=</code> wins unless it is an integer paired with a float-only mosaic method; otherwise lazycogs infers from <code>_promote_dtypes(...)</code> and auto-promotes integer inference to <code>float32</code> for float-only methods</li>
+<li><code>nodata</code>: explicit <code>nodata=</code> wins, otherwise <code>_resolve_output_nodata(...)</code></li>
+<li>float-only mosaic methods (<code>MeanMethod</code>, <code>MedianMethod</code>, <code>StdevMethod</code>) fail early only when the caller explicitly forces an integer dtype</li>
+<li>inferred <code>dtype</code> and <code>nodata</code> are runtime-validated during chunk reads so later heterogeneous assets fail loudly instead of truncating or silently remapping nodata</li>
 <li>Calls <code>_build_time_steps()</code>: queries the parquet source via <code>duckdb_client.search_to_arrow(...)</code> to obtain an Arrow table containing only the <code>datetime</code> and <code>start_datetime</code> columns (plus any filter/sort fields). Extracts timestamps from the Arrow columns without Python-level dict walking, buckets them with the <code>_TemporalGrouper</code>, deduplicates, and returns sorted <code>(filter_strings, time_coords)</code> pairs. Only groups with at least one item produce a time step.</li>
 <li>Calls <code>compute_output_grid()</code> to get the output affine transform and dimensions (width, height). No eager coordinate arrays are produced.</li>
 <li>Creates a single <code>MultiBandStacBackendArray</code> (a dataclass) with shape <code>(band, time, y, x)</code> holding all the parameters needed to materialise any chunk later, then wraps it in one <code>xarray.core.indexing.LazilyIndexedArray</code>. This avoids <code>xr.concat</code> (used internally by <code>ds.to_array()</code>), which would eagerly load <code>LazilyIndexedArray</code>-backed objects.</li>
 <li>Uses <code>rasterix.RasterIndex</code> for spatial indexing, but materialises the x/y coordinate variables eagerly as numpy arrays so chunked scalar spatial selections compute reliably.</li>
-<li>Constructs the <code>xr.DataArray</code> directly from the 4-D variable. If <code>chunks</code> is provided, calls <code>.chunk(chunks)</code> to convert to a dask-backed array; otherwise the <code>LazilyIndexedArray</code> remains in play so narrow slices (e.g. a single pixel) translate to minimal I/O.</li>
+<li>Constructs the <code>xr.DataArray</code> directly from the 4-D variable. If <code>chunks</code> is provided, calls <code>.chunk(chunks)</code> to convert to a dask-backed array; otherwise the <code>LazilyIndexedArray</code> remains in play so narrow slices (e.g. a single pixel) translate to minimal I/O. When output nodata is known, the returned array sets <code>da.attrs["_FillValue"]</code> and <code>da.encoding["_FillValue"]</code> for downstream serialization. When unknown, no <code>_FillValue</code> metadata is attached.</li>
 <li>Stores <code>_stac_backend</code> (the <code>MultiBandStacBackendArray</code> instance) and <code>_stac_time_coords</code> (the full time coordinate array) in <code>da.attrs</code> so that <code>da.lazycogs.explain()</code> can reconstruct the explain plan without re-specifying <code>open()</code> parameters.</li>
 </ol>
 <h2 id="explain-dry-run-read-estimator">Explain: dry-run read estimator<a class="headerlink" href="#explain-dry-run-read-estimator" title="Permanent link">&para;</a></h2>
@@ -1724,7 +1785,7 @@
 <p>The y coordinates are derived directly from the affine transform: <code>y[i] = f + e * (0.5 + i)</code>. Because <code>e &lt; 0</code>, <code>y[0]</code> is the northernmost pixel centre and the array is strictly decreasing. Spatial selection uses <code>sel(y=slice(north, south))</code> (high to low).</p>
 <p>A <code>rasterix.RasterIndex</code> is attached to every DataArray returned by <code>open()</code>. The index provides CRS discoverability via <code>da.proj.crs</code> and enables spatial alignment with other RasterIndex-backed arrays. The x/y coordinate variables themselves are still materialised eagerly from that index so operations like <code>da.chunk(...).sel(x=..., y=..., method="nearest").compute()</code> keep scalar spatial coordinates as true scalars instead of length-1 arrays.</p>
 <h2 id="per-chunk-read-and-resample-pipeline">Per-chunk read and resample pipeline<a class="headerlink" href="#per-chunk-read-and-resample-pipeline" title="Permanent link">&para;</a></h2>
-<p>Each call to <code>_read_item_band()</code> in <code>_chunk_reader.py</code> follows a four-step pipeline to turn a remote COG into a correctly-sized, correctly-projected numpy array for one destination chunk.</p>
+<p>Each call to <code>_read_item_band()</code> in <code>_chunk_reader.py</code> first validates the source asset against the inferred output contract, then follows a four-step pipeline to turn a remote COG into a correctly-sized, correctly-projected numpy array for one destination chunk.</p>
 <h3 id="1-overview-selection">1. Overview selection<a class="headerlink" href="#1-overview-selection" title="Permanent link">&para;</a></h3>
 <p>Before fetching any pixels, <code>_select_overview()</code> picks the right level of the COG's built-in pyramid. The target resolution is estimated in the source image's native CRS: if <code>dst_crs</code> differs from the COG's CRS, a 1-pixel offset at the chunk centre is transformed with pyproj to approximate the pixel size in source units. The overview list (ordered finest → coarsest) is walked to find the coarsest overview whose pixel size is still ≤ the target — i.e. the finest source data that avoids upsampling. This preserves as much spatial detail as the output scale warrants without reading unnecessarily fine data. If no overview satisfies the condition (target falls between native and the finest overview), or no overviews exist, full-resolution is used.</p>
 <p>This is the primary resampling control: the pyramid level is chosen to match the output resolution, so the reprojection step works on roughly the right amount of data.</p>
@@ -1747,7 +1808,7 @@
 <h2 id="concurrency-model">Concurrency model<a class="headerlink" href="#concurrency-model" title="Permanent link">&para;</a></h2>
 <p>There are two load-bearing concurrency layers in a chunk read, plus dask as an orthogonal scheduler.</p>
 <p><strong>Dask (optional, chunk level).</strong> When a dask-backed DataArray is computed, dask dispatches chunk tasks to worker threads. Each worker thread calls <code>_sync_getitem()</code> in <code>_backend.py</code>, which uses <code>run_on_loop(_async_getitem(...))</code> to submit the chunk read to lazycogs' shared persistent background loop. Dask controls how many chunk tasks run at once; it does not create extra lazycogs event loops.</p>
-<p><strong>One shared asyncio loop (I/O fan-out).</strong> A single background event loop is created lazily and reused for every sync caller. Startup is only considered ready once that loop is actually running, so first-use sync bridge calls do not depend on thread scheduling luck. Inside <code>_async_getitem</code>, <code>asyncio.gather</code> fans out one <code>_run_one_date</code> coroutine per requested time step, and each time step uses <code>read_chunk_async</code> to fan out item reads under <code>asyncio.Semaphore(max_concurrent_reads)</code>. COG header reads and tile fetches from <code>async-geotiff</code> are all awaitable, so the loop multiplexes network I/O without blocking. DuckDB work never runs on the loop thread: <code>_search_items_async</code> and <code>_explain_async</code> both route queries through <code>run_duckdb(...)</code>, a small internal helper that applies a private submission bound before dispatching onto the DuckDB executor. The executor is still bounded (<code>max_workers=1</code> today), so DuckDB yields the event loop but still matches the effective single-connection serialization of the current client model. The current local benchmark fixture keeps DuckDB well below the U4 threshold for a separate client pool (1.9% of per-date chunk wall time on a small-bbox / many-time-step workload, 0.2% on a large-bbox / few-time-step workload), so the single-worker executor remains the intended design for now.</p>
+<p><strong>One shared asyncio loop (I/O fan-out).</strong> A single background event loop is created lazily and reused for every sync caller. Startup is only considered ready once that loop is actually running, so first-use sync bridge calls do not depend on thread scheduling luck. Inside <code>_async_getitem</code>, <code>asyncio.gather</code> fans out one <code>_run_one_date</code> coroutine per requested time step, and each time step uses <code>read_chunk_async</code> to fan out item reads under <code>asyncio.Semaphore(max_concurrent_reads)</code>. COG header reads and tile fetches from <code>async-geotiff</code> are all awaitable, so the loop multiplexes network I/O without blocking. DuckDB work never runs on the loop thread: <code>_search_items_async</code> and <code>_explain_async</code> both route queries through <code>run_duckdb(...)</code>, a small internal helper that applies a private submission bound before dispatching onto the DuckDB executor. The executor is still bounded (<code>max_workers=1</code> today), so DuckDB yields the event loop but still matches the effective single-connection serialization of the current client model. The current local benchmark fixture keeps DuckDB well below the U4 threshold for a separate client pool (1.9% of per-date chunk wall time on a small-bbox / many-time-step workload, 0.2% on a large-bbox / few-time-step workload), so the single-worker executor remains the intended design for now. That same prepared benchmark dataset also backs offline regression coverage in <code>tests/benchmarks/</code>, which keeps dtype/nodata contract tests off the network while exercising real local COGs.</p>
 <p><strong>One bounded reprojection thread pool (CPU work).</strong> <code>_apply_bands_with_warp_cache</code> is synchronous CPU-bound work that processes all bands for one item together. <code>_read_item_band</code> dispatches it via <code>loop.run_in_executor(get_reproject_pool(), ...)</code>, so the event loop stays free while reprojections run on a shared bounded thread pool. The default bound is <code>min(os.cpu_count() or 1, 4)</code>, configurable before first use via <code>LAZYCOGS_REPROJECT_WORKERS</code>. That environment variable is read once when the pool is first created; later changes are ignored. The <code>warp_cache</code> is shared across coroutines; <code>compute_warp_map</code> is deterministic, so duplicate concurrent writes are safe.</p>
 <p><strong>Why threads, not a process pool.</strong> <code>pyproj.Transformer.transform()</code> and numpy's fancy-indexing both release the GIL during their heavy inner loops. Threads therefore give real CPU parallelism here without the process-spawn and array-pickling overhead of a <code>ProcessPoolExecutor</code>.</p>
 <p><strong>Why reprojection is memory-bandwidth-bound, not compute-bound.</strong> <code>compute_warp_map</code> builds two meshgrids the size of the output chunk, transforms all coordinates in one vectorised call, and produces large index arrays. <code>apply_warp_map</code> samples the source array with random-access fancy indexing (<code>out[:, valid] = data[:, row_idx[valid], col_idx[valid]]</code>), which produces near-constant cache misses. Both phases are dominated by memory latency and bandwidth rather than arithmetic, so pushing far past 4 threads usually hurts more than it helps.</p>
@@ -1831,9 +1892,10 @@
 <ul>
 <li><code>FirstMethod</code>: Returns the first valid pixel seen. Short-circuits when all pixels are filled.</li>
 <li><code>HighestMethod</code> / <code>LowestMethod</code>: Tracks the running max / min across items.</li>
-<li><code>MeanMethod</code> / <code>MedianMethod</code> / <code>StdevMethod</code>: Accumulates all arrays and reduces at the end.</li>
+<li><code>MeanMethod</code> / <code>MedianMethod</code> / <code>StdevMethod</code>: Accumulates all arrays and reduces at the end. These methods advertise <code>requires_float = True</code>, so <code>open()</code> auto-promotes inferred integer outputs to <code>float32</code> and rejects explicit integer <code>dtype=</code> overrides.</li>
 <li><code>CountMethod</code>: Counts valid (non-masked) observations per pixel.</li>
 </ul>
+<p>For nodata-aware methods, any pixels that remain masked after mosaicking are materialized with the resolved output nodata sentinel when one is known, or with <code>0</code> only when output nodata is unknown.</p>
 <p>These are copied from <code>rio-tiler</code> (MIT licence, zero GDAL imports) to avoid pulling in rasterio as a transitive dependency.</p>
 <h2 id="temporal-compositing">Temporal compositing<a class="headerlink" href="#temporal-compositing" title="Permanent link">&para;</a></h2>
 <p>Combining <code>time_period</code> with a mosaic method is the idiomatic way to produce
@@ -1927,6 +1989,7 @@ mean that requires all weeks to be present before reducing).</p>
 <li><strong>Introduction</strong>: rendered from <code>README.md</code> (symlinked as <code>docs/index.md</code>)</li>
 <li><strong>Examples</strong>: two Jupyter notebooks rendered by <code>mkdocs-jupyter</code> — <code>docs/demo_midwest_daily.ipynb</code> (daily Sentinel-2 array over the Midwest US) and <code>docs/demo_southwest_monthly.ipynb</code> (monthly low-cloud composite over the US Southwest)</li>
 <li><strong>API Reference</strong>: auto-generated from docstrings by <code>mkdocstrings[python]</code></li>
+<li><strong>Guides</strong>: focused docs for topics like STAC queries, chunking, cloud storage, and dtype/nodata handling</li>
 </ul>
 <p>To preview locally: <code>uv run mkdocs serve</code></p>
 

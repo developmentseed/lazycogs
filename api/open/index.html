@@ -413,6 +413,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../guides/dtype-nodata/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    dtype and nodata handling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../notebooks/explain/" class="md-nav__link">
         
   
@@ -690,6 +718,34 @@
     
   
     HLS Example (us-west-2 only)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../notebooks/hls-analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HLS NDVI Analysis
   
 
     
@@ -1141,7 +1197,7 @@
 <h1 id="open">open<a class="headerlink" href="#open" title="Permanent link">&para;</a></h1>
 <div class="admonition tip">
 <p class="admonition-title">See also</p>
-<p><a href="../../notebooks/quickstart/">Quickstart</a> · <a href="../../guides/stac-search/">STAC item queries guide</a> · <a href="../../guides/temporal-grouping/">Temporal grouping guide</a> · <a href="../../guides/cloud-storage/">Cloud storage guide</a> · <a href="../../guides/chunking/">Chunking guide</a> · <a href="../../notebooks/explain/">Inspecting read plans</a></p>
+<p><a href="../../notebooks/quickstart/">Quickstart</a> · <a href="../../guides/stac-search/">STAC item queries guide</a> · <a href="../../guides/temporal-grouping/">Temporal grouping guide</a> · <a href="../../guides/dtype-nodata/">Dtype and nodata guide</a> · <a href="../../guides/cloud-storage/">Cloud storage guide</a> · <a href="../../guides/chunking/">Chunking guide</a> · <a href="../../notebooks/explain/">Inspecting read plans</a></p>
 </div>
 
 
@@ -1320,8 +1376,8 @@ to DuckDB queries, e.g. <code>"eo:cloud_cover &lt; 20"</code>.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Asset keys to include.  If <code>None</code>, auto-detected from the
-first matching item.</p>
+                <p>Asset keys to include. If <code>None</code>, inferred from the first
+matching item's preferred data assets.</p>
               </div>
             </td>
             <td>
@@ -1374,7 +1430,9 @@ larger regions.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>No-data fill value for output arrays.</p>
+                <p>No-data fill value for output arrays. When omitted,
+lazycogs advertises a scalar nodata sentinel only when sampled
+bands agree on one.</p>
               </div>
             </td>
             <td>
@@ -1390,7 +1448,10 @@ larger regions.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Output array dtype.  Defaults to <code>float32</code>.</p>
+                <p>Output array dtype. When omitted, inferred from sampled asset
+dtypes on the first matching item. Float-only mosaic methods may
+auto-promote inferred integer outputs to <code>float32</code>. Explicit
+integer <code>dtype=</code> still raises for those methods.</p>
               </div>
             </td>
             <td>

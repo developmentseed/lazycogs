@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://developmentseed.org/lazycogs/guides/temporal-grouping/">
+        <link rel="canonical" href="https://developmentseed.org/lazycogs/guides/dtype-nodata/">
       
       
-        <link rel="prev" href="../mosaic-methods/">
+        <link rel="prev" href="../temporal-grouping/">
       
       
-        <link rel="next" href="../dtype-nodata/">
+        <link rel="next" href="../../notebooks/explain/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Temporal grouping - lazycogs</title>
+        <title>dtype and nodata handling - lazycogs</title>
       
     
     
@@ -72,7 +72,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#temporal-grouping" class="md-skip">
+        <a href="#dtype-and-nodata-handling" class="md-skip">
           Skip to content
         </a>
       
@@ -107,7 +107,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Temporal grouping
+              dtype and nodata handling
             
           </span>
         </div>
@@ -384,6 +384,34 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../temporal-grouping/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Temporal grouping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -403,7 +431,7 @@
   <span class="md-ellipsis">
     
   
-    Temporal grouping
+    dtype and nodata handling
   
 
     
@@ -421,7 +449,7 @@
   <span class="md-ellipsis">
     
   
-    Temporal grouping
+    dtype and nodata handling
   
 
     
@@ -447,10 +475,49 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#supported-values" class="md-nav__link">
+  <a href="#default-behavior" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Supported values
+        Default behavior
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Default behavior">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#dtype-inference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dtype inference
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nodata-inference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nodata inference
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-output-nodata-means" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What output nodata means
       
     </span>
   </a>
@@ -458,10 +525,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#why-this-is-more-efficient-than-post-hoc-resampling" class="md-nav__link">
+  <a href="#mosaic-method-interaction" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Why this is more efficient than post-hoc resampling
+        Mosaic-method interaction
       
     </span>
   </a>
@@ -469,10 +536,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#common-patterns" class="md-nav__link">
+  <a href="#explicit-overrides-win" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Common patterns
+        Explicit overrides win
       
     </span>
   </a>
@@ -480,10 +547,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#combining-with-mosaic-methods" class="md-nav__link">
+  <a href="#runtime-validation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Combining with mosaic methods
+        Runtime validation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick checks
       
     </span>
   </a>
@@ -494,34 +572,6 @@
   
 </nav>
       
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../dtype-nodata/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    dtype and nodata handling
-  
-
-    
-  </span>
-  
-  
-
-      </a>
     </li>
   
 
@@ -1197,10 +1247,49 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#supported-values" class="md-nav__link">
+  <a href="#default-behavior" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Supported values
+        Default behavior
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Default behavior">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#dtype-inference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dtype inference
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nodata-inference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nodata inference
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-output-nodata-means" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What output nodata means
       
     </span>
   </a>
@@ -1208,10 +1297,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#why-this-is-more-efficient-than-post-hoc-resampling" class="md-nav__link">
+  <a href="#mosaic-method-interaction" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Why this is more efficient than post-hoc resampling
+        Mosaic-method interaction
       
     </span>
   </a>
@@ -1219,10 +1308,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#common-patterns" class="md-nav__link">
+  <a href="#explicit-overrides-win" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Common patterns
+        Explicit overrides win
       
     </span>
   </a>
@@ -1230,10 +1319,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#combining-with-mosaic-methods" class="md-nav__link">
+  <a href="#runtime-validation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Combining with mosaic methods
+        Runtime validation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick checks
       
     </span>
   </a>
@@ -1260,107 +1360,85 @@
   
 
 
-<h1 id="temporal-grouping">Temporal grouping<a class="headerlink" href="#temporal-grouping" title="Permanent link">&para;</a></h1>
-<p>By default, each time step in a lazycogs DataArray represents one calendar day. When multiple scenes were acquired on the same day, the <a href="../mosaic-methods/">mosaic method</a> merges them into a single value per pixel.</p>
-<p>The <code>time_period</code> parameter lets you aggregate across longer windows. Setting <code>time_period="P1W"</code> means each time step represents one ISO calendar week; all scenes within that week are mosaicked together into a single composite. This is more efficient than building a daily array and then reducing along the time axis, because lazycogs only reads the pixels it actually needs for each composite — it never materializes the individual daily values before reducing them.</p>
-<h2 id="supported-values">Supported values<a class="headerlink" href="#supported-values" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th><code>time_period</code></th>
-<th>Window</th>
-<th>Time coordinate</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>"P1D"</code> (default)</td>
-<td>Calendar day</td>
-<td><code>YYYY-MM-DD</code></td>
-</tr>
-<tr>
-<td><code>"P1W"</code></td>
-<td>ISO calendar week (Monday through Sunday)</td>
-<td>Monday of the week</td>
-</tr>
-<tr>
-<td><code>"P1M"</code></td>
-<td>Calendar month</td>
-<td>First day of the month</td>
-</tr>
-<tr>
-<td><code>"P1Y"</code></td>
-<td>Calendar year</td>
-<td>January 1st</td>
-</tr>
-<tr>
-<td><code>"P16D"</code></td>
-<td>16-day fixed window</td>
-<td>Aligned to 2000-01-01 epoch</td>
-</tr>
-<tr>
-<td><code>"PnD"</code> (any n)</td>
-<td>n-day fixed window</td>
-<td>Aligned to 2000-01-01 epoch</td>
-</tr>
-</tbody>
-</table>
-<p>The <code>P16D</code> period is useful for Landsat (16-day orbital repeat) and MODIS-style composites. Any integer multiple of days is supported via <code>PnD</code>.</p>
-<h2 id="why-this-is-more-efficient-than-post-hoc-resampling">Why this is more efficient than post-hoc resampling<a class="headerlink" href="#why-this-is-more-efficient-than-post-hoc-resampling" title="Permanent link">&para;</a></h2>
-<p>Suppose you want monthly composites over a year. You could:</p>
-<ol>
-<li>Open a daily DataArray (<code>time_period="P1D"</code>, 365 steps) and call <code>.resample(time="MS").max()</code></li>
-<li>Open directly as monthly (<code>time_period="P1M"</code>, 12 steps)</li>
-</ol>
-<p>Option 1 materializes every daily value before the reduction — even for days with no data. Option 2 queries only the items that fall within each month when a pixel is read. For large archives with sparse coverage, option 2 can be orders of magnitude faster.</p>
-<h2 id="common-patterns">Common patterns<a class="headerlink" href="#common-patterns" title="Permanent link">&para;</a></h2>
-<p><strong>Weekly low-cloud composite:</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">da</span> <span class="o">=</span> <span class="n">lazycogs</span><span class="o">.</span><span class="n">open</span><span class="p">(</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="s2">&quot;items.parquet&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">bbox</span><span class="o">=</span><span class="n">dst_bbox</span><span class="p">,</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">crs</span><span class="o">=</span><span class="n">dst_crs</span><span class="p">,</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">resolution</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">time_period</span><span class="o">=</span><span class="s2">&quot;P1W&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">sortby</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;eo:cloud_cover&quot;</span><span class="p">],</span>       <span class="c1"># sort by cloud cover ascending (scene-level)</span>
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="p">)</span>
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="c1"># Each time step is a composite that preferentially draws from the least cloudy</span>
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="c1"># scenes acquired during that ISO week. Scene-level cloud cover sorting reduces</span>
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="c1"># overall cloud contamination but does not remove individual cloudy pixels unless</span>
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="c1"># they are masked to nodata in the source data.</span>
+<h1 id="dtype-and-nodata-handling">Dtype and nodata handling<a class="headerlink" href="#dtype-and-nodata-handling" title="Permanent link">&para;</a></h1>
+<p><code>lazycogs.open()</code> returns a plain numeric <code>xarray.DataArray</code>. It does not return a masked array.</p>
+<p>That means lazycogs has to make two output-level decisions:</p>
+<ul>
+<li><code>dtype</code>: the numeric type of the returned array</li>
+<li><code>nodata</code>: one scalar sentinel value for missing pixels, when that sentinel is knowable</li>
+</ul>
+<p>Internal masking still happens while reading and mosaicking COGs, but the public contract is always the numeric array you get back.</p>
+<h2 id="default-behavior">Default behavior<a class="headerlink" href="#default-behavior" title="Permanent link">&para;</a></h2>
+<p>When you omit <code>dtype=</code> and <code>nodata=</code>, lazycogs inspects the first matching STAC item and opens one representative COG per requested band.</p>
+<p>From that sample it resolves:</p>
+<ul>
+<li>one safe output <code>dtype</code></li>
+<li>one output <code>nodata</code> value, if the sampled bands agree on one</li>
+</ul>
+<h3 id="dtype-inference">Dtype inference<a class="headerlink" href="#dtype-inference" title="Permanent link">&para;</a></h3>
+<p>The sampled band dtypes are promoted to one safe output dtype.</p>
+<p>Examples:</p>
+<ul>
+<li>all <code>uint16</code> -&gt; <code>uint16</code></li>
+<li><code>uint8</code> + <code>int16</code> -&gt; <code>int16</code></li>
+<li>any <code>float32</code> present -&gt; <code>float32</code></li>
+<li>any <code>float64</code> present -&gt; <code>float64</code></li>
+</ul>
+<p>If lazycogs cannot promote the sampled dtypes safely, <code>open()</code> raises and asks you to pass <code>dtype=</code> explicitly.</p>
+<h3 id="nodata-inference">Nodata inference<a class="headerlink" href="#nodata-inference" title="Permanent link">&para;</a></h3>
+<p>When you omit <code>nodata=</code>:</p>
+<ul>
+<li>if sampled bands all agree on one scalar nodata value, lazycogs uses it</li>
+<li>if sampled bands all have <code>nodata=None</code>, lazycogs leaves output nodata unknown</li>
+<li>if sampled bands disagree, <code>open()</code> raises and asks you to pass <code>nodata=</code> explicitly</li>
+</ul>
+<p>When nodata is known, the returned <code>DataArray</code> advertises it in both:</p>
+<ul>
+<li><code>da.attrs["_FillValue"]</code></li>
+<li><code>da.encoding["_FillValue"]</code></li>
+</ul>
+<h2 id="what-output-nodata-means">What output nodata means<a class="headerlink" href="#what-output-nodata-means" title="Permanent link">&para;</a></h2>
+<p>When lazycogs knows one scalar nodata value, that value applies to:</p>
+<ul>
+<li>uncovered pixels</li>
+<li>out-of-bounds pixels introduced by reprojection</li>
+<li>pixels where every contributing source pixel was nodata</li>
+</ul>
+<p>When nodata is unknown, lazycogs does <strong>not</strong> attach <code>_FillValue</code> metadata. In that mode, <code>0</code> may still appear in uncovered regions as an implementation fill value, but <code>0</code> is not declared as semantic nodata.</p>
+<p>If you need a stable sentinel for downstream analysis or export, pass <code>nodata=</code> explicitly.</p>
+<h2 id="mosaic-method-interaction">Mosaic-method interaction<a class="headerlink" href="#mosaic-method-interaction" title="Permanent link">&para;</a></h2>
+<p><code>MeanMethod</code>, <code>MedianMethod</code>, and <code>StdevMethod</code> require floating-point output.</p>
+<p>If you omit <code>dtype=</code>, lazycogs will auto-promote an inferred integer dtype to <code>float32</code> for those methods. If you pass an explicit integer <code>dtype=</code>, <code>open()</code> raises.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">lazycogs</span><span class="w"> </span><span class="kn">import</span> <span class="n">MeanMethod</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">da</span> <span class="o">=</span> <span class="n">lazycogs</span><span class="o">.</span><span class="n">open</span><span class="p">(</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="s2">&quot;items.parquet&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">bbox</span><span class="o">=</span><span class="n">dst_bbox</span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">crs</span><span class="o">=</span><span class="n">dst_crs</span><span class="p">,</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">resolution</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">mosaic_method</span><span class="o">=</span><span class="n">MeanMethod</span><span class="p">,</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="p">)</span>
 </code></pre></div>
-<p><strong>Monthly composite:</strong></p>
+<h2 id="explicit-overrides-win">Explicit overrides win<a class="headerlink" href="#explicit-overrides-win" title="Permanent link">&para;</a></h2>
+<p>Caller-provided <code>dtype=</code> and <code>nodata=</code> are authoritative.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">da</span> <span class="o">=</span> <span class="n">lazycogs</span><span class="o">.</span><span class="n">open</span><span class="p">(</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="s2">&quot;items.parquet&quot;</span><span class="p">,</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="n">bbox</span><span class="o">=</span><span class="n">dst_bbox</span><span class="p">,</span>
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="n">crs</span><span class="o">=</span><span class="n">dst_crs</span><span class="p">,</span>
 <a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">resolution</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">time_period</span><span class="o">=</span><span class="s2">&quot;P1M&quot;</span><span class="p">,</span>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="p">)</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">dtype</span><span class="o">=</span><span class="s2">&quot;float32&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="n">nodata</span><span class="o">=-</span><span class="mi">9999</span><span class="p">,</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="p">)</span>
 </code></pre></div>
-<p><strong>16-day Landsat-style composite:</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">da</span> <span class="o">=</span> <span class="n">lazycogs</span><span class="o">.</span><span class="n">open</span><span class="p">(</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="s2">&quot;items.parquet&quot;</span><span class="p">,</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">bbox</span><span class="o">=</span><span class="n">dst_bbox</span><span class="p">,</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">crs</span><span class="o">=</span><span class="n">dst_crs</span><span class="p">,</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">resolution</span><span class="o">=</span><span class="mf">30.0</span><span class="p">,</span>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">time_period</span><span class="o">=</span><span class="s2">&quot;P16D&quot;</span><span class="p">,</span>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="p">)</span>
+<p>Use explicit overrides when you need a fixed contract across heterogeneous assets.</p>
+<h2 id="runtime-validation">Runtime validation<a class="headerlink" href="#runtime-validation" title="Permanent link">&para;</a></h2>
+<p>The startup inspection samples only one representative item. Later chunk reads still validate what they encounter.</p>
+<p>If a later asset conflicts with the inferred output contract, compute raises instead of silently truncating values or remapping nodata.</p>
+<h2 id="quick-checks">Quick checks<a class="headerlink" href="#quick-checks" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">da</span><span class="o">.</span><span class="n">dtype</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">da</span><span class="o">.</span><span class="n">encoding</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;_FillValue&quot;</span><span class="p">)</span>
 </code></pre></div>
-<h2 id="combining-with-mosaic-methods">Combining with mosaic methods<a class="headerlink" href="#combining-with-mosaic-methods" title="Permanent link">&para;</a></h2>
-<p><code>time_period</code> and <code>mosaic_method</code> work together. A common idiom is weekly windows with <code>FirstMethod</code> (default) sorted by ascending cloud cover — this draws each pixel from the least cloudy scene available in the week and stops reading further scenes once all output pixels are filled. Because <code>eo:cloud_cover</code> is a scene-level metric, this reduces overall cloud contamination but does not remove individual cloudy pixels:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">lazycogs</span><span class="w"> </span><span class="kn">import</span> <span class="n">FirstMethod</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">da</span> <span class="o">=</span> <span class="n">lazycogs</span><span class="o">.</span><span class="n">open</span><span class="p">(</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="s2">&quot;items.parquet&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">bbox</span><span class="o">=</span><span class="n">dst_bbox</span><span class="p">,</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">crs</span><span class="o">=</span><span class="n">dst_crs</span><span class="p">,</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="n">resolution</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="n">time_period</span><span class="o">=</span><span class="s2">&quot;P1W&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    <span class="n">sortby</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;eo:cloud_cover&quot;</span><span class="p">],</span>
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="n">mosaic_method</span><span class="o">=</span><span class="n">FirstMethod</span><span class="p">,</span>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="p">)</span>
-</code></pre></div>
-<p>See also: <a href="../../notebooks/demo_southwest_monthly/">Example: Southwest US monthly low-cloud Sentinel-2 array</a> for a worked example of monthly compositing, <a href="../mosaic-methods/">Mosaic methods guide</a>, <a href="../../api/open/">API reference for open()</a></p>
+<p>Those two values tell you most of what lazycogs has promised about the returned array.</p>
 
 
 
