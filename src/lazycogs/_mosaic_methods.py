@@ -21,9 +21,16 @@ class MosaicMethodBase(ABC):
 
     requires_float: bool = False
 
-    def __init__(self) -> None:
-        """Initialise an empty mosaic accumulator."""
+    def __init__(self, *, fill_value: float = 0) -> None:
+        """Initialise an empty mosaic accumulator.
+
+        Args:
+            fill_value: Value used when materialising still-masked output
+                pixels into a plain ndarray.
+
+        """
         self._mosaic: ma.MaskedArray | None = None
+        self._fill_value = fill_value
 
     @property
     def is_done(self) -> bool:
@@ -36,11 +43,11 @@ class MosaicMethodBase(ABC):
     def data(self) -> np.ndarray:
         """Return the filled mosaic as a plain numpy array.
 
-        Remaining masked pixels are filled with zero.
+        Remaining masked pixels are filled with the configured fill value.
         """
         if self._mosaic is None:
             raise ValueError("No data has been fed to the mosaic method.")
-        return ma.filled(self._mosaic, 0)
+        return ma.filled(self._mosaic, self._fill_value)
 
     @abstractmethod
     def feed(self, arr: ma.MaskedArray) -> None:
@@ -121,9 +128,9 @@ class MeanMethod(MosaicMethodBase):
 
     requires_float = True
 
-    def __init__(self) -> None:
+    def __init__(self, *, fill_value: float = 0) -> None:
         """Initialise accumulators for incremental mean computation."""
-        super().__init__()
+        super().__init__(fill_value=fill_value)
         self._count: np.ndarray | None = None
 
     def feed(self, arr: ma.MaskedArray) -> None:
@@ -159,7 +166,7 @@ class MeanMethod(MosaicMethodBase):
         """
         if self._mosaic is None:
             raise ValueError("No data has been fed to the mosaic method.")
-        return ma.filled(self._mosaic, 0)
+        return ma.filled(self._mosaic, self._fill_value)
 
 
 class MedianMethod(MosaicMethodBase):
@@ -167,9 +174,9 @@ class MedianMethod(MosaicMethodBase):
 
     requires_float = True
 
-    def __init__(self) -> None:
+    def __init__(self, *, fill_value: float = 0) -> None:
         """Initialise the tile stack."""
-        super().__init__()
+        super().__init__(fill_value=fill_value)
         self._stack: list[ma.MaskedArray] = []
 
     def feed(self, arr: ma.MaskedArray) -> None:
@@ -201,7 +208,7 @@ class MedianMethod(MosaicMethodBase):
         if not self._stack:
             raise ValueError("No data has been fed to the mosaic method.")
         stacked = ma.array(self._stack)
-        return ma.filled(ma.median(stacked, axis=0), 0)
+        return ma.filled(ma.median(stacked, axis=0), self._fill_value)
 
 
 class StdevMethod(MosaicMethodBase):
@@ -209,9 +216,9 @@ class StdevMethod(MosaicMethodBase):
 
     requires_float = True
 
-    def __init__(self) -> None:
+    def __init__(self, *, fill_value: float = 0) -> None:
         """Initialise the tile stack."""
-        super().__init__()
+        super().__init__(fill_value=fill_value)
         self._stack: list[ma.MaskedArray] = []
 
     def feed(self, arr: ma.MaskedArray) -> None:
@@ -243,7 +250,7 @@ class StdevMethod(MosaicMethodBase):
         if not self._stack:
             raise ValueError("No data has been fed to the mosaic method.")
         stacked = ma.array(self._stack)
-        return ma.filled(stacked.std(axis=0), 0)
+        return ma.filled(stacked.std(axis=0), self._fill_value)
 
 
 class CountMethod(MosaicMethodBase):

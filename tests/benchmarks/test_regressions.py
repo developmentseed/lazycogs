@@ -113,9 +113,10 @@ def test_open_infers_uint16_and_coherent_nodata_from_benchmark_data(
     )
 
     assert da.dtype == np.dtype("uint16")
-    assert da.attrs["nodata"] == 0
+    assert "nodata" not in da.attrs
+    assert "missing_value" not in da.attrs
     assert da.attrs["_FillValue"] == 0
-    assert da.attrs["missing_value"] == 0
+    assert da.encoding["_FillValue"] == 0
 
 
 def test_open_explicit_overrides_win_over_benchmark_inference(
@@ -133,9 +134,10 @@ def test_open_explicit_overrides_win_over_benchmark_inference(
     )
 
     assert da.dtype == np.dtype("float32")
-    assert da.attrs["nodata"] == -9999
+    assert "nodata" not in da.attrs
+    assert "missing_value" not in da.attrs
     assert da.attrs["_FillValue"] == -9999
-    assert da.attrs["missing_value"] == -9999
+    assert da.encoding["_FillValue"] == -9999
 
 
 def test_open_rejects_conflicting_sampled_nodata_on_local_benchmark_copy(
@@ -183,9 +185,10 @@ def test_open_accepts_conflicting_sampled_nodata_with_explicit_override(
         nodata=-9999,
     )
 
-    assert da.attrs["nodata"] == -9999
+    assert "nodata" not in da.attrs
+    assert "missing_value" not in da.attrs
     assert da.attrs["_FillValue"] == -9999
-    assert da.attrs["missing_value"] == -9999
+    assert da.encoding["_FillValue"] == -9999
 
 
 def test_compute_raises_on_later_incompatible_auto_inferred_dtype(
@@ -355,7 +358,42 @@ def test_compute_accepts_conflicting_nodata_with_explicit_override(
 
     assert data.shape == (1, 1, 1, 1)
     assert data.item() == 7
-    assert da.attrs["nodata"] == 0
+    assert "nodata" not in da.attrs
+    assert "missing_value" not in da.attrs
+    assert da.attrs["_FillValue"] == 0
+    assert da.encoding["_FillValue"] == 0
+
+
+def test_compute_preserves_explicit_nodata_for_fully_masked_pixels(
+    tmp_path: Path,
+    benchmark_items: list[dict[str, Any]],
+) -> None:
+    """Fully masked pixels materialize as the explicit nodata value, not zero."""
+    item = deepcopy(benchmark_items[0])
+    row, col = _item_center_pixel(item, "red")
+    pixel_bbox = _pixel_bbox(item["assets"]["red"]["href"], row=row, col=col)
+    item["assets"]["red"]["href"] = _write_asset_variant(
+        item["assets"]["red"]["href"],
+        tmp_path / "nodata-fill" / "red-nodata-255.tif",
+        nodata=255,
+        pixel_updates=[(row, col, 255)],
+    )
+
+    da = lazycogs.open(
+        _write_items_parquet(tmp_path / "nodata-fill.parquet", [item]),
+        bbox=pixel_bbox,
+        crs=BENCHMARK_NATIVE_CRS,
+        resolution=10.0,
+        bands=BENCHMARK_SINGLE_BAND,
+        nodata=255,
+    )
+
+    data = da.compute()
+
+    assert data.shape == (1, 1, 1, 1)
+    assert data.dtype == np.dtype("uint16")
+    assert data.item() == 255
+    assert da.encoding["_FillValue"] == 255
 
 
 def test_chunk_reads_still_mask_per_cog_nodata_with_explicit_override(
@@ -412,7 +450,8 @@ def test_chunk_reads_still_mask_per_cog_nodata_with_explicit_override(
     )
     value = da.compute().item()
 
-    assert da.attrs["nodata"] == 0
+    assert "nodata" not in da.attrs
+    assert "missing_value" not in da.attrs
     assert da.attrs["_FillValue"] == 0
-    assert da.attrs["missing_value"] == 0
+    assert da.encoding["_FillValue"] == 0
     assert value == 10

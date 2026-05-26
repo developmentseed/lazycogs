@@ -664,13 +664,14 @@ async def read_chunk_async(  # noqa: C901
     )
 
     semaphore = asyncio.Semaphore(max_concurrent_reads)
+    fill = nodata if nodata is not None else 0
 
     async def _guarded(item: dict) -> dict[str, tuple[np.ndarray, float | None]] | None:
         async with semaphore:
             return await _read_item_band(item, bands, ctx)
 
     mosaic_methods: dict[str, MosaicMethodBase] = {
-        b: mosaic_method_cls() for b in bands
+        b: mosaic_method_cls(fill_value=fill) for b in bands
     }
 
     task_list: list[asyncio.Task] = [
@@ -696,7 +697,6 @@ async def read_chunk_async(  # noqa: C901
 
     await _drain_in_order(task_list, _feed, _done, _error)
 
-    fill = nodata if nodata is not None else 0
     output: dict[str, np.ndarray] = {}
     for band in bands:
         try:

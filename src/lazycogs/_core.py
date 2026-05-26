@@ -574,11 +574,6 @@ def _build_dataarray(
         "_stac_time_coords": _CompactDateArray(time_coord),
     }
 
-    if nodata is not None:
-        attributes["nodata"] = nodata
-        attributes["_FillValue"] = nodata
-        attributes["missing_value"] = nodata
-
     # Zarr geo-proj convention
     epsg = dst_crs.to_epsg()
     if epsg is not None:
@@ -586,7 +581,7 @@ def _build_dataarray(
     else:
         attributes["proj:wkt2"] = dst_crs.to_wkt()
 
-    return DataArray(
+    data_array = DataArray(
         var,
         coords=Coordinates(
             {"band": resolved_bands, "time": time_coord, "spatial_ref": spatial_ref},
@@ -594,6 +589,12 @@ def _build_dataarray(
         | spatial_coords,
         attrs=attributes,
     )
+
+    if nodata is not None:
+        data_array.attrs["_FillValue"] = nodata
+        data_array.encoding["_FillValue"] = nodata
+
+    return data_array
 
 
 def open(  # noqa: A001

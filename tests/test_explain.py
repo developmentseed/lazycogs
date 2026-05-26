@@ -70,6 +70,8 @@ def _make_backend(
         dtype=np.dtype("float32"),
         nodata=-9999.0,
         mosaic_method_cls=FirstMethod,
+        dtype_was_explicit=True,
+        nodata_was_explicit=True,
     )
 
 

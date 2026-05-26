@@ -21,7 +21,7 @@ from lazycogs._core import (
     _resolve_output_dtype,
     _resolve_output_nodata,
 )
-from lazycogs._mosaic_methods import MeanMethod, MedianMethod
+from lazycogs._mosaic_methods import FirstMethod, MeanMethod, MedianMethod
 from lazycogs._temporal import _DayGrouper, _FixedDayGrouper, _MonthGrouper
 
 
@@ -375,9 +375,9 @@ def test_open_sets_expected_dataarray_attributes(opened_dataarray):
 
     # Inferred output contract
     assert da.dtype == np.dtype("uint16")
-    assert da.attrs["nodata"] == 0
-    assert da.attrs["_FillValue"] == 0
-    assert da.attrs["missing_value"] == 0
+    assert "nodata" not in da.attrs
+    assert "missing_value" not in da.attrs
+    assert da.encoding["_FillValue"] == da.attrs["_FillValue"] == 0
 
     # Internal bookkeeping attributes
     assert isinstance(da.attrs["_stac_backend"], MultiBandStacBackendArray)
@@ -524,6 +524,33 @@ def test_dtype_is_compatible_accepts_equal_dtype():
 def test_dtype_is_compatible_rejects_unsafe_cast():
     """Unsafe inferred output dtypes are rejected."""
     assert _dtype_is_compatible(np.dtype("float32"), np.dtype("uint16")) is False
+
+
+def test_first_method_fills_masked_pixels_with_configured_fill_value():
+    """Masked mosaic output uses the resolved fill value, not a hard-coded zero."""
+    method = FirstMethod(fill_value=255)
+    method.feed(
+        np.ma.MaskedArray(
+            np.array([[[255]]], dtype=np.uint8),
+            mask=np.array([[[True]]]),
+        ),
+    )
+
+    assert method.data.dtype == np.dtype("uint8")
+    assert method.data.item() == 255
+
+
+def test_median_method_fills_masked_pixels_with_configured_fill_value():
+    """Statistical mosaic methods also honor the configured fill value."""
+    method = MedianMethod(fill_value=255)
+    method.feed(
+        np.ma.MaskedArray(
+            np.array([[[255]]], dtype=np.uint8),
+            mask=np.array([[[True]]]),
+        ),
+    )
+
+    assert method.data.item() == 255
 
 
 def test_inspect_first_item_returns_dtype_and_nodata_metadata():
