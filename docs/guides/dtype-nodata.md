@@ -40,10 +40,12 @@ When you omit `nodata=`:
 - if sampled bands all have `nodata=None`, lazycogs leaves output nodata unknown
 - if sampled bands disagree, `open()` raises and asks you to pass `nodata=` explicitly
 
-When nodata is known, the returned `DataArray` advertises it in both:
+When nodata is known, the returned `DataArray` advertises it with:
 
 - `da.attrs["_FillValue"]`
-- `da.encoding["_FillValue"]`
+
+lazycogs intentionally does not duplicate `_FillValue` into `da.encoding` because
+that collides with xarray's CF encoding step during rioxarray exports.
 
 ## What output nodata means
 
@@ -102,7 +104,7 @@ If a later asset conflicts with the inferred output contract, compute raises ins
 
 ```python
 da.dtype
-da.encoding.get("_FillValue")
+da.attrs.get("_FillValue")
 ```
 
 Those two values tell you most of what lazycogs has promised about the returned array.

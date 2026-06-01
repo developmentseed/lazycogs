@@ -116,7 +116,7 @@ def test_open_infers_uint16_and_coherent_nodata_from_benchmark_data(
     assert "nodata" not in da.attrs
     assert "missing_value" not in da.attrs
     assert da.attrs["_FillValue"] == 0
-    assert da.encoding["_FillValue"] == 0
+    assert "_FillValue" not in da.encoding
 
 
 def test_open_explicit_overrides_win_over_benchmark_inference(
@@ -137,7 +137,7 @@ def test_open_explicit_overrides_win_over_benchmark_inference(
     assert "nodata" not in da.attrs
     assert "missing_value" not in da.attrs
     assert da.attrs["_FillValue"] == -9999
-    assert da.encoding["_FillValue"] == -9999
+    assert "_FillValue" not in da.encoding
 
 
 def test_explain_fetch_headers_uses_local_benchmark_data(
@@ -210,7 +210,7 @@ def test_open_accepts_conflicting_sampled_nodata_with_explicit_override(
     assert "nodata" not in da.attrs
     assert "missing_value" not in da.attrs
     assert da.attrs["_FillValue"] == -9999
-    assert da.encoding["_FillValue"] == -9999
+    assert "_FillValue" not in da.encoding
 
 
 def test_compute_raises_on_later_incompatible_auto_inferred_dtype(
@@ -383,7 +383,7 @@ def test_compute_accepts_conflicting_nodata_with_explicit_override(
     assert "nodata" not in da.attrs
     assert "missing_value" not in da.attrs
     assert da.attrs["_FillValue"] == 0
-    assert da.encoding["_FillValue"] == 0
+    assert "_FillValue" not in da.encoding
 
 
 def test_compute_preserves_explicit_nodata_for_fully_masked_pixels(
@@ -415,7 +415,8 @@ def test_compute_preserves_explicit_nodata_for_fully_masked_pixels(
     assert data.shape == (1, 1, 1, 1)
     assert data.dtype == np.dtype("uint16")
     assert data.item() == 255
-    assert da.encoding["_FillValue"] == 255
+    assert da.attrs["_FillValue"] == 255
+    assert "_FillValue" not in da.encoding
 
 
 def test_chunk_reads_still_mask_per_cog_nodata_with_explicit_override(
@@ -475,5 +476,5 @@ def test_chunk_reads_still_mask_per_cog_nodata_with_explicit_override(
     assert "nodata" not in da.attrs
     assert "missing_value" not in da.attrs
     assert da.attrs["_FillValue"] == 0
-    assert da.encoding["_FillValue"] == 0
+    assert "_FillValue" not in da.encoding
     assert value == 10

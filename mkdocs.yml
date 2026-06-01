@@ -37,6 +37,7 @@ nav:
           - notebooks/hls-analysis.ipynb
       - CMR STAC example: notebooks/cmr-lpcloud-fix-assets.ipynb
       - Experimental async workflow: notebooks/async-workflow.ipynb
+      - rioxarray interoperability: notebooks/rioxarray.ipynb
       - lazycogs vs odc-stac: notebooks/lazycogs-odc-stac.ipynb
   - Performance: performance.md
   - API Reference:
