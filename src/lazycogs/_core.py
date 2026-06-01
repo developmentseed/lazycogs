@@ -6,7 +6,7 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from async_geotiff import GeoTIFF
@@ -32,23 +32,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 _INT_WIDTHS = (8, 16, 32, 64)
-
-
-class _CompactDateArray(np.ndarray):
-    """Numpy datetime64 array subclass with a compact display for xarray HTML repr."""
-
-    def __new__(cls, values: np.ndarray) -> Self:
-        return np.asarray(values, dtype="datetime64[D]").view(cls)
-
-    def __str__(self) -> str:
-        arr = self.view(np.ndarray)
-        n = len(arr)
-        if n == 1:
-            return str(arr[0])
-        return f"{arr[0]} \u2026 {arr[-1]} (n={n})"
-
-    def __repr__(self) -> str:
-        return self.__str__()
 
 
 @dataclass(frozen=True)
@@ -570,8 +553,6 @@ def _build_dataarray(
         "spatial:transform": gt,
         "spatial:shape": [dst_height, dst_width],
         "spatial:registration": "pixel",
-        "_stac_backend": multi,
-        "_stac_time_coords": _CompactDateArray(time_coord),
     }
 
     # Zarr geo-proj convention

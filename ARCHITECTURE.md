@@ -56,7 +56,7 @@ src/lazycogs/
 8. Creates a single `MultiBandStacBackendArray` (a dataclass) with shape `(band, time, y, x)` holding all the parameters needed to materialise any chunk later, then wraps it in one `xarray.core.indexing.LazilyIndexedArray`. This avoids `xr.concat` (used internally by `ds.to_array()`), which would eagerly load `LazilyIndexedArray`-backed objects.
 9. Uses `rasterix.RasterIndex` for spatial indexing, but materialises the x/y coordinate variables eagerly as numpy arrays so chunked scalar spatial selections compute reliably.
 10. Constructs the `xr.DataArray` directly from the 4-D variable. If `chunks` is provided, calls `.chunk(chunks)` to convert to a dask-backed array; otherwise the `LazilyIndexedArray` remains in play so narrow slices (e.g. a single pixel) translate to minimal I/O. When output nodata is known, the returned array sets `da.attrs["_FillValue"]` and `da.encoding["_FillValue"]` for downstream serialization. When unknown, no `_FillValue` metadata is attached.
-11. Stores `_stac_backend` (the `MultiBandStacBackendArray` instance) and `_stac_time_coords` (the full time coordinate array) in `da.attrs` so that `da.lazycogs.explain()` can reconstruct the explain plan without re-specifying `open()` parameters.
+11. Keeps lazy runtime state on the backing array rather than in `da.attrs`. This lets xarray operations such as `sortby()` and deep copies clone metadata safely without trying to pickle live objects like `DuckdbClient`.
 
 ## Explain: dry-run read estimator
 
@@ -69,7 +69,7 @@ print(plan.summary())
 df = plan.to_dataframe()
 ```
 
-The accessor reads `_stac_backend` and `_stac_time_coords` from `da.attrs` and respects the DataArray's current extent and chunk sizes, so explaining a sliced DataArray (`da.isel(time=0).lazycogs.explain()`) queries only the reads needed for that slice.
+The accessor discovers the `MultiBandStacBackendArray` from the DataArray's lazy backing array and respects the current extent, indexing, and chunk sizes, so explaining a sliced or reordered DataArray (`da.isel(time=0).lazycogs.explain()` or `da.sortby("time").lazycogs.explain()`) queries only the reads needed for that view. If the array has been materialized or transformed into a different backing array, `explain()` raises and asks for a still-lazy lazycogs array.
 
 `ExplainPlan` exposes:
 - `total_chunk_reads` — number of `(band, time, spatial tile)` combinations

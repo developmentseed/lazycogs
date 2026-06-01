@@ -13,7 +13,9 @@ import xarray as xr
 from affine import Affine
 from pandas import DataFrame
 from pyproj import CRS, Transformer
+from xarray.core import indexing
 
+from lazycogs._backend import MultiBandStacBackendArray
 from lazycogs._chunk_reader import _ChunkContext, _open_and_window
 from lazycogs._executor import run_duckdb, run_on_loop
 
@@ -22,11 +24,129 @@ if TYPE_CHECKING:
 
     from async_geotiff import Store
 
-    from lazycogs._backend import MultiBandStacBackendArray
 
 logger = logging.getLogger(__name__)
 
 _COG_MULTI_THRESHOLD = 2
+
+
+def _backend_search_children(value: object) -> list[object]:
+    """Return nested objects that may contain a lazycogs backend."""
+    children: list[object] = []
+
+    if isinstance(value, indexing.LazilyIndexedArray):
+        children.append(value.array)
+        return children
+
+    if isinstance(value, indexing.ImplicitToExplicitIndexingAdapter):
+        children.append(value.array)
+        return children
+
+    for attr in ("array", "_array", "dask", "layers"):
+        nested = getattr(value, attr, None)
+        if nested is not None:
+            children.append(nested)
+
+    if isinstance(value, dict):
+        children.extend(value.values())
+        return children
+
+    values = getattr(value, "values", None)
+    if callable(values):
+        children.extend(values())
+
+    if isinstance(value, tuple | list):
+        children.extend(value)
+
+    return children
+
+
+def _find_backend_array(
+    value: object,
+) -> tuple[MultiBandStacBackendArray, indexing.ExplicitIndexer | None] | None:
+    """Return the first lazycogs backend found inside an xarray data wrapper."""
+    stack: list[object] = [value]
+    seen: set[int] = set()
+
+    while stack:
+        current = stack.pop()
+        obj_id = id(current)
+        if obj_id in seen:
+            continue
+        seen.add(obj_id)
+
+        if isinstance(current, MultiBandStacBackendArray):
+            return current, None
+
+        if isinstance(current, indexing.LazilyIndexedArray) and isinstance(
+            current.array,
+            MultiBandStacBackendArray,
+        ):
+            return current.array, current.key
+
+        stack.extend(reversed(_backend_search_children(current)))
+
+    return None
+
+
+def _indexer_positions(
+    indexer: int | np.integer | slice | np.ndarray,
+    size: int,
+) -> list[int]:
+    """Normalise one xarray indexer component to explicit integer positions."""
+    if isinstance(indexer, int | np.integer):
+        return [int(indexer)]
+    if isinstance(indexer, slice):
+        return list(range(*indexer.indices(size)))
+
+    values = np.asarray(indexer)
+    if values.dtype == np.bool_:
+        return np.flatnonzero(values).astype(int).tolist()
+    return values.astype(int).tolist()
+
+
+def _current_time_items(
+    da: xr.DataArray,
+    backend: MultiBandStacBackendArray,
+    key: indexing.ExplicitIndexer | None,
+) -> list[tuple[int, str, np.datetime64]]:
+    """Return backend time indices and current coordinate values in array order."""
+    if "time" not in da.coords:
+        raise ValueError(
+            "This DataArray no longer exposes a time coordinate. "
+            "lazycogs.explain() only supports arrays that still retain their "
+            "lazycogs time axis.",
+        )
+
+    current_time_coords = np.atleast_1d(da.coords["time"].values).astype(
+        "datetime64[D]",
+    )
+
+    if key is None:
+        if len(current_time_coords) != len(backend.dates):
+            raise ValueError(
+                "Could not recover lazycogs time-step indexing from this DataArray. "
+                "lazycogs.explain() currently supports arrays that still retain "
+                "their original lazy indexing structure.",
+            )
+        time_positions = list(range(len(backend.dates)))
+    else:
+        time_positions = _indexer_positions(key.tuple[1], len(backend.dates))
+
+    if len(time_positions) != len(current_time_coords):
+        raise ValueError(
+            "Could not align the current time coordinates with the underlying "
+            "lazycogs backend indexing.",
+        )
+
+    return [
+        (backend_index, backend.dates[backend_index], time_coord)
+        for backend_index, time_coord in zip(
+            time_positions,
+            current_time_coords,
+            strict=False,
+        )
+    ]
 
 
 @dataclass
@@ -500,6 +620,7 @@ async def _inspect_item_async(
 async def _explain_async(
     da: xr.DataArray,
     backend: MultiBandStacBackendArray,
+    key: indexing.ExplicitIndexer | None,
     *,
     fetch_headers: bool,
 ) -> ExplainPlan:
@@ -515,8 +636,10 @@ async def _explain_async(
 
     Args:
         da: DataArray whose extent and chunking define the explain scope.
-        backend: :class:`MultiBandStacBackendArray` stored in the DataArray
-            attrs by :func:`~lazycogs._core._build_dataarray`.
+        backend: :class:`MultiBandStacBackendArray` discovered from the
+            DataArray's lazy backing array.
+        key: The xarray indexer associated with the discovered backend, when
+            available.
         fetch_headers: When ``True``, open each matched COG header.
 
     Returns:
@@ -543,28 +666,7 @@ async def _explain_async(
 
     dst_crs = backend.dst_crs
 
-    # Identify which time steps to explain based on current DataArray coords.
-    full_time_coords: np.ndarray = np.asarray(
-        da.attrs["_stac_time_coords"],
-        dtype="datetime64[D]",
-    )
-    full_time_filters: list[str] = backend.dates
-
-    if "time" in da.coords:
-        current_times: set[np.datetime64] = set(
-            np.atleast_1d(da.coords["time"].values).astype("datetime64[D]"),
-        )
-        time_items = [
-            (i, f, tc)
-            for i, (f, tc) in enumerate(
-                zip(full_time_filters, full_time_coords, strict=False),
-            )
-            if tc.astype("datetime64[D]") in current_times
-        ]
-    else:
-        time_items = [
-            (i, f, full_time_coords[i]) for i, f in enumerate(full_time_filters)
-        ]
+    time_items = _current_time_items(da, backend, key)
 
     chunk_h, chunk_w = _infer_chunk_sizes(da)
 
@@ -738,17 +840,18 @@ class StacCogAccessor:
             tile) reads for the current DataArray extent and chunking.
 
         Raises:
-            ValueError: If the DataArray was not produced by
-                ``lazycogs.open()`` (missing explain metadata in
-                ``attrs``).
+            ValueError: If the DataArray is not still backed by lazycogs'
+                lazy backend array.
 
         """
-        backend: MultiBandStacBackendArray | None = self._da.attrs.get("_stac_backend")
-        if backend is None:
+        backend_and_key = _find_backend_array(self._da.variable._data)  # noqa: SLF001
+        if backend_and_key is None:
             raise ValueError(
-                "This DataArray does not have lazycogs explain metadata. "
-                "Ensure it was created by lazycogs.open().",
+                "This DataArray is not backed by lazycogs' lazy array. "
+                "Ensure it was created by lazycogs.open() and has not been "
+                "materialized or transformed into a different backing array.",
             )
+        backend, key = backend_and_key
         return run_on_loop(
-            _explain_async(self._da, backend, fetch_headers=fetch_headers),
+            _explain_async(self._da, backend, key, fetch_headers=fetch_headers),
         )

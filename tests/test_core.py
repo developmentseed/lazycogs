@@ -21,6 +21,7 @@ from lazycogs._core import (
     _resolve_output_dtype,
     _resolve_output_nodata,
 )
+from lazycogs._explain import _find_backend_array
 from lazycogs._mosaic_methods import FirstMethod, MeanMethod, MedianMethod
 from lazycogs._temporal import _DayGrouper, _FixedDayGrouper, _MonthGrouper
 
@@ -379,9 +380,12 @@ def test_open_sets_expected_dataarray_attributes(opened_dataarray):
     assert "missing_value" not in da.attrs
     assert da.encoding["_FillValue"] == da.attrs["_FillValue"] == 0
 
-    # Internal bookkeeping attributes
-    assert isinstance(da.attrs["_stac_backend"], MultiBandStacBackendArray)
-    assert da.attrs["_stac_time_coords"].dtype == np.dtype("datetime64[D]")
+    # Internal runtime state is kept off attrs so xarray can deep-copy safely.
+    assert "_stac_backend" not in da.attrs
+    assert "_stac_time_coords" not in da.attrs
+
+    backend, _ = _find_backend_array(da.variable._data)
+    assert isinstance(backend, MultiBandStacBackendArray)
 
 
 def test_chunked_spatial_selection_computes_scalar_spatial_coords(opened_dataarray):
@@ -408,6 +412,24 @@ def test_chunked_spatial_selection_full_compute_succeeds(opened_dataarray):
 
     assert computed.dims == ("band", "time")
     assert computed.shape == (1, 1)
+
+
+def test_opened_dataarray_sortby_time_deepcopy_safe(opened_dataarray):
+    """sortby(time) works because runtime state is not stored in attrs."""
+    sorted_da = opened_dataarray.sortby("time")
+
+    assert sorted_da.dims == opened_dataarray.dims
+    assert "_stac_backend" not in sorted_da.attrs
+    assert "_stac_time_coords" not in sorted_da.attrs
+
+
+def test_opened_dataarray_deep_copy_safe(opened_dataarray):
+    """Deep copying a lazycogs DataArray does not try to pickle DuckDB state."""
+    copied = opened_dataarray.copy(deep=True)
+
+    assert copied.dims == opened_dataarray.dims
+    assert "_stac_backend" not in copied.attrs
+    assert "_stac_time_coords" not in copied.attrs
 
 
 # ---------------------------------------------------------------------------
@@ -691,7 +713,8 @@ def test_open_accepts_protocol_store_without_head(tmp_path):
             path_from_href=lambda href: href.split("/", 3)[-1],
         )
 
-    assert da.attrs["_stac_backend"].store is store
+    backend, _ = _find_backend_array(da.variable._data)
+    assert backend.store is store
 
 
 def test_open_auto_promotes_inferred_integer_dtype_for_float_method(tmp_path):
