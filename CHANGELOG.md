@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/developmentseed/lazycogs/compare/v0.4.1...v0.5.0) (2026-06-01)
+
+
+### Features
+
+* lazycogs interoperable with rioxarray ([#71](https://github.com/developmentseed/lazycogs/issues/71)) ([58fae42](https://github.com/developmentseed/lazycogs/commit/58fae4236d69eb0145d06dcf03a5089950c76ec5)), closes [#70](https://github.com/developmentseed/lazycogs/issues/70)
+
 ## [0.4.1](https://github.com/developmentseed/lazycogs/compare/v0.4.0...v0.4.1) (2026-06-01)
 
 
