@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.1](https://github.com/developmentseed/lazycogs/compare/v0.4.0...v0.4.1) (2026-06-01)
+
+
+### Bug Fixes
+
+* add _WindowContext class for use in explain operations ([#69](https://github.com/developmentseed/lazycogs/issues/69)) ([a54b640](https://github.com/developmentseed/lazycogs/commit/a54b6404a328abd130b7cb92964c02ee5ad4d0bc)), closes [#68](https://github.com/developmentseed/lazycogs/issues/68)
+* keep lazy runtime state out of DataArray attrs ([#66](https://github.com/developmentseed/lazycogs/issues/66)) ([fc4b3d0](https://github.com/developmentseed/lazycogs/commit/fc4b3d09f8b67f515b2a4ab6088bcd6e28dade5d)), closes [#65](https://github.com/developmentseed/lazycogs/issues/65) [#64](https://github.com/developmentseed/lazycogs/issues/64)
+
 ## [0.4.0](https://github.com/developmentseed/lazycogs/compare/v0.3.1...v0.4.0) (2026-05-26)
 
 
