@@ -510,7 +510,7 @@ def _build_dataarray(
 
     time_coord = np.array(time_coords, dtype="datetime64[D]")
 
-    gt = [
+    affine_transform = [
         dst_affine.a,
         dst_affine.b,
         dst_affine.c,
@@ -518,12 +518,15 @@ def _build_dataarray(
         dst_affine.e,
         dst_affine.f,
     ]
+    gdal_transform = dst_affine.to_gdal()
+    crs_wkt = dst_crs.to_wkt()
 
     spatial_ref = DataArray(
         np.array(0),
         attrs={
-            "crs_wkt": dst_crs.to_wkt(),
-            "GeoTransform": " ".join(str(v) for v in gt),
+            "crs_wkt": crs_wkt,
+            "spatial_ref": crs_wkt,
+            "GeoTransform": " ".join(str(v) for v in gdal_transform),
         },
     )
 
@@ -550,7 +553,7 @@ def _build_dataarray(
         "spatial:dimensions": ["y", "x"],
         "spatial:bbox": bbox,
         "spatial:transform_type": "affine",
-        "spatial:transform": gt,
+        "spatial:transform": affine_transform,
         "spatial:shape": [dst_height, dst_width],
         "spatial:registration": "pixel",
     }
@@ -573,7 +576,6 @@ def _build_dataarray(
 
     if nodata is not None:
         data_array.attrs["_FillValue"] = nodata
-        data_array.encoding["_FillValue"] = nodata
 
     return data_array
 

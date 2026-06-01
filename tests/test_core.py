@@ -309,40 +309,6 @@ def _fake_open_item() -> dict:
     }
 
 
-@pytest.fixture
-def opened_dataarray(tmp_path):
-    """Return a small DataArray from open() with DuckDB calls patched."""
-
-    parquet = tmp_path / "items.parquet"
-    parquet.write_bytes(b"")
-
-    store = MemoryStore()
-    store.put("B04.tif", b"dummy")
-
-    table = _items_to_arrow([{"properties": {"datetime": "2023-01-15T10:00:00Z"}}])
-
-    class _FakeGeoTIFF:
-        dtype = np.dtype("uint16")
-        nodata = 0
-
-    async def fake_open(path: str, *, store):
-        return _FakeGeoTIFF()
-
-    with (
-        patch("rustac.DuckdbClient.search", return_value=[_fake_open_item()]),
-        patch("rustac.DuckdbClient.search_to_arrow", return_value=table),
-        patch("lazycogs._core.GeoTIFF.open", side_effect=fake_open),
-    ):
-        return lazycogs.open(
-            str(parquet),
-            bbox=(0.0, 0.0, 100.0, 100.0),
-            crs="EPSG:32632",
-            resolution=10.0,
-            store=store,
-            path_from_href=lambda href: href.split("/", 3)[-1],
-        )
-
-
 def test_open_sets_expected_dataarray_attributes(opened_dataarray):
     """open() attaches all expected extra attributes to the returned DataArray."""
     da = opened_dataarray
@@ -364,9 +330,12 @@ def test_open_sets_expected_dataarray_attributes(opened_dataarray):
     assert da.attrs["spatial:registration"] == "pixel"
     assert da.attrs["proj:code"] == "EPSG:32632"
 
-    # spatial:transform should be the 6-element GeoTransform list
-    assert isinstance(da.attrs["spatial:transform"], list)
-    assert len(da.attrs["spatial:transform"]) == 6
+    # spatial:transform remains affine-order metadata.
+    assert da.attrs["spatial:transform"] == [10.0, 0.0, 0.0, 0.0, -10.0, 100.0]
+
+    spatial_ref_attrs = da.coords["spatial_ref"].attrs
+    assert spatial_ref_attrs["crs_wkt"] == spatial_ref_attrs["spatial_ref"]
+    assert spatial_ref_attrs["GeoTransform"] == "0.0 10.0 0.0 100.0 0.0 -10.0"
 
     # zarr_conventions
     assert isinstance(da.attrs["zarr_conventions"], list)
@@ -378,7 +347,8 @@ def test_open_sets_expected_dataarray_attributes(opened_dataarray):
     assert da.dtype == np.dtype("uint16")
     assert "nodata" not in da.attrs
     assert "missing_value" not in da.attrs
-    assert da.encoding["_FillValue"] == da.attrs["_FillValue"] == 0
+    assert da.attrs["_FillValue"] == 0
+    assert "_FillValue" not in da.encoding
 
     # Internal runtime state is kept off attrs so xarray can deep-copy safely.
     assert "_stac_backend" not in da.attrs

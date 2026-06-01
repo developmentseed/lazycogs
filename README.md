@@ -118,11 +118,11 @@ asks you to pass `dtype=` explicitly.
 When you omit `nodata=`:
 
 - if sampled bands all agree on one scalar nodata sentinel, the returned
-  `DataArray` sets `attrs["_FillValue"]` and `encoding["_FillValue"]`, and
-  masked mosaic output materializes with that same sentinel instead of zero
+  `DataArray` sets `attrs["_FillValue"]`, and masked mosaic output materializes
+  with that same sentinel instead of zero
 - if sampled bands disagree, `open()` raises `ValueError` and asks you to pass
   `nodata=` explicitly
-- if sampled bands have no nodata sentinel, no `_FillValue` encoding is
+- if sampled bands have no nodata sentinel, no `_FillValue` metadata is
   attached and `0` remains only an implementation fill value for uncovered
   regions
 - if later chunk reads encounter a conflicting source nodata value, compute
@@ -130,6 +130,12 @@ When you omit `nodata=`:
 
 Explicit `dtype=` and `nodata=` stay authoritative even when source assets are
 heterogeneous.
+
+`lazycogs.open()` also attaches CF/rioxarray-compatible spatial metadata. The
+GeoZarr-style `spatial:transform` attribute stays in affine coefficient order,
+while `spatial_ref.attrs["GeoTransform"]` is written in GDAL geotransform order
+so sliced 2D images and 3D band stacks can be read by rioxarray without repairing
+the transform metadata.
 
 Float-only mosaic methods such as `MeanMethod`, `MedianMethod`, and
 `StdevMethod` auto-promote inferred integer outputs to `float32`. If you pass
