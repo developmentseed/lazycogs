@@ -403,6 +403,15 @@ class MultiBandStacBackendArray(BackendArray):
         """Return a compact string representation."""
         return f"MultiBandStacBackendArray(bands={self.bands!r}, shape={self.shape})"
 
+    def __copy__(self) -> MultiBandStacBackendArray:
+        """Return ``self`` because backend arrays are immutable runtime state."""
+        return self
+
+    def __deepcopy__(self, memo: dict[int, object]) -> MultiBandStacBackendArray:
+        """Return ``self`` so xarray copies do not try to pickle DuckDB state."""
+        memo[id(self)] = self
+        return self
+
     def _resolve_spatial_window(
         self,
         y_key: int | np.integer | slice,

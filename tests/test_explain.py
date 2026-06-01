@@ -10,6 +10,7 @@ import xarray as xr
 from affine import Affine
 from pyproj import CRS
 from rustac import DuckdbClient
+from xarray.core import indexing
 
 from lazycogs._backend import MultiBandStacBackendArray
 from lazycogs._explain import (
@@ -17,6 +18,7 @@ from lazycogs._explain import (
     CogRead,
     ExplainPlan,
     _compute_chunk_bbox_4326,
+    _find_backend_array,
     _infer_chunk_sizes,
     _iter_spatial_chunks,
     _roi_pixel_offsets,
@@ -84,7 +86,7 @@ def _make_da_with_backends(
     height: int = 10,
     affine: Affine | None = None,
 ) -> xr.DataArray:
-    """Return a minimal DataArray with lazycogs explain attrs attached."""
+    """Return a minimal lazycogs-backed DataArray for explain tests."""
     if affine is None:
         resolution = 1.0
         affine = Affine(resolution, 0.0, 0.0, 0.0, -resolution, float(height))
@@ -105,19 +107,19 @@ def _make_da_with_backends(
     x_coords = np.array([affine.c + (i + 0.5) * resolution for i in range(width)])
     y_coords = np.array([affine.f + (i + 0.5) * affine.e for i in range(height)])
 
-    da = xr.DataArray(
-        np.zeros((len(bands), len(dates), height, width), dtype="float32"),
+    variable = xr.Variable(
+        ("band", "time", "y", "x"),
+        indexing.LazilyIndexedArray(backend),
+    )
+    return xr.DataArray(
+        variable,
         coords={
             "band": bands,
             "time": time_coord,
             "y": y_coords,
             "x": x_coords,
         },
-        dims=("band", "time", "y", "x"),
     )
-    da.attrs["_stac_backend"] = backend
-    da.attrs["_stac_time_coords"] = time_coord
-    return da
 
 
 # ---------------------------------------------------------------------------
@@ -269,7 +271,7 @@ def test_roi_pixel_offsets_full_extent(wgs84):
         height=10,
         affine=affine,
     )
-    backend = da.attrs["_stac_backend"]
+    backend, _ = _find_backend_array(da.variable._data)
     x_start, y_start_physical, roi_w, roi_h = _roi_pixel_offsets(da, backend)
     assert x_start == 0
     assert y_start_physical == 0
@@ -457,9 +459,9 @@ def _fake_items(band: str, n: int) -> list[dict]:
 
 
 def test_accessor_raises_on_non_stac_da():
-    """explain() raises ValueError when the DataArray has no explain metadata."""
+    """explain() raises ValueError when the array is not lazycogs-backed."""
     da = xr.DataArray(np.zeros((3, 3)))
-    with pytest.raises(ValueError, match=r"lazycogs\.open"):
+    with pytest.raises(ValueError, match=r"backed by lazycogs"):
         da.lazycogs.explain()
 
 
@@ -626,6 +628,33 @@ def test_accessor_explain_time_slice(wgs84):
 
     assert len(plan.time_coords) == 2
     assert plan.total_chunk_reads == 2  # 1 band * 2 time steps * 1 spatial tile
+
+
+def test_accessor_explain_time_sort_preserves_current_order(wgs84):
+    """explain() follows the current DataArray time order after sortby."""
+    dates = ["2023-01-01/2023-01-01", "2023-01-02/2023-01-02"]
+    time_coords = [np.datetime64("2023-01-02", "D"), np.datetime64("2023-01-01", "D")]
+    da = _make_da_with_backends(
+        wgs84,
+        dates=dates,
+        time_coords=time_coords,
+        bands=["red"],
+        width=4,
+        height=4,
+    )
+    da_sorted = da.sortby("time")
+
+    with patch("rustac.DuckdbClient.search", return_value=[]):
+        plan = da_sorted.lazycogs.explain()
+
+    assert plan.time_coords == [
+        np.datetime64("2023-01-01", "D"),
+        np.datetime64("2023-01-02", "D"),
+    ]
+    assert [chunk.date_filter for chunk in plan.chunk_reads] == [
+        "2023-01-02/2023-01-02",
+        "2023-01-01/2023-01-01",
+    ]
 
 
 def test_accessor_explain_query_count_not_multiplied_by_bands(wgs84):
