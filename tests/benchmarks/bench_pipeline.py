@@ -59,6 +59,22 @@ def test_full_compute(benchmark, benchmark_parquet: str) -> None:
 
 
 @pytest.mark.benchmark
+def test_explain_fetch_headers(benchmark, benchmark_parquet: str) -> None:
+    """Explain plan with COG header opens: open + explain(fetch_headers=True)."""
+
+    def run() -> object:
+        da = lazycogs.open(
+            benchmark_parquet,
+            bbox=BENCHMARK_BBOX,
+            crs=BENCHMARK_CRS,
+            resolution=60.0,
+        )
+        return da.lazycogs.explain(fetch_headers=True)
+
+    benchmark(run)
+
+
+@pytest.mark.benchmark
 @pytest.mark.parametrize("method", [FirstMethod, MedianMethod], ids=["first", "median"])
 def test_mosaic_method(
     benchmark,

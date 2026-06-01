@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import numpy as np
@@ -13,6 +15,7 @@ from rustac import DuckdbClient
 from xarray.core import indexing
 
 from lazycogs._backend import MultiBandStacBackendArray
+from lazycogs._chunk_reader import _ChunkContext, _WindowContext
 from lazycogs._explain import (
     ChunkRead,
     CogRead,
@@ -20,6 +23,7 @@ from lazycogs._explain import (
     _compute_chunk_bbox_4326,
     _find_backend_array,
     _infer_chunk_sizes,
+    _inspect_item_async,
     _iter_spatial_chunks,
     _roi_pixel_offsets,
 )
@@ -456,6 +460,49 @@ def _fake_items(band: str, n: int) -> list[dict]:
         }
         for i in range(n)
     ]
+
+
+def test_inspect_item_async_builds_window_context_for_header_fetch(wgs84):
+    """Header fetch explain path does not require pixel-read contract fields."""
+    chunk_affine = Affine(1.0, 0.0, 0.0, 0.0, -1.0, 10.0)
+    store = object()
+    geotiff = SimpleNamespace(overviews=[], transform=chunk_affine)
+    reader = geotiff
+    window = SimpleNamespace(col_off=1, row_off=2, width=3, height=4)
+
+    with patch(
+        "lazycogs._explain._open_and_window",
+        new_callable=AsyncMock,
+        return_value=(geotiff, reader, window, "s3://bucket/item-0.tif"),
+    ) as open_and_window:
+        read = asyncio.run(
+            _inspect_item_async(
+                _fake_items("red", 1)[0],
+                "red",
+                chunk_affine,
+                wgs84,
+                10,
+                10,
+                store,
+            ),
+        )
+
+    _, _, ctx = open_and_window.call_args.args
+    assert isinstance(ctx, _WindowContext)
+    assert not isinstance(ctx, _ChunkContext)
+    assert ctx.chunk_affine == chunk_affine
+    assert ctx.dst_crs == wgs84
+    assert ctx.chunk_width == 10
+    assert ctx.chunk_height == 10
+    assert ctx.store is store
+    assert ctx.path_fn is None
+    assert not hasattr(ctx, "out_dtype")
+    assert not hasattr(ctx, "nodata")
+    assert read is not None
+    assert read.window_col_off == 1
+    assert read.window_row_off == 2
+    assert read.window_width == 3
+    assert read.window_height == 4
 
 
 def test_accessor_raises_on_non_stac_da():

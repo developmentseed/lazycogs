@@ -78,7 +78,7 @@ The accessor discovers the `MultiBandStacBackendArray` from the DataArray's lazy
 - `summary()` — multi-line human-readable report with COG-read distribution histogram
 - `to_dataframe()` — one row per `(chunk, COG file)` for further analysis in pandas
 
-With `fetch_headers=True`, each matched COG header is fetched (a small HTTP range request to read the IFD block) and `CogRead.overview_level`, `window_col_off`, `window_row_off`, `window_width`, and `window_height` are populated.
+With `fetch_headers=True`, each matched COG header is fetched (a small HTTP range request to read the IFD block) and `CogRead.overview_level`, `window_col_off`, `window_row_off`, `window_width`, and `window_height` are populated. This path shares `_chunk_reader._open_and_window()` with real reads through a lightweight window context, but does not construct the full read context or resolve dtype/nodata pixel contracts.
 
 ## Phase 1 in detail
 
@@ -110,7 +110,7 @@ A `rasterix.RasterIndex` is attached to every DataArray returned by `open()`. Th
 
 ## Per-chunk read and resample pipeline
 
-Each call to `_read_item_band()` in `_chunk_reader.py` first validates the source asset against the inferred output contract, then follows a four-step pipeline to turn a remote COG into a correctly-sized, correctly-projected numpy array for one destination chunk.
+Each call to `_read_item_band()` in `_chunk_reader.py` first validates the source asset against the inferred output contract, then follows a four-step pipeline to turn a remote COG into a correctly-sized, correctly-projected numpy array for one destination chunk. Header/window helpers consume the smaller `_WindowContext`; `_ChunkContext` extends it with read-only fields such as nodata, output dtype, explicitness flags, and the warp cache.
 
 ### 1. Overview selection
 

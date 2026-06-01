@@ -16,7 +16,7 @@ from pyproj import CRS, Transformer
 from xarray.core import indexing
 
 from lazycogs._backend import MultiBandStacBackendArray
-from lazycogs._chunk_reader import _ChunkContext, _open_and_window
+from lazycogs._chunk_reader import _open_and_window, _WindowContext
 from lazycogs._executor import run_duckdb, run_on_loop
 
 if TYPE_CHECKING:
@@ -588,15 +588,13 @@ async def _inspect_item_async(
         the item has no matching asset or the chunk does not overlap.
 
     """
-    ctx = _ChunkContext(
+    ctx = _WindowContext(
         chunk_affine=chunk_affine,
         dst_crs=dst_crs,
         chunk_width=chunk_width,
         chunk_height=chunk_height,
-        nodata=None,
         store=store,
         path_fn=None,
-        warp_cache=None,
     )
     opened = await _open_and_window(item, band, ctx)
     if opened is None:
