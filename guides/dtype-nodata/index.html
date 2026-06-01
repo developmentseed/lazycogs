@@ -973,6 +973,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../notebooks/rioxarray/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    rioxarray interoperability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../notebooks/lazycogs-odc-stac/" class="md-nav__link">
         
   
@@ -1392,11 +1420,12 @@
 <li>if sampled bands all have <code>nodata=None</code>, lazycogs leaves output nodata unknown</li>
 <li>if sampled bands disagree, <code>open()</code> raises and asks you to pass <code>nodata=</code> explicitly</li>
 </ul>
-<p>When nodata is known, the returned <code>DataArray</code> advertises it in both:</p>
+<p>When nodata is known, the returned <code>DataArray</code> advertises it with:</p>
 <ul>
 <li><code>da.attrs["_FillValue"]</code></li>
-<li><code>da.encoding["_FillValue"]</code></li>
 </ul>
+<p>lazycogs intentionally does not duplicate <code>_FillValue</code> into <code>da.encoding</code> because
+that collides with xarray's CF encoding step during rioxarray exports.</p>
 <h2 id="what-output-nodata-means">What output nodata means<a class="headerlink" href="#what-output-nodata-means" title="Permanent link">&para;</a></h2>
 <p>When lazycogs knows one scalar nodata value, that value applies to:</p>
 <ul>
@@ -1436,7 +1465,7 @@
 <p>If a later asset conflicts with the inferred output contract, compute raises instead of silently truncating values or remapping nodata.</p>
 <h2 id="quick-checks">Quick checks<a class="headerlink" href="#quick-checks" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">da</span><span class="o">.</span><span class="n">dtype</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">da</span><span class="o">.</span><span class="n">encoding</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;_FillValue&quot;</span><span class="p">)</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">da</span><span class="o">.</span><span class="n">attrs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;_FillValue&quot;</span><span class="p">)</span>
 </code></pre></div>
 <p>Those two values tell you most of what lazycogs has promised about the returned array.</p>
 

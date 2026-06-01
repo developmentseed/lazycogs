@@ -830,6 +830,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../notebooks/rioxarray/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    rioxarray interoperability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../notebooks/lazycogs-odc-stac/" class="md-nav__link">
         
   
@@ -1742,7 +1770,7 @@
 <li>Calls <code>compute_output_grid()</code> to get the output affine transform and dimensions (width, height). No eager coordinate arrays are produced.</li>
 <li>Creates a single <code>MultiBandStacBackendArray</code> (a dataclass) with shape <code>(band, time, y, x)</code> holding all the parameters needed to materialise any chunk later, then wraps it in one <code>xarray.core.indexing.LazilyIndexedArray</code>. This avoids <code>xr.concat</code> (used internally by <code>ds.to_array()</code>), which would eagerly load <code>LazilyIndexedArray</code>-backed objects.</li>
 <li>Uses <code>rasterix.RasterIndex</code> for spatial indexing, but materialises the x/y coordinate variables eagerly as numpy arrays so chunked scalar spatial selections compute reliably.</li>
-<li>Constructs the <code>xr.DataArray</code> directly from the 4-D variable. If <code>chunks</code> is provided, calls <code>.chunk(chunks)</code> to convert to a dask-backed array; otherwise the <code>LazilyIndexedArray</code> remains in play so narrow slices (e.g. a single pixel) translate to minimal I/O. When output nodata is known, the returned array sets <code>da.attrs["_FillValue"]</code> and <code>da.encoding["_FillValue"]</code> for downstream serialization. When unknown, no <code>_FillValue</code> metadata is attached.</li>
+<li>Constructs the <code>xr.DataArray</code> directly from the 4-D variable. If <code>chunks</code> is provided, calls <code>.chunk(chunks)</code> to convert to a dask-backed array; otherwise the <code>LazilyIndexedArray</code> remains in play so narrow slices (e.g. a single pixel) translate to minimal I/O. Spatial metadata is serialized for both GeoZarr-style consumers and GDAL/rioxarray consumers: <code>spatial:transform</code> stays in affine coefficient order, while <code>spatial_ref.attrs["GeoTransform"]</code> uses GDAL geotransform order. When output nodata is known, the returned array sets <code>da.attrs["_FillValue"]</code> without duplicating it in <code>da.encoding</code>, which keeps rioxarray export paths compatible with xarray CF encoding. When unknown, no <code>_FillValue</code> metadata is attached.</li>
 <li>Keeps lazy runtime state on the backing array rather than in <code>da.attrs</code>. This lets xarray operations such as <code>sortby()</code> and deep copies clone metadata safely without trying to pickle live objects like <code>DuckdbClient</code>.</li>
 </ol>
 <h2 id="explain-dry-run-read-estimator">Explain: dry-run read estimator<a class="headerlink" href="#explain-dry-run-read-estimator" title="Permanent link">&para;</a></h2>
