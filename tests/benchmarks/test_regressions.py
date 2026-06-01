@@ -140,6 +140,28 @@ def test_open_explicit_overrides_win_over_benchmark_inference(
     assert da.encoding["_FillValue"] == -9999
 
 
+def test_explain_fetch_headers_uses_local_benchmark_data(
+    benchmark_parquet: str,
+) -> None:
+    """Header-fetch explain works on real local COG metadata without pixel reads."""
+    da = lazycogs.open(
+        benchmark_parquet,
+        bbox=BENCHMARK_BBOX,
+        crs=BENCHMARK_CRS,
+        resolution=60.0,
+        bands=BENCHMARK_SINGLE_BAND,
+    )
+
+    plan = da.lazycogs.explain(fetch_headers=True)
+    df = plan.to_dataframe()
+
+    assert plan.fetch_headers is True
+    assert plan.total_cog_reads > 0
+    assert df["window_width"].notna().any()
+    assert df["window_height"].notna().any()
+    assert df["overview_resolution"].notna().any()
+
+
 def test_open_rejects_conflicting_sampled_nodata_on_local_benchmark_copy(
     tmp_path: Path,
     benchmark_items: list[dict[str, Any]],

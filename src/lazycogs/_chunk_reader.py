@@ -33,7 +33,24 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
-class _ChunkContext:
+class _WindowContext:
+    """Immutable parameters needed to open a COG and compute a read window.
+
+    This header/window-only context is shared by dry-run explain and real chunk
+    reads. It intentionally excludes pixel-read contract fields such as dtype,
+    nodata, and warp caches.
+    """
+
+    chunk_affine: Affine
+    dst_crs: CRS
+    chunk_width: int
+    chunk_height: int
+    store: Store | None
+    path_fn: Callable[[str], str] | None
+
+
+@dataclass(frozen=True)
+class _ChunkContext(_WindowContext):
     """Immutable per-chunk parameters shared across all item reads.
 
     Built once per chunk in async_mosaic_chunk and passed through to all
@@ -41,16 +58,10 @@ class _ChunkContext:
     coroutines.
     """
 
-    chunk_affine: Affine
-    dst_crs: CRS
-    chunk_width: int
-    chunk_height: int
     nodata: float | int | None
     out_dtype: np.dtype
     dtype_was_explicit: bool
     nodata_was_explicit: bool
-    store: Store | None
-    path_fn: Callable[[str], str] | None
     warp_cache: dict[tuple[tuple[float, ...], CRS], WarpMap] | None
 
 
@@ -313,7 +324,7 @@ def _native_window(
 async def _open_and_window(
     item: dict,
     band: str,
-    ctx: _ChunkContext,
+    ctx: _WindowContext,
 ) -> tuple[GeoTIFF, GeoTIFF | Overview, Window | None, str] | None:
     """Open a COG asset and compute the pixel window covering the chunk.
 

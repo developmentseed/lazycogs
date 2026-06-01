@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
 import pytest
@@ -12,9 +13,12 @@ from pyproj import CRS
 
 from lazycogs._chunk_reader import (
     _apply_bands_with_warp_cache,
+    _ChunkContext,
     _drain_in_order,
     _native_window,
+    _open_and_window,
     _select_overview,
+    _WindowContext,
     read_chunk_async,
 )
 from lazycogs._executor import get_reproject_pool
@@ -161,6 +165,79 @@ def test_native_window_clamped_to_image_bounds():
     assert win.col_off == 2
     assert win.col_off + win.width <= 4  # clamped at image width
     assert win.row_off + win.height <= 4  # clamped at image height
+
+
+# ---------------------------------------------------------------------------
+# _open_and_window context boundary
+# ---------------------------------------------------------------------------
+
+
+def test_chunk_context_is_a_window_context():
+    """Read context is accepted anywhere header/window helpers expect context."""
+    ctx = _ChunkContext(
+        chunk_affine=Affine(1.0, 0.0, 0.0, 0.0, -1.0, 4.0),
+        dst_crs=CRS.from_epsg(4326),
+        chunk_width=4,
+        chunk_height=4,
+        store=None,
+        path_fn=None,
+        nodata=None,
+        out_dtype=np.dtype("float32"),
+        dtype_was_explicit=False,
+        nodata_was_explicit=False,
+        warp_cache=None,
+    )
+
+    assert isinstance(ctx, _WindowContext)
+    assert ctx.chunk_width == 4
+    assert ctx.chunk_height == 4
+
+
+def test_open_and_window_accepts_chunk_context():
+    """_open_and_window uses only the stable header/window context fields."""
+    ctx = _ChunkContext(
+        chunk_affine=Affine(1.0, 0.0, 0.0, 0.0, -1.0, 4.0),
+        dst_crs=CRS.from_epsg(4326),
+        chunk_width=4,
+        chunk_height=4,
+        store=None,
+        path_fn=None,
+        nodata=None,
+        out_dtype=np.dtype("float32"),
+        dtype_was_explicit=False,
+        nodata_was_explicit=False,
+        warp_cache=None,
+    )
+    geotiff = SimpleNamespace(
+        crs=ctx.dst_crs,
+        overviews=[],
+        transform=ctx.chunk_affine,
+        width=4,
+        height=4,
+    )
+    item = {"id": "item-0", "assets": {"red": {"href": "file:///tmp/red.tif"}}}
+
+    with (
+        patch(
+            "lazycogs._chunk_reader._resolve_store",
+            return_value=(None, "/tmp/red.tif"),
+        ),
+        patch(
+            "lazycogs._chunk_reader.GeoTIFF.open",
+            new_callable=AsyncMock,
+            return_value=geotiff,
+        ),
+    ):
+        opened = asyncio.run(_open_and_window(item, "red", ctx))
+
+    assert opened is not None
+    opened_geotiff, reader, window, path = opened
+    assert opened_geotiff is geotiff
+    assert reader is geotiff
+    assert window is not None
+    assert window.width == 4
+    assert window.height == 4
+    assert path == "/tmp/red.tif"
 
 
 # ---------------------------------------------------------------------------
