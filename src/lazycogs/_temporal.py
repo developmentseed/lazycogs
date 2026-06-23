@@ -5,14 +5,33 @@ from __future__ import annotations
 import calendar
 import re
 from abc import ABC, abstractmethod
-from datetime import date, timedelta
+from dataclasses import dataclass
+from datetime import UTC, date, datetime, timedelta
 
 import numpy as np
 
-# Epoch used for epoch-aligned fixed-day-count periods (PnD where n > 1).
+# Epoch used for epoch-aligned fixed-duration periods.
 _EPOCH = date(2000, 1, 1)
+_DATETIME_EPOCH = datetime(2000, 1, 1, tzinfo=UTC)
 
 _ISO_DURATION_RE = re.compile(r"^P(\d+)(D|W|M|Y)$")
+_ISO_HOUR_DURATION_RE = re.compile(r"^PT(\d+)H$")
+
+
+@dataclass(frozen=True)
+class _TimeStep:
+    """Internal temporal step with coordinate and rustac datetime predicate.
+
+    Attributes:
+        coord: The xarray coordinate value for this time step.
+        label: Opaque sortable grouping label.
+        datetime_filter: Predicate passed to ``rustac`` as ``datetime=``.
+
+    """
+
+    coord: np.datetime64
+    label: str
+    datetime_filter: str
 
 
 class _TemporalGrouper(ABC):
@@ -23,62 +42,113 @@ class _TemporalGrouper(ABC):
     ``rustac``-compatible datetime filter string, and a ``numpy.datetime64``
     coordinate value.
 
-    All built-in implementations use ``datetime64[D]`` precision for
-    coordinate values to keep the xarray time axis consistent.
-
     """
 
     @abstractmethod
     def group_key(self, datetime_str: str) -> str:
-        """Map a STAC item datetime string to a group label.
-
-        Labels must sort lexicographically in temporal order.
-
-        Args:
-            datetime_str: RFC 3339 datetime string from a STAC item's
-                ``properties.datetime`` or ``properties.start_datetime``.
-
-        Returns:
-            An opaque string label for the group this item belongs to.
-
-        """
+        """Map a STAC item datetime string to a sortable group label."""
         ...
 
     @abstractmethod
     def datetime_filter(self, group_key: str) -> str:
-        """Return a ``rustac``-compatible datetime filter for a group.
-
-        Args:
-            group_key: A label previously returned by :meth:`group_key`.
-
-        Returns:
-            An RFC 3339 datetime or range string suitable for passing to
-            ``rustac.search_sync(..., datetime=...)``.
-
-        """
+        """Return a ``rustac``-compatible datetime filter for a group."""
         ...
 
     @abstractmethod
     def to_datetime64(self, group_key: str) -> np.datetime64:
-        """Map a group label to an xarray time coordinate value.
-
-        Args:
-            group_key: A label previously returned by :meth:`group_key`.
-
-        Returns:
-            A ``numpy.datetime64`` value at day precision (``datetime64[D]``).
-
-        """
+        """Map a group label to an xarray time coordinate value."""
         ...
+
+    def time_step(self, group_key: str) -> _TimeStep:
+        """Build a complete time-step object from a group key."""
+        return _TimeStep(
+            coord=self.to_datetime64(group_key),
+            label=group_key,
+            datetime_filter=self.datetime_filter(group_key),
+        )
+
+
+def _parse_timestamp(datetime_str: str) -> datetime:
+    """Parse a timestamp and normalize it to UTC.
+
+    Bare dates are rejected because exact and sub-daily grouping need a real
+    instant rather than rustac's date-wide interpretation of ``YYYY-MM-DD``.
+    Naive timestamps are treated as UTC for compatibility with STAC-like test
+    fixtures that omit the offset.
+    """
+    if "T" not in datetime_str:
+        raise ValueError(
+            f"Timestamp {datetime_str!r} must include a time component for "
+            "exact or sub-daily temporal grouping.",
+        )
+    try:
+        parsed = datetime.fromisoformat(datetime_str)
+    except ValueError as exc:
+        raise ValueError(f"Invalid timestamp {datetime_str!r}.") from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def _format_utc_timestamp(value: datetime, *, timespec: str = "auto") -> str:
+    """Return a stable UTC timestamp string ending in ``Z``."""
+    return value.astimezone(UTC).isoformat(timespec=timespec).replace("+00:00", "Z")
+
+
+class _ExactTimestampGrouper(_TemporalGrouper):
+    """Group items by their unique normalized timestamp (``time_period=None``)."""
+
+    def group_key(self, datetime_str: str) -> str:
+        """Return the normalized UTC timestamp for *datetime_str*."""
+        return _format_utc_timestamp(_parse_timestamp(datetime_str))
+
+    def datetime_filter(self, group_key: str) -> str:
+        """Return the normalized timestamp unchanged for rustac."""
+        return group_key
+
+    def to_datetime64(self, group_key: str) -> np.datetime64:
+        """Return the exact timestamp as ``datetime64[ns]``."""
+        return np.datetime64(group_key.removesuffix("Z"), "ns")
+
+
+class _HourGrouper(_TemporalGrouper):
+    """Group items into fixed-length hour windows aligned to the UTC epoch."""
+
+    def __init__(self, n_hours: int) -> None:
+        """Initialise with a positive fixed hour window length."""
+        if n_hours < 1:
+            raise ValueError("Hour temporal grouping requires a positive hour count.")
+        self._n = n_hours
+
+    def _bucket_start(self, group_key: str) -> datetime:
+        """Return the UTC bucket start represented by *group_key*."""
+        return _parse_timestamp(group_key)
+
+    def group_key(self, datetime_str: str) -> str:
+        """Return the bucket start timestamp label for *datetime_str*."""
+        value = _parse_timestamp(datetime_str)
+        bucket_seconds = self._n * 60 * 60
+        elapsed = int((value - _DATETIME_EPOCH).total_seconds())
+        bucket_start_seconds = (elapsed // bucket_seconds) * bucket_seconds
+        start = _DATETIME_EPOCH + timedelta(seconds=bucket_start_seconds)
+        return _format_utc_timestamp(start, timespec="seconds")
+
+    def datetime_filter(self, group_key: str) -> str:
+        """Return a closed second-precision ``start/end`` range."""
+        start = self._bucket_start(group_key)
+        end = start + timedelta(hours=self._n, seconds=-1)
+        return (
+            f"{_format_utc_timestamp(start, timespec='seconds')}/"
+            f"{_format_utc_timestamp(end, timespec='seconds')}"
+        )
+
+    def to_datetime64(self, group_key: str) -> np.datetime64:
+        """Return the bucket start as ``datetime64[s]``."""
+        return np.datetime64(group_key.removesuffix("Z"), "s")
 
 
 class _DayGrouper(_TemporalGrouper):
-    """Group items by calendar day (``P1D``).
-
-    This is the default and preserves the existing behaviour of truncating
-    each item datetime to ``YYYY-MM-DD``.
-
-    """
+    """Group items by calendar day (``P1D``)."""
 
     def group_key(self, datetime_str: str) -> str:
         """Return the ``YYYY-MM-DD`` portion of *datetime_str*."""
@@ -100,8 +170,6 @@ class _WeekGrouper(_TemporalGrouper):
         """Return an ``YYYY-Www`` ISO week label for *datetime_str*."""
         d = date.fromisoformat(datetime_str[:10])
         iso = d.isocalendar()
-        # Use iso.year (not d.year) to handle year-boundary weeks correctly:
-        # e.g. 2022-01-02 belongs to ISO week 2021-W52, not 2022-W00.
         return f"{iso.year}-W{iso.week:02d}"
 
     def datetime_filter(self, group_key: str) -> str:
@@ -119,7 +187,6 @@ class _WeekGrouper(_TemporalGrouper):
         """Return the Monday ``date`` for an ``YYYY-Www`` key."""
         year = int(group_key[:4])
         week = int(group_key[6:])
-        # ISO week 1 always contains January 4th.
         jan4 = date(year, 1, 4)
         week1_monday = jan4 - timedelta(days=jan4.weekday())
         return week1_monday + timedelta(weeks=week - 1)
@@ -160,16 +227,7 @@ class _YearGrouper(_TemporalGrouper):
 
 
 class _FixedDayGrouper(_TemporalGrouper):
-    """Group items into fixed-length windows of *n_days* days.
-
-    Windows are aligned to :data:`_EPOCH` (2000-01-01) so that the same
-    ``time_period`` always produces identical bucket boundaries regardless of
-    which dates happen to appear in a query.
-
-    Args:
-        n_days: Window length in days (must be >= 2).
-
-    """
+    """Group items into fixed-length windows of *n_days* days."""
 
     def __init__(self, n_days: int) -> None:
         """Initialise with a fixed window length."""
@@ -181,12 +239,7 @@ class _FixedDayGrouper(_TemporalGrouper):
         return (d - _EPOCH).days // self._n
 
     def group_key(self, datetime_str: str) -> str:
-        """Return a zero-padded decimal bucket index as the group label.
-
-        The index is zero-padded to 6 digits so that lexicographic sort
-        matches numeric/temporal order for up to 10^6 buckets.
-
-        """
+        """Return a zero-padded decimal bucket index as the group label."""
         return f"{self._bucket(datetime_str):06d}"
 
     def datetime_filter(self, group_key: str) -> str:
@@ -203,20 +256,15 @@ class _FixedDayGrouper(_TemporalGrouper):
         return np.datetime64(start.isoformat(), "D")
 
 
-def grouper_from_period(time_period: str) -> _TemporalGrouper:
-    """Return a :class:`_TemporalGrouper` for an ISO 8601 duration string.
+def grouper_from_period(time_period: str | None) -> _TemporalGrouper:
+    """Return a temporal grouper for a supported grouping period.
 
-    Args:
-        time_period: ISO 8601 duration string, e.g. ``"P1D"``, ``"P1M"``,
-            ``"P16D"``.  Supported forms: ``PnD``, ``PnW``, ``PnM``, ``PnY``.
-
-    Returns:
-        A :class:`_TemporalGrouper` instance appropriate for *time_period*.
-
-    Raises:
-        ValueError: If *time_period* is not a recognised duration string.
-
+    Supported values are ``None`` for exact timestamps, date durations
+    ``P1D``, ``PnD``, ``P1W``, ``P1M``, ``P1Y``, and hour durations ``PTnH``.
     """
+    if time_period is None:
+        return _ExactTimestampGrouper()
+
     m = _ISO_DURATION_RE.match(time_period)
     if m:
         count, unit = int(m.group(1)), m.group(2)
@@ -229,7 +277,14 @@ def grouper_from_period(time_period: str) -> _TemporalGrouper:
         if unit == "Y" and count == 1:
             return _YearGrouper()
 
+    hour_match = _ISO_HOUR_DURATION_RE.match(time_period)
+    if hour_match:
+        count = int(hour_match.group(1))
+        if count > 0:
+            return _HourGrouper(count)
+
     raise ValueError(
         f"Unsupported time_period {time_period!r}. "
-        "Supported values: 'P1D', 'PnD' (n>1), 'P1W', 'P1M', 'P1Y'.",
+        "Supported values: None, 'P1D', 'PnD' (n>1), 'P1W', 'P1M', "
+        "'P1Y', and 'PTnH' (n>=1).",
     )

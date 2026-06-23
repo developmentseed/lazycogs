@@ -33,7 +33,7 @@ src/lazycogs/
   _reproject.py      Nearest-neighbor reprojection using pyproj Transformer + numpy fancy indexing.
   _storage_ext.py    STAC Storage Extension metadata parsing (version detection, kwargs extraction for v1 and v2).
   _store.py          Resolve cloud HREFs into obstore Store instances (or route through a user-supplied store) with a shared cache; store_for() factory for constructing stores from parquet STAC files.
-  _temporal.py       Temporal grouping strategies (day, week, month, year, fixed-day-count).
+  _temporal.py       Temporal grouping strategies and _TimeStep predicates (exact, hour, day, week, month, year, fixed-day-count).
   _mosaic_methods.py Pixel-selection strategies (First, Highest, Lowest, Mean, Median, Stdev, Count).
 ```
 
@@ -42,7 +42,7 @@ src/lazycogs/
 `open()` in `_core.py`:
 
 1. Resolves `duckdb_client`: if not provided, creates a plain `DuckdbClient()`. Validates that `href` ends in `.parquet`/`.geoparquet` when no client is supplied (a directory path is accepted when a custom client is passed).
-2. Parses `time_period` into a `_TemporalGrouper` (see `_temporal.py`).
+2. Parses `time_period` into a `_TemporalGrouper` (see `_temporal.py`). Supported values include `None`, `PTnH`, and the existing date durations.
 3. Converts `bbox` from the target CRS to EPSG:4326 using `pyproj.Transformer`.
 4. Calls `_inspect_first_item()`: queries the parquet source via `duckdb_client.search(..., max_items=1)` to fetch one representative item, resolves preferred data assets (or caller-requested `bands=`), and opens one COG per requested band concurrently through `run_on_loop(...)`.
 5. Resolves the output contract from that inspection result:
@@ -51,7 +51,7 @@ src/lazycogs/
    - `nodata`: explicit `nodata=` wins, otherwise `_resolve_output_nodata(...)`
    - float-only mosaic methods (`MeanMethod`, `MedianMethod`, `StdevMethod`) fail early only when the caller explicitly forces an integer dtype
    - inferred `dtype` and `nodata` are runtime-validated during chunk reads so later heterogeneous assets fail loudly instead of truncating or silently remapping nodata
-6. Calls `_build_time_steps()`: queries the parquet source via `duckdb_client.search_to_arrow(...)` to obtain an Arrow table containing only the `datetime` and `start_datetime` columns (plus any filter/sort fields). Extracts timestamps from the Arrow columns without Python-level dict walking, buckets them with the `_TemporalGrouper`, deduplicates, and returns sorted `(filter_strings, time_coords)` pairs. Only groups with at least one item produce a time step.
+6. Calls `_build_time_steps()`: queries the parquet source via `duckdb_client.search_to_arrow(...)` to obtain an Arrow table containing only the `datetime` and `start_datetime` columns (plus any filter/sort fields). Extracts timestamps from the Arrow columns without Python-level dict walking, buckets them with the `_TemporalGrouper`, deduplicates, and returns sorted `_TimeStep` objects. Each `_TimeStep` carries the xarray coordinate and the exact rustac `datetime=` predicate; callers do not reconstruct predicates from coordinates. Only groups with at least one item produce a time step.
 7. Calls `compute_output_grid()` to get the output affine transform and dimensions (width, height). No eager coordinate arrays are produced.
 8. Creates a single `MultiBandStacBackendArray` (a dataclass) with shape `(band, time, y, x)` holding all the parameters needed to materialise any chunk later, then wraps it in one `xarray.core.indexing.LazilyIndexedArray`. This avoids `xr.concat` (used internally by `ds.to_array()`), which would eagerly load `LazilyIndexedArray`-backed objects.
 9. Uses `rasterix.RasterIndex` for spatial indexing, but materialises the x/y coordinate variables eagerly as numpy arrays so chunked scalar spatial selections compute reliably.
@@ -92,8 +92,8 @@ With `fetch_headers=True`, each matched COG header is fetched (a small HTTP rang
 5. Physical top-down y-indices are used directly; no conversion is needed.
 6. The chunk's affine transform is derived: `chunk_affine = dst_affine * Affine.translation(x_start, y_start_physical)`.
 7. The chunk's EPSG:4326 bounding box is computed from the four corners of the chunk using `_dst_to_4326`, a `pyproj.Transformer` cached on the `MultiBandStacBackendArray` instance at construction time (or `None` when `dst_crs` is already EPSG:4326).
-8. `_async_getitem` drives all time steps via `await _read_chunk_all_dates(...)`. Inside `_read_chunk_all_dates`, an `asyncio.gather` fans out one `_run_one_date` coroutine per time step, so COG reads overlap across dates:
-   a. Each `_run_one_date` calls `await _search_items_async(plan, date)`, which dispatches the DuckDB query through a shared bounded `run_duckdb(...)` helper onto the DuckDB executor. DuckDB serialises access internally, so concurrent queries on the same client are safe but not parallel. Empty results short-circuit to nodata immediately.
+8. `_async_getitem` drives all time steps via `await _read_chunk_all_dates(...)`. Inside `_read_chunk_all_dates`, an `asyncio.gather` fans out one `_run_one_date` coroutine per time step, so COG reads overlap across dates, instants, or hour windows:
+   a. Each `_run_one_date` calls `await _search_items_async(plan, time_step)`, which dispatches the DuckDB query with `datetime=time_step.datetime_filter` through a shared bounded `run_duckdb(...)` helper onto the DuckDB executor. DuckDB serialises access internally, so concurrent queries on the same client are safe but not parallel. Empty results short-circuit to nodata immediately.
    b. `read_chunk_async(...)` materialises all selected bands for the time step concurrently.
 9. The result is returned in the same top-down orientation as the COG data.
 
@@ -194,17 +194,21 @@ When spatial chunks are necessary for memory reasons, making them as large as po
 
 ## Temporal grouping
 
-`_temporal.py` defines the `_TemporalGrouper` protocol and five concrete implementations:
+`_temporal.py` defines the `_TemporalGrouper` protocol, the frozen `_TimeStep` model, and the concrete implementations:
 
 | Class | `time_period` | Bucket boundary |
 |---|---|---|
+| `_ExactTimestampGrouper` | `None` | Unique normalized UTC timestamp |
+| `_HourGrouper` | `PTnH` | Fixed hour windows aligned to 2000-01-01T00:00:00Z |
 | `_DayGrouper` | `P1D` | Calendar day |
 | `_WeekGrouper` | `P1W` | ISO 8601 calendar week (Monday anchor) |
 | `_MonthGrouper` | `P1M` | Calendar month |
 | `_YearGrouper` | `P1Y` | Calendar year |
 | `_FixedDayGrouper` | `PnD` (n>1) or `PnW` (n>1) | Fixed-length windows aligned to 2000-01-01 |
 
-Each grouper provides three methods: `group_key()` maps a datetime string to a sortable label, `datetime_filter()` converts a label to a `rustac`-compatible datetime range string, and `to_datetime64()` converts a label to a `numpy.datetime64[D]` coordinate value.
+Each grouper provides `group_key()`, `datetime_filter()`, `to_datetime64()`, and `time_step()`. `_TimeStep.coord` is the xarray time coordinate; `_TimeStep.datetime_filter` is the only value passed to rustac's `datetime=` parameter at read time. Day-or-coarser groupers keep `datetime64[D]` coordinates. Exact grouping uses `datetime64[ns]` coordinates and normalized UTC timestamp predicates. Hour grouping uses `datetime64[s]` coordinates and closed second-precision ranges such as `2025-01-01T00:00:00Z/2025-01-01T00:59:59Z`.
+
+Exact and hourly grouping reject bare dates because `YYYY-MM-DD` is a day-wide rustac predicate, not an exact instant. First-pass sub-daily support is limited to positive integer hour windows; arbitrary ISO 8601 durations, interval semantics based on `end_datetime`, and item-identity grouping are intentionally out of scope.
 
 ## Mosaic methods
 
@@ -223,11 +227,12 @@ These are copied from `rio-tiler` (MIT licence, zero GDAL imports) to avoid pull
 
 Combining `time_period` with a mosaic method is the idiomatic way to produce
 temporal composites. Setting `time_period="P1W"` groups every STAC item within
-the same ISO calendar week into a single time step. When a chunk is read,
-`async_mosaic_chunk` feeds all items for that week to the mosaic method in
-order. With `FirstMethod` (the default), reading stops as soon as every output
-pixel has a valid (non-nodata) value — the remaining items in the week are
-never fetched.
+the same ISO calendar week into a single time step; `time_period="PT1H"` does
+the same for each hour; `time_period=None` keeps one step per unique normalized
+timestamp. When a chunk is read, `read_chunk_async` feeds all items for that
+time step to the mosaic method in order. With `FirstMethod` (the default),
+reading stops as soon as every output pixel has a valid (non-nodata) value —
+the remaining items in that time step are never fetched.
 
 Note that mosaic methods operate on nodata masks only; they have no awareness
 of semantic content like clouds. Pixels that are not masked as nodata in the

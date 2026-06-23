@@ -83,6 +83,17 @@ da = lazycogs.open(
 )
 ```
 
+### Temporal grouping
+
+By default, `lazycogs.open()` groups items into one time step per calendar day (`time_period="P1D"`). You can also request coarser composites with `"PnD"`, `"P1W"`, `"P1M"`, or `"P1Y"`.
+
+For sub-daily collections, two modes are available:
+
+- `time_period=None`: one time step per unique normalized item timestamp. Items with the same timestamp still mosaic together; this is not item-identity grouping.
+- `time_period="PT1H"` or `"PTnH"`: fixed hour buckets aligned to 2000-01-01 UTC. Runtime queries use closed second-precision ranges such as `2025-01-01T00:00:00Z/2025-01-01T00:59:59Z`.
+
+Exact and hourly modes require timestamps with a time component. Bare dates remain valid for day-or-coarser grouping only. lazycogs continues to pass temporal predicates to rustac via `datetime=` and forwards any user `filter=` unchanged.
+
 ### Async loading
 
 When you are already inside an async context (for example, a Jupyter

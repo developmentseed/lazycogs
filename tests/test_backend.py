@@ -16,6 +16,7 @@ from lazycogs import _executor
 from lazycogs._backend import MultiBandStacBackendArray
 from lazycogs._executor import run_duckdb, run_on_loop
 from lazycogs._mosaic_methods import FirstMethod
+from lazycogs._temporal import _TimeStep
 from tests._executor_test_utils import reset_executor_state_for_tests
 
 
@@ -37,6 +38,18 @@ def utm32n() -> CRS:
     return CRS.from_epsg(32632)
 
 
+def _steps(filters: list[str]) -> list[_TimeStep]:
+    """Return daily time steps for backend unit tests."""
+    return [
+        _TimeStep(
+            coord=np.datetime64(value.split("/")[0], "D"),
+            label=value,
+            datetime_filter=value,
+        )
+        for value in filters
+    ]
+
+
 def _make_array(
     crs: CRS,
     bands: list[str] | None = None,
@@ -54,7 +67,7 @@ def _make_array(
         parquet_path="/tmp/fake.parquet",
         duckdb_client=DuckdbClient(),
         bands=bands,
-        dates=dates,
+        time_steps=_steps(dates),
         dst_affine=dst_affine or Affine(1.0, 0.0, 10.0, 0.0, -1.0, 50.0),
         dst_crs=crs,
         bbox_4326=[10.0, 49.0, 14.0, 50.0],
@@ -160,6 +173,40 @@ def test_raw_getitem_with_items_calls_mosaic(wgs84):
     np.testing.assert_array_equal(result, 42.0)
 
 
+def test_raw_getitem_passes_time_step_datetime_filter(wgs84):
+    """Chunk reads pass the selected _TimeStep datetime_filter to rustac."""
+    step = _TimeStep(
+        coord=np.datetime64("2023-01-01T01:00:00", "s"),
+        label="2023-01-01T01:00:00Z",
+        datetime_filter="2023-01-01T01:00:00Z/2023-01-01T01:59:59Z",
+    )
+    arr = MultiBandStacBackendArray(
+        parquet_path="/tmp/fake.parquet",
+        duckdb_client=DuckdbClient(),
+        bands=["B04"],
+        time_steps=[step],
+        dst_affine=Affine(1.0, 0.0, 10.0, 0.0, -1.0, 50.0),
+        dst_crs=wgs84,
+        bbox_4326=[10.0, 49.0, 14.0, 50.0],
+        sortby=None,
+        filter="eo:cloud_cover < 20",
+        ids=None,
+        dst_width=4,
+        dst_height=1,
+        dtype=np.dtype("float32"),
+        nodata=-9999.0,
+        mosaic_method_cls=FirstMethod,
+        dtype_was_explicit=True,
+        nodata_was_explicit=True,
+    )
+
+    with patch("rustac.DuckdbClient.search", return_value=[]) as search:
+        arr._sync_getitem((slice(0, 1), 0, slice(0, 1), slice(0, 4)))
+
+    assert search.call_args.kwargs["datetime"] == step.datetime_filter
+    assert search.call_args.kwargs["filter"] == "eo:cloud_cover < 20"
+
+
 def test_raw_getitem_chunk_affine_offset(wgs84):
     """Chunk affine is translated by (x_start, y_start) from the full grid."""
     arr = _make_array(wgs84)
@@ -197,7 +244,7 @@ def _make_multiband_array(
         parquet_path="/tmp/fake.parquet",
         duckdb_client=DuckdbClient(),
         bands=bands,
-        dates=dates,
+        time_steps=_steps(dates),
         dst_affine=Affine(1.0, 0.0, 10.0, 0.0, -1.0, 50.0),
         dst_crs=crs,
         bbox_4326=[10.0, 49.0, 14.0, 50.0],

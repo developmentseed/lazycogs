@@ -9,7 +9,9 @@ import pytest
 
 from lazycogs._temporal import (
     _DayGrouper,
+    _ExactTimestampGrouper,
     _FixedDayGrouper,
+    _HourGrouper,
     _MonthGrouper,
     _WeekGrouper,
     _YearGrouper,
@@ -252,9 +254,14 @@ class TestGrouperFromPeriod:
         with pytest.raises(ValueError, match="Unsupported time_period"):
             grouper_from_period("invalid")
 
-    def test_pt1h_raises(self):
-        with pytest.raises(ValueError, match="Unsupported time_period"):
-            grouper_from_period("PT1H")
+    def test_none_returns_exact_grouper(self):
+        assert isinstance(grouper_from_period(None), _ExactTimestampGrouper)
+
+    def test_pt1h_returns_hour_grouper(self):
+        assert isinstance(grouper_from_period("PT1H"), _HourGrouper)
+
+    def test_pt6h_returns_hour_grouper(self):
+        assert isinstance(grouper_from_period("PT6H"), _HourGrouper)
 
     def test_p2m_raises(self):
         # P2M (2 months) is not supported
@@ -264,6 +271,97 @@ class TestGrouperFromPeriod:
     def test_p2y_raises(self):
         with pytest.raises(ValueError, match="Unsupported time_period"):
             grouper_from_period("P2Y")
+
+    @pytest.mark.parametrize("period", ["PT30M", "PT1.5H", "PT0H"])
+    def test_unsupported_pt_values_raise(self, period):
+        with pytest.raises(ValueError, match="Unsupported time_period"):
+            grouper_from_period(period)
+
+
+# ---------------------------------------------------------------------------
+# _TimeStep contract, exact timestamps, and hour grouping
+# ---------------------------------------------------------------------------
+
+
+def test_day_grouper_time_step_preserves_existing_contract():
+    """Daily time steps carry today's coordinate and rustac date filter."""
+    step = _DayGrouper().time_step("2023-01-15")
+
+    assert step.label == "2023-01-15"
+    assert step.datetime_filter == "2023-01-15"
+    assert step.coord == np.datetime64("2023-01-15", "D")
+
+
+def test_exact_grouping_distinguishes_same_day_timestamps():
+    """Exact mode keeps separate sub-daily timestamps distinct."""
+    g = _ExactTimestampGrouper()
+
+    assert g.group_key("2023-01-15T10:00:00Z") == "2023-01-15T10:00:00Z"
+    assert g.group_key("2023-01-15T11:00:00Z") == "2023-01-15T11:00:00Z"
+
+
+def test_exact_grouping_normalizes_equivalent_utc_offsets():
+    """Equivalent UTC instants collapse to the same exact grouping key."""
+    g = _ExactTimestampGrouper()
+
+    assert g.group_key("2023-01-15T10:00:00Z") == g.group_key(
+        "2023-01-15T05:00:00-05:00",
+    )
+
+
+def test_exact_grouping_preserves_fractional_seconds():
+    """Fractional seconds stay in the label, filter, and nanosecond coordinate."""
+    g = _ExactTimestampGrouper()
+    key = g.group_key("2023-01-15T10:00:00.123456Z")
+    step = g.time_step(key)
+
+    assert step.label == "2023-01-15T10:00:00.123456Z"
+    assert step.datetime_filter == "2023-01-15T10:00:00.123456Z"
+    assert step.coord == np.datetime64("2023-01-15T10:00:00.123456", "ns")
+
+
+@pytest.mark.parametrize("grouper", [_ExactTimestampGrouper(), _HourGrouper(1)])
+def test_subdaily_groupers_reject_malformed_timestamps(grouper):
+    """Exact and hourly modes fail clearly on malformed timestamps."""
+    with pytest.raises(ValueError, match="Invalid timestamp"):
+        grouper.group_key("2023-01-01Tbad")
+
+
+@pytest.mark.parametrize("grouper", [_ExactTimestampGrouper(), _HourGrouper(1)])
+def test_subdaily_groupers_reject_bare_dates(grouper):
+    """Exact and hourly modes require a timestamp, not a bare date."""
+    with pytest.raises(ValueError, match="must include a time component"):
+        grouper.group_key("2023-01-15")
+
+
+def test_hourly_grouping_uses_closed_second_precision_range():
+    """PT1H produces closed second-precision rustac datetime ranges."""
+    g = _HourGrouper(1)
+    key = g.group_key("2025-01-01T00:59:59Z")
+
+    assert key == "2025-01-01T00:00:00Z"
+    assert g.datetime_filter(key) == "2025-01-01T00:00:00Z/2025-01-01T00:59:59Z"
+    assert g.to_datetime64(key) == np.datetime64("2025-01-01T00:00:00", "s")
+
+
+def test_hourly_grouping_splits_on_hour_boundary():
+    """PT1H puts exact hour-boundary timestamps in the next bucket."""
+    g = _HourGrouper(1)
+
+    assert g.group_key("2025-01-01T00:59:59Z") != g.group_key(
+        "2025-01-01T01:00:00Z",
+    )
+
+
+def test_multi_hour_grouping_aligns_to_epoch():
+    """PT6H windows align deterministically to epoch-relative boundaries."""
+    g = _HourGrouper(6)
+
+    assert g.group_key("2025-01-01T05:59:59Z") == "2025-01-01T00:00:00Z"
+    assert g.group_key("2025-01-01T06:00:00Z") == "2025-01-01T06:00:00Z"
+    assert g.datetime_filter("2025-01-01T00:00:00Z") == (
+        "2025-01-01T00:00:00Z/2025-01-01T05:59:59Z"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -291,6 +389,9 @@ SAMPLE_DATETIMES = [
         _YearGrouper(),
         _FixedDayGrouper(16),
         _FixedDayGrouper(5),
+        _ExactTimestampGrouper(),
+        _HourGrouper(1),
+        _HourGrouper(6),
     ],
 )
 def test_sort_invariant(grouper):
