@@ -1252,7 +1252,7 @@
 <a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">nodata</span><span class="p">:</span> <span class="n"><span title="float">float</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="n">dtype</span><span class="p">:</span> <span class="n"><span title="str">str</span></span> <span class="o">|</span> <span class="n"><span title="numpy.dtype">dtype</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    <span class="n">mosaic_method</span><span class="p">:</span> <span class="n"><span title="type">type</span></span><span class="p">[</span><span class="n"><a class="autorefs autorefs-internal" title="lazycogs.MosaicMethodBase (lazycogs._mosaic_methods.MosaicMethodBase)" href="../mosaic/#lazycogs.MosaicMethodBase">MosaicMethodBase</a></span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    <span class="n">time_period</span><span class="p">:</span> <span class="n"><span title="str">str</span></span> <span class="o">=</span> <span class="s2">&quot;P1D&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    <span class="n">time_period</span><span class="p">:</span> <span class="n"><span title="str">str</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="s2">&quot;P1D&quot;</span><span class="p">,</span>
 <a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>    <span class="n">store</span><span class="p">:</span> <span class="n"><span title="async_geotiff.Store">Store</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>    <span class="n">max_concurrent_reads</span><span class="p">:</span> <span class="n"><span title="int">int</span></span> <span class="o">=</span> <span class="mi">32</span><span class="p">,</span>
 <a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>    <span class="n">path_from_href</span><span class="p">:</span> <span class="n"><span title="collections.abc.Callable">Callable</span></span><span class="p">[[</span><span class="n"><span title="str">str</span></span><span class="p">],</span> <span class="n"><span title="str">str</span></span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -1508,16 +1508,17 @@ to :class:<code>~lazycogs._mosaic_methods.FirstMethod</code>.</p>
                 <code>time_period</code>
             </td>
             <td>
-                  <code><span title="str">str</span></code>
+                  <code><span title="str">str</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>ISO 8601 duration string controlling how items are
-grouped into time steps.  Supported forms: <code>PnD</code> (days),
+                <p>Temporal grouping mode. Supported forms are <code>None</code>
+(one step per unique normalized timestamp), <code>PnD</code> (days),
 <code>P1W</code> (ISO calendar week), <code>P1M</code> (calendar month), <code>P1Y</code>
-(calendar year).  Defaults to <code>"P1D"</code> (one step per calendar
-day), which preserves the previous behaviour.  Multi-day windows
-such as <code>"P16D"</code> are aligned to an epoch of 2000-01-01.</p>
+(calendar year), and <code>PTnH</code> (fixed hour windows). Defaults to
+<code>"P1D"</code> (one step per calendar day), which preserves the previous
+behaviour. Multi-day and multi-hour windows are aligned to an
+epoch of 2000-01-01.</p>
               </div>
             </td>
             <td>
