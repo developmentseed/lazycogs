@@ -28,6 +28,7 @@ from lazycogs._explain import (
     _roi_pixel_offsets,
 )
 from lazycogs._mosaic_methods import FirstMethod
+from lazycogs._temporal import _TimeStep
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -42,6 +43,18 @@ def wgs84() -> CRS:
 @pytest.fixture
 def epsg5070() -> CRS:
     return CRS.from_epsg(5070)
+
+
+def _steps(filters: list[str]) -> list[_TimeStep]:
+    """Return daily time steps for explain unit tests."""
+    return [
+        _TimeStep(
+            coord=np.datetime64(value.split("/")[0], "D"),
+            label=value,
+            datetime_filter=value,
+        )
+        for value in filters
+    ]
 
 
 def _make_backend(
@@ -64,7 +77,7 @@ def _make_backend(
         parquet_path=parquet_path,
         duckdb_client=DuckdbClient(),
         bands=bands,
-        dates=dates,
+        time_steps=_steps(dates),
         dst_affine=affine,
         dst_crs=crs,
         bbox_4326=[0.0, 0.0, 10.0, 10.0],
@@ -104,7 +117,7 @@ def _make_da_with_backends(
         affine=affine,
     )
 
-    time_coord = np.array(time_coords, dtype="datetime64[D]")
+    time_coord = np.array(time_coords)
     resolution = affine.a
 
     # Build coordinates matching the grid convention: x ascending, y descending
@@ -535,6 +548,55 @@ def test_accessor_explain_routes_duckdb_queries_through_helper(wgs84):
     assert plan.total_chunk_reads == 2
     assert plan.total_cog_reads == 4
     assert mock_run_duckdb.await_count == 2
+
+
+def test_accessor_explain_uses_backend_time_step_filter_with_subdaily_coords(wgs84):
+    """Explain uses _TimeStep predicates and preserves sub-daily coordinates."""
+    step = _TimeStep(
+        coord=np.datetime64("2023-01-01T01:00:00", "s"),
+        label="2023-01-01T01:00:00Z",
+        datetime_filter="2023-01-01T01:00:00Z/2023-01-01T01:59:59Z",
+    )
+    backend = MultiBandStacBackendArray(
+        parquet_path="/tmp/fake.parquet",
+        duckdb_client=DuckdbClient(),
+        bands=["red"],
+        time_steps=[step],
+        dst_affine=Affine(1.0, 0.0, 0.0, 0.0, -1.0, 4.0),
+        dst_crs=wgs84,
+        bbox_4326=[0.0, 0.0, 4.0, 4.0],
+        sortby=None,
+        filter="eo:cloud_cover < 20",
+        ids=None,
+        dst_width=4,
+        dst_height=4,
+        dtype=np.dtype("float32"),
+        nodata=-9999.0,
+        mosaic_method_cls=FirstMethod,
+        dtype_was_explicit=True,
+        nodata_was_explicit=True,
+    )
+    variable = xr.Variable(
+        ("band", "time", "y", "x"),
+        indexing.LazilyIndexedArray(backend),
+    )
+    da = xr.DataArray(
+        variable,
+        coords={
+            "band": ["red"],
+            "time": np.array([step.coord]),
+            "y": np.array([3.5, 2.5, 1.5, 0.5]),
+            "x": np.array([0.5, 1.5, 2.5, 3.5]),
+        },
+    )
+
+    with patch("rustac.DuckdbClient.search", return_value=[]) as search:
+        plan = da.lazycogs.explain()
+
+    assert plan.time_coords == [step.coord]
+    assert plan.chunk_reads[0].date_filter == step.datetime_filter
+    assert search.call_args.kwargs["datetime"] == step.datetime_filter
+    assert search.call_args.kwargs["filter"] == "eo:cloud_cover < 20"
 
 
 def test_accessor_explain_returns_plan(wgs84):

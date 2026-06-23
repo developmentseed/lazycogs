@@ -118,20 +118,18 @@ def _current_time_items(
             "lazycogs time axis.",
         )
 
-    current_time_coords = np.atleast_1d(da.coords["time"].values).astype(
-        "datetime64[D]",
-    )
+    current_time_coords = np.atleast_1d(da.coords["time"].values)
 
     if key is None:
-        if len(current_time_coords) != len(backend.dates):
+        if len(current_time_coords) != len(backend.time_steps):
             raise ValueError(
                 "Could not recover lazycogs time-step indexing from this DataArray. "
                 "lazycogs.explain() currently supports arrays that still retain "
                 "their original lazy indexing structure.",
             )
-        time_positions = list(range(len(backend.dates)))
+        time_positions = list(range(len(backend.time_steps)))
     else:
-        time_positions = _indexer_positions(key.tuple[1], len(backend.dates))
+        time_positions = _indexer_positions(key.tuple[1], len(backend.time_steps))
 
     if len(time_positions) != len(current_time_coords):
         raise ValueError(
@@ -140,7 +138,11 @@ def _current_time_items(
         )
 
     return [
-        (backend_index, backend.dates[backend_index], time_coord)
+        (
+            backend_index,
+            backend.time_steps[backend_index].datetime_filter,
+            time_coord,
+        )
         for backend_index, time_coord in zip(
             time_positions,
             current_time_coords,

@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from rustac import DuckdbClient
 
     from lazycogs._mosaic_methods import MosaicMethodBase
+    from lazycogs._temporal import _TimeStep
 
 
 @dataclass(frozen=True)
@@ -50,7 +51,7 @@ class _ChunkReadPlan:
         filter_expr: Optional CQL2 filter forwarded to ``client.search``.
         ids: Optional STAC item IDs forwarded to ``client.search``.
         filter_fields: Field names extracted from ``filter_expr``.
-        dates: Full list of acquisition date strings.
+        time_steps: Full list of temporal steps with runtime datetime filters.
         chunk_bbox_4326: ``[minx, miny, maxx, maxy]`` in EPSG:4326.
         selected_bands: STAC asset keys to read.
         chunk_affine: Affine transform of the chunk.
@@ -76,7 +77,7 @@ class _ChunkReadPlan:
     filter_expr: str | dict[str, Any] | None
     ids: list[str] | None
     filter_fields: set[str]
-    dates: list[str]
+    time_steps: list[_TimeStep]
     chunk_bbox_4326: list[float]
     selected_bands: list[str]
     chunk_affine: Affine
@@ -120,13 +121,13 @@ class _SpatialWindow:
 
 def _resolve_time_indices(
     time_key: int | np.integer | slice,
-    n_dates: int,
+    n_time_steps: int,
 ) -> tuple[list[int], bool]:
     """Resolve a time indexer to a list of integer indices.
 
     Args:
         time_key: Integer or slice indexer for the time dimension.
-        n_dates: Total number of dates (size of the time dimension).
+        n_time_steps: Total number of time steps (size of the time dimension).
 
     Returns:
         ``(time_indices, squeeze_time)`` where ``squeeze_time`` is ``True``
@@ -136,7 +137,7 @@ def _resolve_time_indices(
     if isinstance(time_key, (int, np.integer)):
         return [int(time_key)], True
     start = time_key.start if time_key.start is not None else 0
-    stop = time_key.stop if time_key.stop is not None else n_dates
+    stop = time_key.stop if time_key.stop is not None else n_time_steps
     step = time_key.step if time_key.step is not None else 1
     return list(range(start, stop, step)), False
 
@@ -166,13 +167,13 @@ def _resolve_band_indices(
 
 def _search_items_sync(
     plan: _ChunkReadPlan,
-    date: str,
+    time_step: _TimeStep,
 ) -> list[Any]:
     """Query the STAC parquet for items overlapping a chunk.
 
     Args:
         plan: Read plan carrying all parameters for this chunk.
-        date: Acquisition date string (``"YYYY-MM-DD"``).
+        time_step: Temporal step carrying the rustac datetime filter.
 
     Returns:
         List of STAC items returned by DuckDB.
@@ -183,7 +184,7 @@ def _search_items_sync(
     items = plan.duckdb_client.search(
         plan.parquet_path,
         bbox=plan.chunk_bbox_4326,
-        datetime=date,
+        datetime=time_step.datetime_filter,
         sortby=plan.sortby,
         filter=plan.filter_expr,
         ids=plan.ids,
@@ -192,9 +193,9 @@ def _search_items_sync(
         ),
     )
     logger.debug(
-        "duckdb_client.search %s date=%s returned %d items in %.3fs",
+        "duckdb_client.search %s datetime=%s returned %d items in %.3fs",
         label,
-        date,
+        time_step.datetime_filter,
         len(items),
         time.perf_counter() - t0,
     )
@@ -211,7 +212,7 @@ def _search_items_sync(
 
 async def _search_items_async(
     plan: _ChunkReadPlan,
-    date: str,
+    time_step: _TimeStep,
 ) -> list[Any]:
     """Run the DuckDB search on the dedicated DuckDB executor.
 
@@ -221,13 +222,13 @@ async def _search_items_async(
 
     Args:
         plan: Read plan carrying all parameters for this chunk.
-        date: Acquisition date string (``"YYYY-MM-DD"``).
+        time_step: Temporal step carrying the rustac datetime filter.
 
     Returns:
         List of STAC items returned by DuckDB.
 
     """
-    return await run_duckdb(_search_items_sync, plan, date)
+    return await run_duckdb(_search_items_sync, plan, time_step)
 
 
 async def _run_one_date(
@@ -241,15 +242,15 @@ async def _run_one_date(
     Returns None if no items match the query.
 
     Args:
-        t_idx: Index into ``plan.dates`` for the time step to read.
+        t_idx: Index into ``plan.time_steps`` for the time step to read.
         plan: Read plan carrying all parameters for this chunk.
 
     Returns:
         Per-band arrays keyed by band name, or ``None`` if no items matched.
 
     """
-    date = plan.dates[t_idx]
-    items = await _search_items_async(plan, date)
+    time_step = plan.time_steps[t_idx]
+    items = await _search_items_async(plan, time_step)
 
     if not items:
         return None
@@ -272,9 +273,9 @@ async def _run_one_date(
         path_fn=plan.path_fn,
     )
     logger.debug(
-        "read_chunk_async bands=%r date=%s (%d items, %dx%d px) took %.3fs",
+        "read_chunk_async bands=%r datetime=%s (%d items, %dx%d px) took %.3fs",
         plan.selected_bands,
-        date,
+        time_step.datetime_filter,
         len(items),
         plan.chunk_width,
         plan.chunk_height,
@@ -313,7 +314,7 @@ class MultiBandStacBackendArray(BackendArray):
     One instance is created at ``open()`` time.  No pixel I/O happens until
     ``__getitem__`` is called inside a dask task.  Reads all selected bands
     together per time step via
-    :func:`~lazycogs._chunk_reader.async_mosaic_chunk`, issuing a
+    :func:`~lazycogs._chunk_reader.read_chunk_async`, issuing a
     single DuckDB query per time step and sharing reprojection warp maps across
     bands that have identical source geometry.
 
@@ -324,8 +325,7 @@ class MultiBandStacBackendArray(BackendArray):
             Constructed with default settings in :func:`open` when not supplied
             by the caller.
         bands: Ordered list of STAC asset keys, one per band.
-        dates: Sorted list of unique acquisition date strings
-            (``"YYYY-MM-DD"``), one entry per time step.
+        time_steps: Sorted temporal steps, one entry per time step.
         dst_affine: Affine transform of the full output grid.
         dst_crs: CRS of the output grid.
         bbox_4326: ``[minx, miny, maxx, maxy]`` in EPSG:4326, used as the
@@ -358,7 +358,7 @@ class MultiBandStacBackendArray(BackendArray):
             a custom ``store`` whose root does not align with the URL structure
             of the asset HREFs (e.g. Azure Blob Storage with a container-rooted
             store).
-        shape: ``(n_bands, n_dates, dst_height, dst_width)``.  Derived from
+        shape: ``(n_bands, n_time_steps, dst_height, dst_width)``.  Derived from
             the other fields; not accepted as a constructor argument.
 
     """
@@ -366,7 +366,7 @@ class MultiBandStacBackendArray(BackendArray):
     parquet_path: str
     duckdb_client: DuckdbClient
     bands: list[str]
-    dates: list[str]
+    time_steps: list[_TimeStep]
     dst_affine: Affine
     dst_crs: CRS
     bbox_4326: list[float]
@@ -388,7 +388,12 @@ class MultiBandStacBackendArray(BackendArray):
 
     def __post_init__(self) -> None:
         """Derive shape and cache the dst→EPSG:4326 transformer."""
-        self.shape = (len(self.bands), len(self.dates), self.dst_height, self.dst_width)
+        self.shape = (
+            len(self.bands),
+            len(self.time_steps),
+            self.dst_height,
+            self.dst_width,
+        )
         epsg_4326 = CRS.from_epsg(4326)
         if self.dst_crs.equals(epsg_4326):
             self._dst_to_4326: Transformer | None = None
@@ -557,7 +562,10 @@ class MultiBandStacBackendArray(BackendArray):
         band_indices, squeeze_band = _resolve_band_indices(band_key, len(self.bands))
         selected_bands = [self.bands[b] for b in band_indices]
 
-        time_indices, squeeze_time = _resolve_time_indices(time_key, len(self.dates))
+        time_indices, squeeze_time = _resolve_time_indices(
+            time_key,
+            len(self.time_steps),
+        )
         win = self._resolve_spatial_window(y_key, x_key)
 
         fill = self.nodata if self.nodata is not None else 0
@@ -570,7 +578,7 @@ class MultiBandStacBackendArray(BackendArray):
             filter_expr=self.filter,
             ids=self.ids,
             filter_fields=filter_fields,
-            dates=self.dates,
+            time_steps=self.time_steps,
             chunk_bbox_4326=win.chunk_bbox_4326,
             selected_bands=selected_bands,
             chunk_affine=win.chunk_affine,

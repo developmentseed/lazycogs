@@ -22,7 +22,7 @@ from lazycogs._executor import run_on_loop
 from lazycogs._grid import compute_output_grid
 from lazycogs._mosaic_methods import FirstMethod, MosaicMethodBase
 from lazycogs._store import resolve
-from lazycogs._temporal import _TemporalGrouper, grouper_from_period
+from lazycogs._temporal import _TemporalGrouper, _TimeStep, grouper_from_period
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -303,8 +303,8 @@ def _build_time_steps(
     ids: list[str] | None = None,
     sortby: str | list[str | dict[str, str]] | None = None,
     temporal_grouper: _TemporalGrouper,
-) -> tuple[list[str], list[np.datetime64]]:
-    """Return filter strings and coordinate values for each unique time step.
+) -> list[_TimeStep]:
+    """Return explicit temporal steps for each unique time step.
 
     Queries *parquet_path* and buckets matching items by *temporal_grouper*.
     Only groups that have at least one matching item produce a time step, so
@@ -322,10 +322,8 @@ def _build_time_steps(
             datetime filter strings, and coordinate values.
 
     Returns:
-        A ``(filter_strings, time_coords)`` tuple where *filter_strings* is
-        the list of datetime filter strings (one per time step, sorted in
-        temporal order) and *time_coords* is the corresponding list of
-        ``numpy.datetime64[D]`` coordinate values.
+        ``_TimeStep`` values sorted in temporal order. Each step carries the
+        coordinate value and the opaque rustac ``datetime=`` predicate.
 
     """
     filter_fields = _extract_filter_fields(filter) if filter else set()
@@ -359,10 +357,7 @@ def _build_time_steps(
             iso = val if isinstance(val, str) else val.isoformat()
             keys.add(temporal_grouper.group_key(iso))
 
-    sorted_keys = sorted(keys)
-    filter_strings = [temporal_grouper.datetime_filter(k) for k in sorted_keys]
-    time_coords = [temporal_grouper.to_datetime64(k) for k in sorted_keys]
-    return filter_strings, time_coords
+    return [temporal_grouper.time_step(k) for k in sorted(keys)]
 
 
 def _spatial_coords_with_eager_variables(index: RasterIndex) -> Coordinates:
@@ -400,8 +395,7 @@ def _build_dataarray(
     parquet_path: str,
     duckdb_client: DuckdbClient,
     resolved_bands: list[str],
-    filter_strings: list[str],
-    time_coords: list[np.datetime64],
+    time_steps: list[_TimeStep],
     bbox: tuple[float, float, float, float],
     bbox_4326: list[float],
     dst_crs: CRS,
@@ -430,10 +424,8 @@ def _build_dataarray(
             :class:`~lazycogs._backend.MultiBandStacBackendArray` for per-chunk
         queries.
         resolved_bands: Ordered list of band/asset keys.
-        filter_strings: Sorted list of ``rustac``-compatible datetime filter
-            strings, one per time step.
-        time_coords: ``numpy.datetime64[D]`` coordinate values corresponding
-            to each entry in *filter_strings*.
+        time_steps: Sorted temporal steps carrying xarray coordinates and
+            ``rustac``-compatible datetime filters.
         bbox: Output bounding box in ``dst_crs``.
         bbox_4326: Bounding box in EPSG:4326.
         dst_crs: Target output CRS.
@@ -469,7 +461,7 @@ def _build_dataarray(
         parquet_path=parquet_path,
         duckdb_client=duckdb_client,
         bands=resolved_bands,
-        dates=filter_strings,
+        time_steps=time_steps,
         dst_affine=dst_affine,
         dst_crs=dst_crs,
         bbox_4326=bbox_4326,
@@ -508,7 +500,7 @@ def _build_dataarray(
     )
     spatial_coords = _spatial_coords_with_eager_variables(index)
 
-    time_coord = np.array(time_coords, dtype="datetime64[D]")
+    time_coord = np.array([step.coord for step in time_steps])
 
     affine_transform = [
         dst_affine.a,
@@ -595,7 +587,7 @@ def open(  # noqa: A001
     nodata: float | None = None,
     dtype: str | np.dtype | None = None,
     mosaic_method: type[MosaicMethodBase] | None = None,
-    time_period: str = "P1D",
+    time_period: str | None = "P1D",
     store: Store | None = None,
     max_concurrent_reads: int = 32,
     path_from_href: Callable[[str], str] | None = None,
@@ -637,12 +629,13 @@ def open(  # noqa: A001
             integer ``dtype=`` still raises for those methods.
         mosaic_method: Mosaic method class (not instance) to use.  Defaults
             to :class:`~lazycogs._mosaic_methods.FirstMethod`.
-        time_period: ISO 8601 duration string controlling how items are
-            grouped into time steps.  Supported forms: ``PnD`` (days),
+        time_period: Temporal grouping mode. Supported forms are ``None``
+            (one step per unique normalized timestamp), ``PnD`` (days),
             ``P1W`` (ISO calendar week), ``P1M`` (calendar month), ``P1Y``
-            (calendar year).  Defaults to ``"P1D"`` (one step per calendar
-            day), which preserves the previous behaviour.  Multi-day windows
-            such as ``"P16D"`` are aligned to an epoch of 2000-01-01.
+            (calendar year), and ``PTnH`` (fixed hour windows). Defaults to
+            ``"P1D"`` (one step per calendar day), which preserves the previous
+            behaviour. Multi-day and multi-hour windows are aligned to an
+            epoch of 2000-01-01.
         store: Pre-configured :class:`async_geotiff.Store` accepted by
             ``GeoTIFF.open`` to use for all asset reads. Useful when
             credentials, custom endpoints, or non-default options are needed
@@ -764,7 +757,7 @@ def open(  # noqa: A001
     resolved_bands = bands if bands is not None else inspection.bands
 
     t0 = time.perf_counter()
-    filter_strings, time_coords = _build_time_steps(
+    time_steps = _build_time_steps(
         href,
         duckdb_client=duckdb_client,
         bbox=bbox_4326,
@@ -777,10 +770,10 @@ def open(  # noqa: A001
     logger.debug(
         "_build_time_steps took %.3fs, found %d time steps",
         time.perf_counter() - t0,
-        len(filter_strings),
+        len(time_steps),
     )
 
-    if not filter_strings:
+    if not time_steps:
         raise ValueError(
             f"No STAC items matched the query in {href!r} "
             f"(bbox={bbox_4326}, datetime={datetime}).",
@@ -804,15 +797,14 @@ def open(  # noqa: A001
     logger.info(
         "Discovered %d bands and %d time steps.",
         len(resolved_bands),
-        len(filter_strings),
+        len(time_steps),
     )
 
     return _build_dataarray(
         parquet_path=href,
         duckdb_client=duckdb_client,
         resolved_bands=resolved_bands,
-        filter_strings=filter_strings,
-        time_coords=time_coords,
+        time_steps=time_steps,
         bbox=bbox,
         bbox_4326=bbox_4326,
         dst_crs=dst_crs,

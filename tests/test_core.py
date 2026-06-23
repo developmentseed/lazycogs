@@ -23,7 +23,13 @@ from lazycogs._core import (
 )
 from lazycogs._explain import _find_backend_array
 from lazycogs._mosaic_methods import FirstMethod, MeanMethod, MedianMethod
-from lazycogs._temporal import _DayGrouper, _FixedDayGrouper, _MonthGrouper
+from lazycogs._temporal import (
+    _DayGrouper,
+    _ExactTimestampGrouper,
+    _FixedDayGrouper,
+    _HourGrouper,
+    _MonthGrouper,
+)
 
 
 def _items_to_arrow(items: list[dict]) -> rustac.DuckdbClient:
@@ -123,55 +129,55 @@ def test_build_time_steps_day_deduplicates_same_day():
     """Items on the same day collapse to one time step with DayGrouper."""
     table = _items_to_arrow(_FAKE_ITEMS_SAME_DAY)
     with patch("rustac.DuckdbClient.search_to_arrow", return_value=table):
-        filter_strings, time_coords = _build_time_steps(
+        time_steps = _build_time_steps(
             "fake.parquet",
             duckdb_client=DuckdbClient(),
             temporal_grouper=_DayGrouper(),
         )
-    assert filter_strings == ["2023-01-15"]
-    assert len(time_coords) == 1
-    assert time_coords[0] == np.datetime64("2023-01-15", "D")
+    assert [step.datetime_filter for step in time_steps] == ["2023-01-15"]
+    assert len(time_steps) == 1
+    assert time_steps[0].coord == np.datetime64("2023-01-15", "D")
 
 
 def test_build_time_steps_day_two_days():
     """Items on two different days produce two time steps."""
     table = _items_to_arrow(_FAKE_ITEMS_TWO_DAYS)
     with patch("rustac.DuckdbClient.search_to_arrow", return_value=table):
-        filter_strings, time_coords = _build_time_steps(
+        time_steps = _build_time_steps(
             "fake.parquet",
             duckdb_client=DuckdbClient(),
             temporal_grouper=_DayGrouper(),
         )
-    assert filter_strings == ["2023-01-15", "2023-01-16"]
-    assert len(time_coords) == 2
+    assert [step.datetime_filter for step in time_steps] == ["2023-01-15", "2023-01-16"]
+    assert len(time_steps) == 2
 
 
 def test_build_time_steps_month_deduplicates_same_month():
     """Items in the same month collapse to one time step with MonthGrouper."""
     table = _items_to_arrow(_FAKE_ITEMS_SAME_MONTH)
     with patch("rustac.DuckdbClient.search_to_arrow", return_value=table):
-        filter_strings, time_coords = _build_time_steps(
+        time_steps = _build_time_steps(
             "fake.parquet",
             duckdb_client=DuckdbClient(),
             temporal_grouper=_MonthGrouper(),
         )
-    assert filter_strings == ["2023-01-01/2023-01-31"]
-    assert len(time_coords) == 1
-    assert time_coords[0] == np.datetime64("2023-01-01", "D")
+    assert [step.datetime_filter for step in time_steps] == ["2023-01-01/2023-01-31"]
+    assert len(time_steps) == 1
+    assert time_steps[0].coord == np.datetime64("2023-01-01", "D")
 
 
 def test_build_time_steps_month_two_months():
     """Items in two different months produce two time steps."""
     table = _items_to_arrow(_FAKE_ITEMS_TWO_MONTHS)
     with patch("rustac.DuckdbClient.search_to_arrow", return_value=table):
-        filter_strings, _ = _build_time_steps(
+        time_steps = _build_time_steps(
             "fake.parquet",
             duckdb_client=DuckdbClient(),
             temporal_grouper=_MonthGrouper(),
         )
-    assert len(filter_strings) == 2
-    assert filter_strings[0] == "2023-01-01/2023-01-31"
-    assert filter_strings[1] == "2023-02-01/2023-02-28"
+    assert len(time_steps) == 2
+    assert time_steps[0].datetime_filter == "2023-01-01/2023-01-31"
+    assert time_steps[1].datetime_filter == "2023-02-01/2023-02-28"
 
 
 def test_build_time_steps_p16d_same_bucket():
@@ -183,12 +189,12 @@ def test_build_time_steps_p16d_same_bucket():
     ]
     table = _items_to_arrow(items)
     with patch("rustac.DuckdbClient.search_to_arrow", return_value=table):
-        filter_strings, _ = _build_time_steps(
+        time_steps = _build_time_steps(
             "fake.parquet",
             duckdb_client=DuckdbClient(),
             temporal_grouper=_FixedDayGrouper(16),
         )
-    assert len(filter_strings) == 1
+    assert len(time_steps) == 1
 
 
 def test_build_time_steps_p16d_adjacent_buckets():
@@ -202,25 +208,69 @@ def test_build_time_steps_p16d_adjacent_buckets():
     ]
     table = _items_to_arrow(items)
     with patch("rustac.DuckdbClient.search_to_arrow", return_value=table):
-        filter_strings, time_coords = _build_time_steps(
+        time_steps = _build_time_steps(
             "fake.parquet",
             duckdb_client=DuckdbClient(),
             temporal_grouper=_FixedDayGrouper(16),
         )
-    assert len(filter_strings) == 2
-    assert time_coords[0] < time_coords[1]
+    assert len(time_steps) == 2
+    assert time_steps[0].coord < time_steps[1].coord
 
 
 def test_build_time_steps_empty_items():
     """Empty item list returns empty lists."""
     with patch("rustac.DuckdbClient.search_to_arrow", return_value=None):
-        filter_strings, time_coords = _build_time_steps(
+        time_steps = _build_time_steps(
             "fake.parquet",
             duckdb_client=DuckdbClient(),
             temporal_grouper=_DayGrouper(),
         )
-    assert filter_strings == []
-    assert time_coords == []
+    assert time_steps == []
+
+
+def test_build_time_steps_exact_keeps_same_day_times_distinct():
+    """Exact grouping produces one step per normalized timestamp."""
+    table = _items_to_arrow(_FAKE_ITEMS_SAME_DAY)
+    with patch("rustac.DuckdbClient.search_to_arrow", return_value=table):
+        time_steps = _build_time_steps(
+            "fake.parquet",
+            duckdb_client=DuckdbClient(),
+            temporal_grouper=_ExactTimestampGrouper(),
+        )
+
+    assert [step.datetime_filter for step in time_steps] == [
+        "2023-01-15T10:00:00Z",
+        "2023-01-15T14:30:00Z",
+    ]
+    assert [step.coord for step in time_steps] == [
+        np.datetime64("2023-01-15T10:00:00", "ns"),
+        np.datetime64("2023-01-15T14:30:00", "ns"),
+    ]
+
+
+def test_build_time_steps_hourly_groups_hour_buckets():
+    """Hourly grouping keeps hour buckets distinct without day coercion."""
+    items = [
+        {"properties": {"datetime": "2023-01-15T10:00:00Z"}},
+        {"properties": {"datetime": "2023-01-15T10:59:59Z"}},
+        {"properties": {"datetime": "2023-01-15T11:00:00Z"}},
+    ]
+    table = _items_to_arrow(items)
+    with patch("rustac.DuckdbClient.search_to_arrow", return_value=table):
+        time_steps = _build_time_steps(
+            "fake.parquet",
+            duckdb_client=DuckdbClient(),
+            temporal_grouper=_HourGrouper(1),
+        )
+
+    assert [step.datetime_filter for step in time_steps] == [
+        "2023-01-15T10:00:00Z/2023-01-15T10:59:59Z",
+        "2023-01-15T11:00:00Z/2023-01-15T11:59:59Z",
+    ]
+    assert [step.coord for step in time_steps] == [
+        np.datetime64("2023-01-15T10:00:00", "s"),
+        np.datetime64("2023-01-15T11:00:00", "s"),
+    ]
 
 
 def test_build_time_steps_uses_start_datetime_fallback():
@@ -236,12 +286,12 @@ def test_build_time_steps_uses_start_datetime_fallback():
     ]
     table = _items_to_arrow(items)
     with patch("rustac.DuckdbClient.search_to_arrow", return_value=table):
-        filter_strings, _ = _build_time_steps(
+        time_steps = _build_time_steps(
             "fake.parquet",
             duckdb_client=DuckdbClient(),
             temporal_grouper=_DayGrouper(),
         )
-    assert filter_strings == ["2023-03-10"]
+    assert [step.datetime_filter for step in time_steps] == ["2023-03-10"]
 
 
 def test_open_time_period_kwarg_wires_through():
@@ -307,6 +357,122 @@ def _fake_open_item() -> dict:
             },
         },
     }
+
+
+def test_open_exact_time_period_preserves_subdaily_coordinates(tmp_path):
+    """open(..., time_period=None) creates exact timestamp time coordinates."""
+    parquet = tmp_path / "items.parquet"
+    parquet.write_bytes(b"")
+    table = _items_to_arrow(_FAKE_ITEMS_SAME_DAY)
+
+    class _FakeGeoTIFF:
+        dtype = np.dtype("uint16")
+        nodata = 0
+
+    async def fake_open(path: str, *, store):
+        return _FakeGeoTIFF()
+
+    with (
+        patch("rustac.DuckdbClient.search", return_value=[_fake_open_item()]),
+        patch("rustac.DuckdbClient.search_to_arrow", return_value=table),
+        patch("lazycogs._core.GeoTIFF.open", side_effect=fake_open),
+    ):
+        da = lazycogs.open(
+            str(parquet),
+            bbox=(0.0, 0.0, 100.0, 100.0),
+            crs="EPSG:32632",
+            resolution=10.0,
+            time_period=None,
+            store=MemoryStore(),
+            path_from_href=lambda href: href.split("/", 3)[-1],
+        )
+
+    np.testing.assert_array_equal(
+        da.coords["time"].values,
+        np.array(
+            [
+                np.datetime64("2023-01-15T10:00:00", "ns"),
+                np.datetime64("2023-01-15T14:30:00", "ns"),
+            ],
+        ),
+    )
+
+
+def test_open_hourly_time_period_preserves_hour_coordinates(tmp_path):
+    """open(..., time_period='PT1H') creates one coordinate per hour bucket."""
+    parquet = tmp_path / "items.parquet"
+    parquet.write_bytes(b"")
+    items = [
+        {"properties": {"datetime": "2023-01-15T10:00:00Z"}},
+        {"properties": {"datetime": "2023-01-15T10:59:59Z"}},
+        {"properties": {"datetime": "2023-01-15T11:00:00Z"}},
+    ]
+    table = _items_to_arrow(items)
+
+    class _FakeGeoTIFF:
+        dtype = np.dtype("uint16")
+        nodata = 0
+
+    async def fake_open(path: str, *, store):
+        return _FakeGeoTIFF()
+
+    with (
+        patch("rustac.DuckdbClient.search", return_value=[_fake_open_item()]),
+        patch("rustac.DuckdbClient.search_to_arrow", return_value=table),
+        patch("lazycogs._core.GeoTIFF.open", side_effect=fake_open),
+    ):
+        da = lazycogs.open(
+            str(parquet),
+            bbox=(0.0, 0.0, 100.0, 100.0),
+            crs="EPSG:32632",
+            resolution=10.0,
+            time_period="PT1H",
+            store=MemoryStore(),
+            path_from_href=lambda href: href.split("/", 3)[-1],
+        )
+
+    np.testing.assert_array_equal(
+        da.coords["time"].values,
+        np.array(
+            [
+                np.datetime64("2023-01-15T10:00:00", "s"),
+                np.datetime64("2023-01-15T11:00:00", "s"),
+            ],
+        ),
+    )
+
+
+def test_open_default_time_period_still_collapses_same_day(tmp_path):
+    """Default open() grouping remains day-level for same-day observations."""
+    parquet = tmp_path / "items.parquet"
+    parquet.write_bytes(b"")
+    table = _items_to_arrow(_FAKE_ITEMS_SAME_DAY)
+
+    class _FakeGeoTIFF:
+        dtype = np.dtype("uint16")
+        nodata = 0
+
+    async def fake_open(path: str, *, store):
+        return _FakeGeoTIFF()
+
+    with (
+        patch("rustac.DuckdbClient.search", return_value=[_fake_open_item()]),
+        patch("rustac.DuckdbClient.search_to_arrow", return_value=table),
+        patch("lazycogs._core.GeoTIFF.open", side_effect=fake_open),
+    ):
+        da = lazycogs.open(
+            str(parquet),
+            bbox=(0.0, 0.0, 100.0, 100.0),
+            crs="EPSG:32632",
+            resolution=10.0,
+            store=MemoryStore(),
+            path_from_href=lambda href: href.split("/", 3)[-1],
+        )
+
+    np.testing.assert_array_equal(
+        da.coords["time"].values,
+        np.array([np.datetime64("2023-01-15", "D")]),
+    )
 
 
 def test_open_sets_expected_dataarray_attributes(opened_dataarray):
