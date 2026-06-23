@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/developmentseed/lazycogs/compare/v0.5.0...v0.6.0) (2026-06-23)
+
+
+### Features
+
+* add options for hourly or exact timestamp temporal grouping ([#74](https://github.com/developmentseed/lazycogs/issues/74)) ([a742078](https://github.com/developmentseed/lazycogs/commit/a742078074efdae9e2baaccccec52ab209970800))
+
 ## [0.5.0](https://github.com/developmentseed/lazycogs/compare/v0.4.1...v0.5.0) (2026-06-01)
 
 
