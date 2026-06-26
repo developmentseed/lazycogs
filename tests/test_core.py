@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import numpy as np
 import pytest
@@ -271,6 +271,73 @@ def test_build_time_steps_hourly_groups_hour_buckets():
         np.datetime64("2023-01-15T10:00:00", "s"),
         np.datetime64("2023-01-15T11:00:00", "s"),
     ]
+
+
+def test_open_exact_time_step_with_start_end_datetime_reads_matching_item(tmp_path):
+    """Exact temporal steps should read items that also have start/end datetimes."""
+    item = {
+        "type": "Feature",
+        "stac_version": "1.0.0",
+        "id": "start-boundary-item",
+        "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+                [
+                    [-0.1, -0.1],
+                    [0.1, -0.1],
+                    [0.1, 0.1],
+                    [-0.1, 0.1],
+                    [-0.1, -0.1],
+                ],
+            ],
+        },
+        "bbox": [-0.1, -0.1, 0.1, 0.1],
+        "properties": {
+            "datetime": "2023-01-01T00:00:00Z",
+            "start_datetime": "2023-01-01T00:00:00Z",
+            "end_datetime": "2023-01-01T23:59:59Z",
+        },
+        "links": [],
+        "assets": {
+            "B04": {
+                "href": "file:///tmp/B04.tif",
+                "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+                "roles": ["data"],
+            },
+        },
+    }
+    parquet_path = tmp_path / "items.parquet"
+    rustac.write_sync(str(parquet_path), [item])
+
+    class _FakeGeoTIFF:
+        dtype = np.dtype("uint16")
+        nodata = 0
+
+    async def fake_open(path: str, *, store):
+        return _FakeGeoTIFF()
+
+    read_value = np.full((1, 1, 1), 99, dtype=np.uint16)
+    with (
+        patch("lazycogs._core.GeoTIFF.open", side_effect=fake_open),
+        patch(
+            "lazycogs._backend.read_chunk_async",
+            new_callable=AsyncMock,
+            return_value={"B04": read_value},
+        ),
+    ):
+        da = lazycogs.open(
+            str(parquet_path),
+            bbox=(-0.1, -0.1, 0.1, 0.1),
+            crs="EPSG:4326",
+            resolution=0.2,
+            bands=["B04"],
+            dtype="uint16",
+            nodata=0,
+            time_period=None,
+        )
+        result = da.isel(band=0, time=0, y=0, x=0).values
+
+    assert result == 99
 
 
 def test_build_time_steps_uses_start_datetime_fallback():
