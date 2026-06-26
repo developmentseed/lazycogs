@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/developmentseed/lazycogs/compare/v0.6.0...v0.6.1) (2026-06-26)
+
+
+### Bug Fixes
+
+* require rustac&gt;=0.9.13 for correct handling of start/end_datetimes ([#77](https://github.com/developmentseed/lazycogs/issues/77)) ([f4f574c](https://github.com/developmentseed/lazycogs/commit/f4f574c1261ab0b3f2d3d15f6d019edc71911d1a)), closes [#76](https://github.com/developmentseed/lazycogs/issues/76)
+
 ## [0.6.0](https://github.com/developmentseed/lazycogs/compare/v0.5.0...v0.6.0) (2026-06-23)
 
 
