@@ -20,6 +20,7 @@ from lazycogs._mosaic_methods import (
     MosaicMethodBase,
     StdevMethod,
 )
+from lazycogs._single import open_cog, open_cog_async
 from lazycogs._store import store_for
 
 __all__ = [
@@ -36,6 +37,8 @@ __all__ = [
     "StdevMethod",
     "align_bbox",
     "open",
+    "open_cog",
+    "open_cog_async",
     "read_chunk_async",
     "run_on_loop",
     "store_for",
