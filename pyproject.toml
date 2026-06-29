@@ -58,6 +58,9 @@ dev = [
     "pre-commit>=4.6.0",
     "ruff>=0.15.12",
     "rioxarray>=0.22.0",
+    "odc-geo>=0.5.1",
+    "boto3>=1.43.36",
+    "rustac>=0.9.13",
 ]
 docs = [
     "mkdocs-jupyter>=0.26.2",
