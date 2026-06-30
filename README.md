@@ -153,6 +153,23 @@ Float-only mosaic methods such as `MeanMethod`, `MedianMethod`, and
 an explicit integer `dtype=` with one of those methods, `open()` raises and
 asks for `dtype="float32"` or `dtype="float64"` instead.
 
+### Read failures
+
+By default (`errors="raise"`), an item whose bands fail to read — e.g. a
+storage error, timeout, or a rate-limit (429) response — raises the first
+such failure as `lazycogs.ChunkReadError`. The exception carries the failing
+`item_id`, `bands`, and the `original` exception (also available via
+`__cause__`).
+
+Pass `errors="ignore"` to `lazycogs.open()` to instead log a warning and skip
+the failed item, leaving its pixels at the mosaic fill value. This means a
+`.compute()`/`.load()` can finish "successfully" while silently containing
+gaps where reads failed — useful for large batch jobs that should tolerate
+transient per-item failures rather than aborting. Contract violations
+(mismatched dtype or nodata against the output contract) always raise
+regardless of this setting, since they indicate a configuration problem
+rather than a transient read failure.
+
 ### Concurrency notes
 
 - Sync callers submit work to one shared persistent lazycogs event loop.

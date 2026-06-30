@@ -13,3 +13,5 @@
 ::: lazycogs.CogRead
 
 ::: lazycogs.StacCogAccessor
+
+::: lazycogs.ChunkReadError

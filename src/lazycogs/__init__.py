@@ -1,6 +1,6 @@
 """lazycogs: lazy xarray DataArrays from STAC COG collections."""
 
-from lazycogs._chunk_reader import read_chunk_async
+from lazycogs._chunk_reader import ChunkReadError, read_chunk_async
 from lazycogs._core import open  # noqa: A004
 from lazycogs._executor import run_on_loop
 from lazycogs._explain import (  # noqa: F401 — registers da.lazycogs accessor
@@ -24,6 +24,7 @@ from lazycogs._store import store_for
 
 __all__ = [
     "ChunkRead",
+    "ChunkReadError",
     "CogRead",
     "CountMethod",
     "ExplainPlan",

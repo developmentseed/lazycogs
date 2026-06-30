@@ -57,6 +57,33 @@ da = lazycogs.open(
 )
 ```
 
+## `errors`
+
+Controls what happens when an item's bands fail to read — a storage error, timeout, or a rate-limit (429) response from the kind of provider quota discussed above. The default, `errors="raise"`, raises the first such failure as `lazycogs.ChunkReadError`, which carries the failing `item_id`, `bands`, and the original exception (`original`, also chained via `__cause__`):
+
+```python
+try:
+    da.compute()
+except lazycogs.ChunkReadError as exc:
+    print(f"failed reading {exc.bands} from {exc.item_id}: {exc.original}")
+```
+
+Pass `errors="ignore"` if you'd rather tolerate per-item failures than abort the whole read — for example, a large batch job over many items where you'd rather get a partially-filled array than retry from scratch:
+
+```python
+da = lazycogs.open(
+    "items.parquet",
+    bbox=dst_bbox,
+    crs=dst_crs,
+    resolution=10.0,
+    errors="ignore",
+)
+```
+
+With `errors="ignore"`, a failed item is logged as a warning and its pixels keep the mosaic fill value, so a `.compute()`/`.load()` can finish "successfully" while silently containing gaps where reads failed.
+
+Dtype/nodata contract violations always raise regardless of this setting — they indicate a configuration problem (e.g. mismatched source dtype), not a transient read failure.
+
 ## `LAZYCOGS_REPROJECT_WORKERS`
 
 Controls how many threads the shared reprojection pool uses for CPU-bound reprojection (pyproj + numpy). The default is `min(os.cpu_count(), 4)`.

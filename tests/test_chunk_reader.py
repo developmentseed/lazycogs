@@ -12,6 +12,7 @@ from affine import Affine
 from pyproj import CRS
 
 from lazycogs._chunk_reader import (
+    ChunkReadError,
     _apply_bands_with_warp_cache,
     _ChunkContext,
     _drain_in_order,
@@ -613,6 +614,109 @@ def test_read_chunk_async_early_exit():
     # at max_concurrent_reads.  Once every band's FirstMethod is satisfied,
     # pending tasks are cancelled, so strictly fewer than n_items reads execute.
     assert reads_executed[0] < n_items
+
+
+def test_read_chunk_async_errors_ignore_fills_and_logs(caplog):
+    """errors="ignore" keeps the fill value and logs a warning."""
+    chunk_width, chunk_height = 4, 4
+    chunk_affine = Affine(1.0, 0.0, 0.0, 0.0, -1.0, 4.0)
+    dst_crs = CRS.from_epsg(4326)
+    bands = ["B01"]
+    items = [{"id": "item-0", "assets": {}}]
+
+    async def _failing_read_item_band(*args, **kwargs):
+        raise RuntimeError("Generic S3 error: 429 Too Many Requests")
+
+    with (
+        patch(
+            "lazycogs._chunk_reader._read_item_band",
+            side_effect=_failing_read_item_band,
+        ),
+        caplog.at_level("WARNING", logger="lazycogs._chunk_reader"),
+    ):
+        result = asyncio.run(
+            read_chunk_async(
+                items=items,
+                bands=bands,
+                chunk_affine=chunk_affine,
+                dst_crs=dst_crs,
+                chunk_width=chunk_width,
+                chunk_height=chunk_height,
+                nodata=-9999,
+                errors="ignore",
+            ),
+        )
+
+    assert np.all(result["B01"] == -9999)
+    assert "Failed to read" in caplog.text
+    assert "item-0" in caplog.text
+
+
+def test_read_chunk_async_errors_default_raises_chunk_read_error():
+    """Default errors="raise" raises ChunkReadError instead of filling and logging."""
+    chunk_width, chunk_height = 4, 4
+    chunk_affine = Affine(1.0, 0.0, 0.0, 0.0, -1.0, 4.0)
+    dst_crs = CRS.from_epsg(4326)
+    bands = ["B01"]
+    items = [{"id": "item-0", "assets": {}}]
+    original = RuntimeError("Generic S3 error: 429 Too Many Requests")
+
+    async def _failing_read_item_band(*args, **kwargs):
+        raise original
+
+    with (
+        patch(
+            "lazycogs._chunk_reader._read_item_band",
+            side_effect=_failing_read_item_band,
+        ),
+        pytest.raises(ChunkReadError) as exc_info,
+    ):
+        asyncio.run(
+            read_chunk_async(
+                items=items,
+                bands=bands,
+                chunk_affine=chunk_affine,
+                dst_crs=dst_crs,
+                chunk_width=chunk_width,
+                chunk_height=chunk_height,
+            ),
+        )
+
+    assert exc_info.value.item_id == "item-0"
+    assert exc_info.value.bands == bands
+    assert exc_info.value.original is original
+    assert exc_info.value.__cause__ is original
+
+
+def test_read_chunk_async_errors_raise_still_raises_value_error_for_contract():
+    """A ValueError contract violation always raises, regardless of errors=."""
+    chunk_width, chunk_height = 4, 4
+    chunk_affine = Affine(1.0, 0.0, 0.0, 0.0, -1.0, 4.0)
+    dst_crs = CRS.from_epsg(4326)
+    bands = ["B01"]
+    items = [{"id": "item-0", "assets": {}}]
+
+    async def _contract_violation(*args, **kwargs):
+        raise ValueError("dtype mismatch")
+
+    with (
+        patch(
+            "lazycogs._chunk_reader._read_item_band",
+            side_effect=_contract_violation,
+        ),
+        pytest.raises(ValueError, match="dtype mismatch"),
+    ):
+        asyncio.run(
+            read_chunk_async(
+                items=items,
+                bands=bands,
+                chunk_affine=chunk_affine,
+                dst_crs=dst_crs,
+                chunk_width=chunk_width,
+                chunk_height=chunk_height,
+                errors="ignore",
+            ),
+        )
 
 
 # ---------------------------------------------------------------------------

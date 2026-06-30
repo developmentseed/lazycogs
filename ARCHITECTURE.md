@@ -143,6 +143,13 @@ If the chunk bbox falls entirely outside the source image after clamping, `_nati
 
 Nearest-neighbor is the only supported resampling method.
 
+### 5. Read failures
+
+`read_chunk_async()` schedules one task per item and drains them via `_drain_in_order()`, which feeds results to the per-band mosaic methods strictly in source order while tolerating out-of-order completion. Per-item exceptions are handled by an `_error` callback: dtype/nodata contract violations (`ValueError`) always propagate, since they indicate a configuration problem rather than a transient failure. All other exceptions — storage errors, timeouts, 429 rate-limit responses, etc. — are governed by `errors=`, threaded from `lazycogs.open()` through `_ChunkReadPlan` and `MultiBandStacBackendArray`:
+
+- `errors="raise"` (default): the failure is wrapped in `ChunkReadError` (carrying `item_id`, `bands`, and the original exception as `original`/`__cause__`) and raised, propagating out of `_drain_in_order`, `read_chunk_async`, `_run_one_date`, and `asyncio.gather` in `_read_chunk_all_dates` to the caller of `.compute()`/`.load()`.
+- `errors="ignore"`: the failure is logged as a warning via `_log_read_failure` and the item is treated as `None`, so its pixels keep the mosaic fill value. This was the original behaviour and can silently leave gaps in compute output.
+
 ## Concurrency model
 
 There are two load-bearing concurrency layers in a chunk read, plus dask as an orthogonal scheduler.
