@@ -739,9 +739,50 @@ def test_accessor_explain_time_slice(wgs84):
     assert plan.total_chunk_reads == 2  # 1 band * 2 time steps * 1 spatial tile
 
 
+def test_accessor_explain_chunk_then_sel_time(wgs84):
+    """explain() works after .chunk(...).sel(time=...), a dask getitem on top.
+
+    Regression test: chunking before selecting a single time label builds the
+    dask graph with the time selection applied as a separate ``getitem``
+    layer rather than folded into the discovered backend's indexer key, so
+    explain() must not rely on recovering that key to figure out which
+    backend time step is active.
+    """
+    dates = [
+        "2023-01-01/2023-01-01",
+        "2023-01-02/2023-01-02",
+        "2023-01-03/2023-01-03",
+    ]
+    time_coords = [
+        np.datetime64("2023-01-01", "D"),
+        np.datetime64("2023-01-02", "D"),
+        np.datetime64("2023-01-03", "D"),
+    ]
+    da = _make_da_with_backends(
+        wgs84,
+        dates=dates,
+        time_coords=time_coords,
+        bands=["red"],
+        width=8,
+        height=8,
+    )
+    da_selected = da.chunk(x=4, y=4).sel(time="2023-01-02")
+
+    with patch("rustac.DuckdbClient.search") as mock_search:
+        mock_search.return_value = []
+        plan = da_selected.lazycogs.explain()
+
+    assert plan.time_coords == [np.datetime64("2023-01-02", "D")]
+    assert [chunk.date_filter for chunk in plan.chunk_reads] == [
+        "2023-01-02/2023-01-02",
+    ] * plan.total_chunk_reads
+
+
 def test_accessor_explain_time_sort_preserves_current_order(wgs84):
     """explain() follows the current DataArray time order after sortby."""
-    dates = ["2023-01-01/2023-01-01", "2023-01-02/2023-01-02"]
+    # Backend time steps are stored out of chronological order; the
+    # DataArray's "time" coordinate always matches each step's own coord.
+    dates = ["2023-01-02/2023-01-02", "2023-01-01/2023-01-01"]
     time_coords = [np.datetime64("2023-01-02", "D"), np.datetime64("2023-01-01", "D")]
     da = _make_da_with_backends(
         wgs84,
@@ -761,8 +802,8 @@ def test_accessor_explain_time_sort_preserves_current_order(wgs84):
         np.datetime64("2023-01-02", "D"),
     ]
     assert [chunk.date_filter for chunk in plan.chunk_reads] == [
-        "2023-01-02/2023-01-02",
         "2023-01-01/2023-01-01",
+        "2023-01-02/2023-01-02",
     ]
 
 
