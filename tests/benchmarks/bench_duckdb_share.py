@@ -69,10 +69,10 @@ def _collect_duckdb_share():
         finally:
             duck_times.append(time.perf_counter() - t0)
 
-    async def wrapped_run_one_date(t_idx, plan):
+    async def wrapped_run_one_date(t_idx, plan, read_semaphore):
         t0 = time.perf_counter()
         try:
-            return await orig_run_one_date(t_idx, plan)
+            return await orig_run_one_date(t_idx, plan, read_semaphore)
         finally:
             date_totals.append(time.perf_counter() - t0)
 
