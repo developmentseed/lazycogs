@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.2](https://github.com/developmentseed/lazycogs/compare/v0.6.1...v0.6.2) (2026-06-30)
+
+
+### Bug Fixes
+
+* match explain() time steps by coordinate value not indexer key ([#82](https://github.com/developmentseed/lazycogs/issues/82)) ([2ade771](https://github.com/developmentseed/lazycogs/commit/2ade771da2accdb4d807616537cd3f9c1580937e))
+
 ## [0.6.1](https://github.com/developmentseed/lazycogs/compare/v0.6.0...v0.6.1) (2026-06-26)
 
 
