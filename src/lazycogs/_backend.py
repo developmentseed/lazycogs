@@ -65,7 +65,8 @@ class _ChunkReadPlan:
         mosaic_method_cls: Mosaic method class, or ``None`` for the default.
         store: Pre-configured :class:`async_geotiff.Store` accepted by
             ``GeoTIFF.open``, or ``None``.
-        max_concurrent_reads: Maximum concurrent COG reads per chunk.
+        max_concurrent_reads: Maximum concurrent item reads per chunk,
+            shared across selected time steps.
         warp_cache: Shared warp map cache across time steps.
         path_fn: Optional callable extracting an object path from an asset HREF.
 
@@ -234,6 +235,7 @@ async def _search_items_async(
 async def _run_one_date(
     t_idx: int,
     plan: _ChunkReadPlan,
+    read_semaphore: asyncio.Semaphore,
 ) -> dict[str, np.ndarray] | None:
     """Read and mosaic all COGs for a single time step.
 
@@ -244,6 +246,7 @@ async def _run_one_date(
     Args:
         t_idx: Index into ``plan.time_steps`` for the time step to read.
         plan: Read plan carrying all parameters for this chunk.
+        read_semaphore: Chunk-local semaphore shared across all time steps.
 
     Returns:
         Per-band arrays keyed by band name, or ``None`` if no items matched.
@@ -269,6 +272,7 @@ async def _run_one_date(
         mosaic_method_cls=plan.mosaic_method_cls,
         store=plan.store,
         max_concurrent_reads=plan.max_concurrent_reads,
+        _read_semaphore=read_semaphore,
         warp_cache=plan.warp_cache,
         path_fn=plan.path_fn,
     )
@@ -293,8 +297,8 @@ async def _read_chunk_all_dates(
     DuckDB queries run on the dedicated DuckDB executor; DuckDB itself
     serialises access on a single connection, so concurrent queries on the
     same ``DuckdbClient`` are safe but not parallel.  Mosaic coroutines for
-    all time steps are gathered concurrently so COG reads and reprojections
-    overlap across time steps.
+    all time steps are gathered concurrently, while their item reads share one
+    chunk-local semaphore so admission is bounded across time steps.
 
     Args:
         time_indices: Ordered list of time-dimension indices to materialise.
@@ -304,7 +308,12 @@ async def _read_chunk_all_dates(
         One entry per time index; ``None`` where no items matched.
 
     """
-    return list(await asyncio.gather(*[_run_one_date(t, plan) for t in time_indices]))
+    read_semaphore = asyncio.Semaphore(plan.max_concurrent_reads)
+    return list(
+        await asyncio.gather(
+            *[_run_one_date(t, plan, read_semaphore) for t in time_indices],
+        ),
+    )
 
 
 @dataclass
@@ -348,9 +357,9 @@ class MultiBandStacBackendArray(BackendArray):
             ``GeoTIFF.open`` and shared across all chunk reads. When ``None``,
             each asset HREF is resolved to an obstore-backed store via the
             shared process-local cache in :func:`~lazycogs._store.resolve`.
-        max_concurrent_reads: Maximum number of COG reads to run concurrently
-            per chunk.  Limits peak in-flight memory when a chunk overlaps
-            many items.  Defaults to 32.
+        max_concurrent_reads: Maximum number of item reads to run concurrently
+            per chunk, shared across selected time steps.  Limits peak
+            in-flight memory when a chunk overlaps many items. Defaults to 32.
         path_from_href: Optional callable ``(href: str) -> str`` that extracts
             the object path from an asset HREF.  When provided, it replaces the
             default ``urlparse``-based extraction in

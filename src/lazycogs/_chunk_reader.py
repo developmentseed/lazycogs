@@ -612,6 +612,7 @@ async def read_chunk_async(  # noqa: C901
     mosaic_method_cls: type[MosaicMethodBase] | None = None,
     store: Store | None = None,
     max_concurrent_reads: int = 32,
+    _read_semaphore: asyncio.Semaphore | None = None,
     warp_cache: dict | None = None,
     path_fn: Callable[[str], str] | None = None,
 ) -> dict[str, np.ndarray]:
@@ -640,7 +641,11 @@ async def read_chunk_async(  # noqa: C901
             Defaults to :class:`~lazycogs._mosaic_methods.FirstMethod`.
         store: Optional pre-configured :class:`async_geotiff.Store`
             accepted by ``GeoTIFF.open``.
-        max_concurrent_reads: Maximum number of COG reads to run concurrently.
+        max_concurrent_reads: Maximum number of item reads to run concurrently
+            when ``_read_semaphore`` is not supplied.
+        _read_semaphore: Optional caller-supplied semaphore used by backend
+            orchestration to share item-read admission across multiple
+            ``read_chunk_async`` calls in one chunk materialisation.
         warp_cache: Optional cache shared across calls for reusing warp maps
             from earlier time steps.
         path_fn: Optional callable that takes an asset HREF and returns the
@@ -674,7 +679,7 @@ async def read_chunk_async(  # noqa: C901
         warp_cache=warp_cache,
     )
 
-    semaphore = asyncio.Semaphore(max_concurrent_reads)
+    semaphore = _read_semaphore or asyncio.Semaphore(max_concurrent_reads)
     fill = nodata if nodata is not None else 0
 
     async def _guarded(item: dict) -> dict[str, tuple[np.ndarray, float | None]] | None:

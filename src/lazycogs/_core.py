@@ -442,8 +442,8 @@ def _build_dataarray(
         store: Pre-configured :class:`async_geotiff.Store` accepted by
             ``GeoTIFF.open``. When provided, it is used directly for all asset
             reads instead of resolving an obstore-backed store from each HREF.
-        max_concurrent_reads: Maximum number of COG reads to run concurrently
-            per chunk.
+        max_concurrent_reads: Maximum number of item reads to run concurrently
+            per chunk, shared across selected time steps.
         path_from_href: Optional callable ``(href: str) -> str`` passed to
             :class:`~lazycogs._backend.MultiBandStacBackendArray`.  See
             :func:`open` for full documentation.
@@ -642,13 +642,18 @@ def open(  # noqa: A001
             without relying on automatic store resolution from each HREF. When
             ``None`` (default), each asset URL is parsed to create or reuse a
             shared cached obstore-backed store behind a small lock.
-        max_concurrent_reads: Maximum number of COG reads to run concurrently
-            per chunk.  Concurrency is bounded to this size with an
-            ``asyncio.Semaphore``, which bounds peak in-flight memory when a
-            chunk overlaps many files. Methods that support early exit (e.g. the default
-            :class:`~lazycogs._mosaic_methods.FirstMethod`) will stop
-            reading once every output pixel is filled, so lower values also
-            reduce unnecessary I/O on dense datasets.  Defaults to 32.
+        max_concurrent_reads: Maximum number of lazycogs item reads to run
+            concurrently within one chunk materialization, shared across all
+            selected time steps in that chunk. Concurrency is bounded to this
+            size with an ``asyncio.Semaphore``, which bounds peak in-flight
+            memory when a chunk overlaps many files. This is not a raw
+            object-store request-rate limiter: one item read can open/read
+            multiple band COGs, and underlying COG operations may issue
+            multiple range requests and retries. Methods that support early
+            exit (e.g. the default
+            :class:`~lazycogs._mosaic_methods.FirstMethod`) will stop reading
+            once every output pixel is filled, so lower values also reduce
+            unnecessary I/O on dense datasets. Defaults to 32.
         path_from_href: Optional callable ``(href: str) -> str`` that extracts
             the object path from an asset HREF.  When provided, it replaces the
             default ``urlparse``-based extraction used in

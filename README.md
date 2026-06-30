@@ -156,6 +156,11 @@ asks for `dtype="float32"` or `dtype="float64"` instead.
 ### Concurrency notes
 
 - Sync callers submit work to one shared persistent lazycogs event loop.
+- `max_concurrent_reads` limits lazycogs item-read coroutines within a single
+  chunk materialization and is shared across all selected timesteps in that
+  chunk. It is not a raw object-store request-rate limiter: one item read can
+  open/read multiple band COGs, and async-geotiff/obstore may issue multiple
+  range requests and retries per COG.
 - CPU-bound reprojection runs on one bounded shared thread pool. Set
   `LAZYCOGS_REPROJECT_WORKERS` before first use to change the default
   `min(os.cpu_count() or 1, 4)` limit. The value is read when the pool is

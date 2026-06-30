@@ -289,6 +289,51 @@ def test_read_chunk_async_limits_concurrent_reads():
     assert peak_concurrent[0] <= max_concurrent
 
 
+def test_read_chunk_async_uses_supplied_read_semaphore():
+    """A caller-supplied semaphore can override max_concurrent_reads."""
+    chunk_width, chunk_height = 4, 4
+    chunk_affine = Affine(1.0, 0.0, 0.0, 0.0, -1.0, 4.0)
+    dst_crs = CRS.from_epsg(4326)
+    bands = ["B01"]
+    n_items = 8
+
+    peak_concurrent = [0]
+    current_concurrent = [0]
+
+    async def _fake_read_item_band(*args, **kwargs):
+        current_concurrent[0] += 1
+        peak_concurrent[0] = max(peak_concurrent[0], current_concurrent[0])
+        await asyncio.sleep(0)
+        current_concurrent[0] -= 1
+        return {
+            b: (np.ones((1, chunk_height, chunk_width), dtype=np.float32), None)
+            for b in bands
+        }
+
+    async def _run() -> None:
+        items = [{"id": f"item-{i}", "assets": {}} for i in range(n_items)]
+        shared_semaphore = asyncio.Semaphore(1)
+        with patch(
+            "lazycogs._chunk_reader._read_item_band",
+            side_effect=_fake_read_item_band,
+        ):
+            await read_chunk_async(
+                items=items,
+                bands=bands,
+                chunk_affine=chunk_affine,
+                dst_crs=dst_crs,
+                chunk_width=chunk_width,
+                chunk_height=chunk_height,
+                nodata=None,
+                max_concurrent_reads=n_items,
+                _read_semaphore=shared_semaphore,
+            )
+
+    asyncio.run(_run())
+
+    assert peak_concurrent[0] == 1
+
+
 # ---------------------------------------------------------------------------
 # _drain_in_order
 # ---------------------------------------------------------------------------
