@@ -89,28 +89,20 @@ def _find_backend_array(
     return None
 
 
-def _indexer_positions(
-    indexer: int | np.integer | slice | np.ndarray,
-    size: int,
-) -> list[int]:
-    """Normalise one xarray indexer component to explicit integer positions."""
-    if isinstance(indexer, int | np.integer):
-        return [int(indexer)]
-    if isinstance(indexer, slice):
-        return list(range(*indexer.indices(size)))
-
-    values = np.asarray(indexer)
-    if values.dtype == np.bool_:
-        return np.flatnonzero(values).astype(int).tolist()
-    return values.astype(int).tolist()
-
-
 def _current_time_items(
     da: xr.DataArray,
     backend: MultiBandStacBackendArray,
-    key: indexing.ExplicitIndexer | None,
 ) -> list[tuple[int, str, np.datetime64]]:
-    """Return backend time indices and current coordinate values in array order."""
+    """Return backend time indices and current coordinate values in array order.
+
+    Matches each of ``da``'s current ``time`` coordinate values against the
+    backend's time-step coordinates by value rather than by recovering a
+    position from the DataArray's lazy indexer. Position-based recovery is
+    unreliable once a dask-backed array has been further indexed (e.g.
+    ``.chunk(...).sel(time=...)``), because the selection may be applied as a
+    separate dask graph layer instead of being folded into the discovered
+    indexer's key.
+    """
     if "time" not in da.coords:
         raise ValueError(
             "This DataArray no longer exposes a time coordinate. "
@@ -119,36 +111,28 @@ def _current_time_items(
         )
 
     current_time_coords = np.atleast_1d(da.coords["time"].values)
+    backend_coords = [step.coord for step in backend.time_steps]
 
-    if key is None:
-        if len(current_time_coords) != len(backend.time_steps):
+    available = list(range(len(backend.time_steps)))
+    items: list[tuple[int, str, np.datetime64]] = []
+    for time_coord in current_time_coords:
+        matches = [i for i in available if backend_coords[i] == time_coord]
+        if not matches:
             raise ValueError(
-                "Could not recover lazycogs time-step indexing from this DataArray. "
-                "lazycogs.explain() currently supports arrays that still retain "
-                "their original lazy indexing structure.",
+                "Could not align the current time coordinates with the underlying "
+                "lazycogs backend indexing.",
             )
-        time_positions = list(range(len(backend.time_steps)))
-    else:
-        time_positions = _indexer_positions(key.tuple[1], len(backend.time_steps))
-
-    if len(time_positions) != len(current_time_coords):
-        raise ValueError(
-            "Could not align the current time coordinates with the underlying "
-            "lazycogs backend indexing.",
+        backend_index = matches[0]
+        available.remove(backend_index)
+        items.append(
+            (
+                backend_index,
+                backend.time_steps[backend_index].datetime_filter,
+                time_coord,
+            ),
         )
 
-    return [
-        (
-            backend_index,
-            backend.time_steps[backend_index].datetime_filter,
-            time_coord,
-        )
-        for backend_index, time_coord in zip(
-            time_positions,
-            current_time_coords,
-            strict=False,
-        )
-    ]
+    return items
 
 
 @dataclass
@@ -620,7 +604,6 @@ async def _inspect_item_async(
 async def _explain_async(
     da: xr.DataArray,
     backend: MultiBandStacBackendArray,
-    key: indexing.ExplicitIndexer | None,
     *,
     fetch_headers: bool,
 ) -> ExplainPlan:
@@ -638,8 +621,6 @@ async def _explain_async(
         da: DataArray whose extent and chunking define the explain scope.
         backend: :class:`MultiBandStacBackendArray` discovered from the
             DataArray's lazy backing array.
-        key: The xarray indexer associated with the discovered backend, when
-            available.
         fetch_headers: When ``True``, open each matched COG header.
 
     Returns:
@@ -666,7 +647,7 @@ async def _explain_async(
 
     dst_crs = backend.dst_crs
 
-    time_items = _current_time_items(da, backend, key)
+    time_items = _current_time_items(da, backend)
 
     chunk_h, chunk_w = _infer_chunk_sizes(da)
 
@@ -851,7 +832,7 @@ class StacCogAccessor:
                 "Ensure it was created by lazycogs.open() and has not been "
                 "materialized or transformed into a different backing array.",
             )
-        backend, key = backend_and_key
+        backend, _ = backend_and_key
         return run_on_loop(
-            _explain_async(self._da, backend, key, fetch_headers=fetch_headers),
+            _explain_async(self._da, backend, fetch_headers=fetch_headers),
         )
