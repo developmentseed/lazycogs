@@ -1278,6 +1278,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#lazycogs.ChunkReadError" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;ChunkReadError
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1565,6 +1576,17 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lazycogs.ChunkReadError" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;ChunkReadError
+      
+    </span>
+  </a>
   
 </li>
       
@@ -2881,6 +2903,57 @@ lazy backend array.</p>
     </div>
 
 </div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="lazycogs.ChunkReadError" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">lazycogs.ChunkReadError</span>
+
+
+<a href="#lazycogs.ChunkReadError" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="RuntimeError">RuntimeError</span></code></p>
+
+
+
+        <p>Raised when <code>errors="raise"</code> and a STAC item's bands fail to read.</p>
+<p>Wraps the original exception (storage error, decode error, etc.) with
+the item and bands that were being read. The original exception is
+available as <code>original</code> and is also chained via <code>__cause__</code>.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
 
 
 

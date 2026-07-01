@@ -1257,7 +1257,8 @@
 <a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>    <span class="n">max_concurrent_reads</span><span class="p">:</span> <span class="n"><span title="int">int</span></span> <span class="o">=</span> <span class="mi">32</span><span class="p">,</span>
 <a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>    <span class="n">path_from_href</span><span class="p">:</span> <span class="n"><span title="collections.abc.Callable">Callable</span></span><span class="p">[[</span><span class="n"><span title="str">str</span></span><span class="p">],</span> <span class="n"><span title="str">str</span></span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>    <span class="n">duckdb_client</span><span class="p">:</span> <span class="n"><span title="rustac.DuckdbClient">DuckdbClient</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><span title="xarray.DataArray">DataArray</span></span>
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>    <span class="n">errors</span><span class="p">:</span> <span class="n"><span title="typing.Literal">Literal</span></span><span class="p">[</span><span class="s2">&quot;ignore&quot;</span><span class="p">,</span> <span class="s2">&quot;raise&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;raise&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><span title="xarray.DataArray">DataArray</span></span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -1555,13 +1556,18 @@ shared cached obstore-backed store behind a small lock.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Maximum number of COG reads to run concurrently
-per chunk.  Concurrency is bounded to this size with an
-<code>asyncio.Semaphore</code>, which bounds peak in-flight memory when a
-chunk overlaps many files. Methods that support early exit (e.g. the default
-:class:<code>~lazycogs._mosaic_methods.FirstMethod</code>) will stop
-reading once every output pixel is filled, so lower values also
-reduce unnecessary I/O on dense datasets.  Defaults to 32.</p>
+                <p>Maximum number of lazycogs item reads to run
+concurrently within one chunk materialization, shared across all
+selected time steps in that chunk. Concurrency is bounded to this
+size with an <code>asyncio.Semaphore</code>, which bounds peak in-flight
+memory when a chunk overlaps many files. This is not a raw
+object-store request-rate limiter: one item read can open/read
+multiple band COGs, and underlying COG operations may issue
+multiple range requests and retries. Methods that support early
+exit (e.g. the default
+:class:<code>~lazycogs._mosaic_methods.FirstMethod</code>) will stop reading
+once every output pixel is filled, so lower values also reduce
+unnecessary I/O on dense datasets. Defaults to 32.</p>
               </div>
             </td>
             <td>
@@ -1637,6 +1643,30 @@ da = lazycogs.open(
             </td>
             <td>
                   <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>errors</code>
+            </td>
+            <td>
+                  <code><span title="typing.Literal">Literal</span>[&#39;ignore&#39;, &#39;raise&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>How to handle a failed item-band read during chunk
+materialization (e.g. a storage error or rate-limit response).
+<code>"raise"</code> (default) raises the first such failure as
+:class:<code>~lazycogs._chunk_reader.ChunkReadError</code>, which wraps the
+original exception and carries the failing <code>item_id</code> and
+<code>bands</code>. <code>"ignore"</code> logs a warning and leaves the mosaic fill
+value in place for that item's pixels instead. Contract
+violations (mismatched dtype or nodata) are always raised
+regardless of this setting.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;raise&#39;</code>
             </td>
           </tr>
       </tbody>

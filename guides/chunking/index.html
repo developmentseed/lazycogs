@@ -603,6 +603,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#errors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        errors
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#lazycogs_reproject_workers" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1280,6 +1291,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#errors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        errors
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#lazycogs_reproject_workers" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1311,9 +1333,9 @@
 
 
 <h1 id="chunking-and-concurrency">Chunking and concurrency<a class="headerlink" href="#chunking-and-concurrency" title="Permanent link">&para;</a></h1>
-<p>lazycogs has two independent concurrency controls: dask chunking for task-level parallelism, and <code>max_concurrent_reads</code> for async I/O parallelism within a single chunk.</p>
+<p>lazycogs has two independent concurrency controls: dask chunking for task-level parallelism, and <code>max_concurrent_reads</code> for async item-read admission within a single chunk.</p>
 <h2 id="default-behavior-no-chunks">Default behavior: no chunks<a class="headerlink" href="#default-behavior-no-chunks" title="Permanent link">&para;</a></h2>
-<p>When <code>chunks</code> is <code>None</code> (the default), lazycogs returns a <code>LazilyIndexedArray</code>-backed DataArray. Each access triggers a targeted read — only the pixels you request are fetched. COG reads across all requested time steps are issued concurrently within a single async event loop, so I/O overlaps even when you read many time steps at once. This is the best mode for:</p>
+<p>When <code>chunks</code> is <code>None</code> (the default), lazycogs returns a <code>LazilyIndexedArray</code>-backed DataArray. Each access triggers a targeted read — only the pixels you request are fetched. Time-step orchestration is concurrent within a single async event loop, while item reads across those time steps share the chunk's <code>max_concurrent_reads</code> limit. This is the best mode for:</p>
 <ul>
 <li>Point extraction (<code>.sel(x=..., y=...)</code>)</li>
 <li>Small spatial subsets</li>
@@ -1321,7 +1343,7 @@
 </ul>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">da</span> <span class="o">=</span> <span class="n">lazycogs</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s2">&quot;items.parquet&quot;</span><span class="p">,</span> <span class="n">bbox</span><span class="o">=</span><span class="n">dst_bbox</span><span class="p">,</span> <span class="n">crs</span><span class="o">=</span><span class="n">dst_crs</span><span class="p">,</span> <span class="n">resolution</span><span class="o">=</span><span class="mf">10.0</span><span class="p">)</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># COG reads for all time steps in the slice overlap concurrently</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># Time-step reads overlap; item-read admission is shared across the slice</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">vals</span> <span class="o">=</span> <span class="n">da</span><span class="o">.</span><span class="n">sel</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="mi">299965</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="mi">2653947</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s2">&quot;nearest&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">sel</span><span class="p">(</span><span class="n">time</span><span class="o">=</span><span class="nb">slice</span><span class="p">(</span><span class="s2">&quot;2025-06&quot;</span><span class="p">,</span> <span class="s2">&quot;2025-08&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">compute</span><span class="p">()</span>
 </code></pre></div>
 <h2 id="when-to-add-chunks">When to add chunks<a class="headerlink" href="#when-to-add-chunks" title="Permanent link">&para;</a></h2>
@@ -1339,9 +1361,9 @@
 <p>Avoid spatial chunks unless you are under memory pressure. lazycogs handles spatial I/O concurrency internally through its async event loop — adding spatial dask tasks layers extra DuckDB query overhead on top of I/O that was already happening concurrently.</p>
 <p>The one case where spatial chunks are useful is when a single time step is too large to fit in memory even at <code>max_concurrent_reads=1</code>. In that case, small spatial chunks limit how many pixels are in flight at once.</p>
 <h2 id="max_concurrent_reads"><code>max_concurrent_reads</code><a class="headerlink" href="#max_concurrent_reads" title="Permanent link">&para;</a></h2>
-<p>Controls how many COG files are opened and read simultaneously within a single chunk. This is pure async I/O — it does not create threads. The default is 32.</p>
-<p>Lower it if you are hitting S3 request-rate throttling or want to reduce peak memory per chunk. Raise it (carefully) if you have many non-overlapping tiles and a fast network connection, but note that diminishing returns set in quickly.</p>
-<p>When using dask, total concurrent reads across all workers equals <code>dask_workers × max_concurrent_reads</code>. On a 16-core machine with default dask settings and <code>max_concurrent_reads=32</code>, that is 512 simultaneous reads.</p>
+<p>Controls how many lazycogs item-read coroutines can run simultaneously within a single chunk materialization. The limit is shared across all selected time steps in that chunk. For example, <code>max_concurrent_reads=1</code> admits at most one item read at a time across the whole time slice, not one item read per time step. This is pure async I/O — it does not create threads. The default is 32.</p>
+<p>This is not a provider request-rate limiter. One admitted item read can open and read multiple requested band COGs, each COG operation can make multiple object-store range requests, and obstore retries can multiply requests. Lower <code>max_concurrent_reads</code> if you are hitting S3 request-rate throttling or want to reduce peak memory per chunk, but use storage-layer retry/backoff settings or a future rate limiter for strict requests-per-second or requests-per-minute control. Raise it carefully if you have many non-overlapping tiles and a fast network connection; diminishing returns set in quickly.</p>
+<p>When using dask, total item-read concurrency across workers is approximately <code>dask_workers × max_concurrent_reads</code> because each dask chunk materialization gets its own semaphore. On a 16-core machine with default dask settings and <code>max_concurrent_reads=32</code>, that can still admit about 512 item reads across workers, before accounting for band-level COG operations and range requests.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">da</span> <span class="o">=</span> <span class="n">lazycogs</span><span class="o">.</span><span class="n">open</span><span class="p">(</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="s2">&quot;items.parquet&quot;</span><span class="p">,</span>
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">bbox</span><span class="o">=</span><span class="n">dst_bbox</span><span class="p">,</span>
@@ -1351,11 +1373,29 @@
 <a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="n">max_concurrent_reads</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>   <span class="c1"># lower if hitting S3 throttling</span>
 <a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="p">)</span>
 </code></pre></div>
+<h2 id="errors"><code>errors</code><a class="headerlink" href="#errors" title="Permanent link">&para;</a></h2>
+<p>Controls what happens when an item's bands fail to read — a storage error, timeout, or a rate-limit (429) response from the kind of provider quota discussed above. The default, <code>errors="raise"</code>, raises the first such failure as <code>lazycogs.ChunkReadError</code>, which carries the failing <code>item_id</code>, <code>bands</code>, and the original exception (<code>original</code>, also chained via <code>__cause__</code>):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">try</span><span class="p">:</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="n">da</span><span class="o">.</span><span class="n">compute</span><span class="p">()</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="k">except</span> <span class="n">lazycogs</span><span class="o">.</span><span class="n">ChunkReadError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;failed reading </span><span class="si">{</span><span class="n">exc</span><span class="o">.</span><span class="n">bands</span><span class="si">}</span><span class="s2"> from </span><span class="si">{</span><span class="n">exc</span><span class="o">.</span><span class="n">item_id</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">exc</span><span class="o">.</span><span class="n">original</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p>Pass <code>errors="ignore"</code> if you'd rather tolerate per-item failures than abort the whole read — for example, a large batch job over many items where you'd rather get a partially-filled array than retry from scratch:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">da</span> <span class="o">=</span> <span class="n">lazycogs</span><span class="o">.</span><span class="n">open</span><span class="p">(</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="s2">&quot;items.parquet&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="n">bbox</span><span class="o">=</span><span class="n">dst_bbox</span><span class="p">,</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">crs</span><span class="o">=</span><span class="n">dst_crs</span><span class="p">,</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">resolution</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="n">errors</span><span class="o">=</span><span class="s2">&quot;ignore&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="p">)</span>
+</code></pre></div>
+<p>With <code>errors="ignore"</code>, a failed item is logged as a warning and its pixels keep the mosaic fill value, so a <code>.compute()</code>/<code>.load()</code> can finish "successfully" while silently containing gaps where reads failed.</p>
+<p>Dtype/nodata contract violations always raise regardless of this setting — they indicate a configuration problem (e.g. mismatched source dtype), not a transient read failure.</p>
 <h2 id="lazycogs_reproject_workers"><code>LAZYCOGS_REPROJECT_WORKERS</code><a class="headerlink" href="#lazycogs_reproject_workers" title="Permanent link">&para;</a></h2>
 <p>Controls how many threads the shared reprojection pool uses for CPU-bound reprojection (pyproj + numpy). The default is <code>min(os.cpu_count(), 4)</code>.</p>
 <p>Reprojection is memory-bandwidth-bound rather than compute-bound. Benchmarks show diminishing returns above 4 threads because concurrent large-array operations saturate the memory bus rather than adding throughput. Raising this beyond 4 is rarely useful.</p>
 <p>Set the environment variable before the first lazycogs chunk read:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">LAZYCOGS_REPROJECT_WORKERS</span><span class="o">=</span><span class="m">2</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">LAZYCOGS_REPROJECT_WORKERS</span><span class="o">=</span><span class="m">2</span>
 </code></pre></div>
 <p>See also: <a href="../../api/open/">API reference for open()</a>, <a href="../../api/utils/">API reference for utilities</a>, <a href="../../architecture/">Architecture</a></p>
 
