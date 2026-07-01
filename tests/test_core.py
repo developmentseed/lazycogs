@@ -591,6 +591,52 @@ def test_open_sets_expected_dataarray_attributes(opened_dataarray):
     assert isinstance(backend, MultiBandStacBackendArray)
 
 
+def test_open_errors_kwarg_defaults_to_raise_and_wires_through(tmp_path):
+    """open() defaults errors="raise" and forwards an explicit value."""
+    parquet = tmp_path / "items.parquet"
+    parquet.write_bytes(b"")
+
+    store = MemoryStore()
+    store.put("B04.tif", b"dummy")
+
+    table = _items_to_arrow([{"properties": {"datetime": "2023-01-15T10:00:00Z"}}])
+
+    class _FakeGeoTIFF:
+        dtype = np.dtype("uint16")
+        nodata = 0
+
+    async def fake_open(path: str, *, store):
+        return _FakeGeoTIFF()
+
+    with (
+        patch("rustac.DuckdbClient.search", return_value=[_fake_open_item()]),
+        patch("rustac.DuckdbClient.search_to_arrow", return_value=table),
+        patch("lazycogs._core.GeoTIFF.open", side_effect=fake_open),
+    ):
+        default_da = lazycogs.open(
+            str(parquet),
+            bbox=(0.0, 0.0, 100.0, 100.0),
+            crs="EPSG:32632",
+            resolution=10.0,
+            store=store,
+            path_from_href=lambda href: href.split("/", 3)[-1],
+        )
+        ignoring_da = lazycogs.open(
+            str(parquet),
+            bbox=(0.0, 0.0, 100.0, 100.0),
+            crs="EPSG:32632",
+            resolution=10.0,
+            store=store,
+            path_from_href=lambda href: href.split("/", 3)[-1],
+            errors="ignore",
+        )
+
+    default_backend, _ = _find_backend_array(default_da.variable._data)
+    ignoring_backend, _ = _find_backend_array(ignoring_da.variable._data)
+    assert default_backend.errors == "raise"
+    assert ignoring_backend.errors == "ignore"
+
+
 def test_chunked_spatial_selection_computes_scalar_spatial_coords(opened_dataarray):
     """Chunked nearest-neighbour spatial selection keeps x/y coords scalar."""
     da = opened_dataarray

@@ -6,7 +6,7 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 from affine import Affine
@@ -65,9 +65,12 @@ class _ChunkReadPlan:
         mosaic_method_cls: Mosaic method class, or ``None`` for the default.
         store: Pre-configured :class:`async_geotiff.Store` accepted by
             ``GeoTIFF.open``, or ``None``.
-        max_concurrent_reads: Maximum concurrent COG reads per chunk.
+        max_concurrent_reads: Maximum concurrent item reads per chunk,
+            shared across selected time steps.
         warp_cache: Shared warp map cache across time steps.
         path_fn: Optional callable extracting an object path from an asset HREF.
+        errors: ``"raise"`` (default) to raise the first failed item read as
+            ``ChunkReadError``, or ``"ignore"`` to log and fill it instead.
 
     """
 
@@ -93,6 +96,7 @@ class _ChunkReadPlan:
     max_concurrent_reads: int
     warp_cache: dict
     path_fn: Callable[[str], str] | None
+    errors: Literal["ignore", "raise"]
 
 
 @dataclass
@@ -234,6 +238,7 @@ async def _search_items_async(
 async def _run_one_date(
     t_idx: int,
     plan: _ChunkReadPlan,
+    read_semaphore: asyncio.Semaphore,
 ) -> dict[str, np.ndarray] | None:
     """Read and mosaic all COGs for a single time step.
 
@@ -244,6 +249,7 @@ async def _run_one_date(
     Args:
         t_idx: Index into ``plan.time_steps`` for the time step to read.
         plan: Read plan carrying all parameters for this chunk.
+        read_semaphore: Chunk-local semaphore shared across all time steps.
 
     Returns:
         Per-band arrays keyed by band name, or ``None`` if no items matched.
@@ -269,8 +275,10 @@ async def _run_one_date(
         mosaic_method_cls=plan.mosaic_method_cls,
         store=plan.store,
         max_concurrent_reads=plan.max_concurrent_reads,
+        _read_semaphore=read_semaphore,
         warp_cache=plan.warp_cache,
         path_fn=plan.path_fn,
+        errors=plan.errors,
     )
     logger.debug(
         "read_chunk_async bands=%r datetime=%s (%d items, %dx%d px) took %.3fs",
@@ -293,8 +301,8 @@ async def _read_chunk_all_dates(
     DuckDB queries run on the dedicated DuckDB executor; DuckDB itself
     serialises access on a single connection, so concurrent queries on the
     same ``DuckdbClient`` are safe but not parallel.  Mosaic coroutines for
-    all time steps are gathered concurrently so COG reads and reprojections
-    overlap across time steps.
+    all time steps are gathered concurrently, while their item reads share one
+    chunk-local semaphore so admission is bounded across time steps.
 
     Args:
         time_indices: Ordered list of time-dimension indices to materialise.
@@ -304,7 +312,12 @@ async def _read_chunk_all_dates(
         One entry per time index; ``None`` where no items matched.
 
     """
-    return list(await asyncio.gather(*[_run_one_date(t, plan) for t in time_indices]))
+    read_semaphore = asyncio.Semaphore(plan.max_concurrent_reads)
+    return list(
+        await asyncio.gather(
+            *[_run_one_date(t, plan, read_semaphore) for t in time_indices],
+        ),
+    )
 
 
 @dataclass
@@ -348,9 +361,9 @@ class MultiBandStacBackendArray(BackendArray):
             ``GeoTIFF.open`` and shared across all chunk reads. When ``None``,
             each asset HREF is resolved to an obstore-backed store via the
             shared process-local cache in :func:`~lazycogs._store.resolve`.
-        max_concurrent_reads: Maximum number of COG reads to run concurrently
-            per chunk.  Limits peak in-flight memory when a chunk overlaps
-            many items.  Defaults to 32.
+        max_concurrent_reads: Maximum number of item reads to run concurrently
+            per chunk, shared across selected time steps.  Limits peak
+            in-flight memory when a chunk overlaps many items. Defaults to 32.
         path_from_href: Optional callable ``(href: str) -> str`` that extracts
             the object path from an asset HREF.  When provided, it replaces the
             default ``urlparse``-based extraction in
@@ -358,6 +371,10 @@ class MultiBandStacBackendArray(BackendArray):
             a custom ``store`` whose root does not align with the URL structure
             of the asset HREFs (e.g. Azure Blob Storage with a container-rooted
             store).
+        errors: ``"raise"`` (default) raises the first item-read failure as
+            :class:`~lazycogs._chunk_reader.ChunkReadError`. ``"ignore"``
+            logs a warning and leaves the fill value in place when an
+            item's bands fail to read.
         shape: ``(n_bands, n_time_steps, dst_height, dst_width)``.  Derived from
             the other fields; not accepted as a constructor argument.
 
@@ -383,6 +400,7 @@ class MultiBandStacBackendArray(BackendArray):
     store: Store | None = field(default=None)
     max_concurrent_reads: int = field(default=32)
     path_from_href: Callable[[str], str] | None = field(default=None)
+    errors: Literal["ignore", "raise"] = field(default="raise")
     shape: tuple[int, ...] = field(init=False)
     _dst_to_4326: Transformer | None = field(init=False, repr=False, compare=False)
 
@@ -594,6 +612,7 @@ class MultiBandStacBackendArray(BackendArray):
             max_concurrent_reads=self.max_concurrent_reads,
             warp_cache={},
             path_fn=self.path_from_href,
+            errors=self.errors,
         )
 
         all_chunk_data = await _read_chunk_all_dates(time_indices, plan)

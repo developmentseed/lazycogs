@@ -1,10 +1,10 @@
 # Chunking and concurrency
 
-lazycogs has two independent concurrency controls: dask chunking for task-level parallelism, and `max_concurrent_reads` for async I/O parallelism within a single chunk.
+lazycogs has two independent concurrency controls: dask chunking for task-level parallelism, and `max_concurrent_reads` for async item-read admission within a single chunk.
 
 ## Default behavior: no chunks
 
-When `chunks` is `None` (the default), lazycogs returns a `LazilyIndexedArray`-backed DataArray. Each access triggers a targeted read — only the pixels you request are fetched. COG reads across all requested time steps are issued concurrently within a single async event loop, so I/O overlaps even when you read many time steps at once. This is the best mode for:
+When `chunks` is `None` (the default), lazycogs returns a `LazilyIndexedArray`-backed DataArray. Each access triggers a targeted read — only the pixels you request are fetched. Time-step orchestration is concurrent within a single async event loop, while item reads across those time steps share the chunk's `max_concurrent_reads` limit. This is the best mode for:
 
 - Point extraction (`.sel(x=..., y=...)`)
 - Small spatial subsets
@@ -13,7 +13,7 @@ When `chunks` is `None` (the default), lazycogs returns a `LazilyIndexedArray`-b
 ```python
 da = lazycogs.open("items.parquet", bbox=dst_bbox, crs=dst_crs, resolution=10.0)
 
-# COG reads for all time steps in the slice overlap concurrently
+# Time-step reads overlap; item-read admission is shared across the slice
 vals = da.sel(x=299965, y=2653947, method="nearest").sel(time=slice("2025-06", "2025-08")).compute()
 ```
 
@@ -40,11 +40,11 @@ The one case where spatial chunks are useful is when a single time step is too l
 
 ## `max_concurrent_reads`
 
-Controls how many COG files are opened and read simultaneously within a single chunk. This is pure async I/O — it does not create threads. The default is 32.
+Controls how many lazycogs item-read coroutines can run simultaneously within a single chunk materialization. The limit is shared across all selected time steps in that chunk. For example, `max_concurrent_reads=1` admits at most one item read at a time across the whole time slice, not one item read per time step. This is pure async I/O — it does not create threads. The default is 32.
 
-Lower it if you are hitting S3 request-rate throttling or want to reduce peak memory per chunk. Raise it (carefully) if you have many non-overlapping tiles and a fast network connection, but note that diminishing returns set in quickly.
+This is not a provider request-rate limiter. One admitted item read can open and read multiple requested band COGs, each COG operation can make multiple object-store range requests, and obstore retries can multiply requests. Lower `max_concurrent_reads` if you are hitting S3 request-rate throttling or want to reduce peak memory per chunk, but use storage-layer retry/backoff settings or a future rate limiter for strict requests-per-second or requests-per-minute control. Raise it carefully if you have many non-overlapping tiles and a fast network connection; diminishing returns set in quickly.
 
-When using dask, total concurrent reads across all workers equals `dask_workers × max_concurrent_reads`. On a 16-core machine with default dask settings and `max_concurrent_reads=32`, that is 512 simultaneous reads.
+When using dask, total item-read concurrency across workers is approximately `dask_workers × max_concurrent_reads` because each dask chunk materialization gets its own semaphore. On a 16-core machine with default dask settings and `max_concurrent_reads=32`, that can still admit about 512 item reads across workers, before accounting for band-level COG operations and range requests.
 
 ```python
 da = lazycogs.open(
@@ -56,6 +56,33 @@ da = lazycogs.open(
     max_concurrent_reads=16,   # lower if hitting S3 throttling
 )
 ```
+
+## `errors`
+
+Controls what happens when an item's bands fail to read — a storage error, timeout, or a rate-limit (429) response from the kind of provider quota discussed above. The default, `errors="raise"`, raises the first such failure as `lazycogs.ChunkReadError`, which carries the failing `item_id`, `bands`, and the original exception (`original`, also chained via `__cause__`):
+
+```python
+try:
+    da.compute()
+except lazycogs.ChunkReadError as exc:
+    print(f"failed reading {exc.bands} from {exc.item_id}: {exc.original}")
+```
+
+Pass `errors="ignore"` if you'd rather tolerate per-item failures than abort the whole read — for example, a large batch job over many items where you'd rather get a partially-filled array than retry from scratch:
+
+```python
+da = lazycogs.open(
+    "items.parquet",
+    bbox=dst_bbox,
+    crs=dst_crs,
+    resolution=10.0,
+    errors="ignore",
+)
+```
+
+With `errors="ignore"`, a failed item is logged as a warning and its pixels keep the mosaic fill value, so a `.compute()`/`.load()` can finish "successfully" while silently containing gaps where reads failed.
+
+Dtype/nodata contract violations always raise regardless of this setting — they indicate a configuration problem (e.g. mismatched source dtype), not a transient read failure.
 
 ## `LAZYCOGS_REPROJECT_WORKERS`
 

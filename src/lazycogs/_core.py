@@ -6,7 +6,7 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 from async_geotiff import GeoTIFF
@@ -412,6 +412,7 @@ def _build_dataarray(
     store: Store | None = None,
     max_concurrent_reads: int = 32,
     path_from_href: Callable[[str], str] | None = None,
+    errors: Literal["ignore", "raise"] = "raise",
 ) -> DataArray:
     """Assemble the lazy DataArray from pre-computed parameters.
 
@@ -442,9 +443,12 @@ def _build_dataarray(
         store: Pre-configured :class:`async_geotiff.Store` accepted by
             ``GeoTIFF.open``. When provided, it is used directly for all asset
             reads instead of resolving an obstore-backed store from each HREF.
-        max_concurrent_reads: Maximum number of COG reads to run concurrently
-            per chunk.
+        max_concurrent_reads: Maximum number of item reads to run concurrently
+            per chunk, shared across selected time steps.
         path_from_href: Optional callable ``(href: str) -> str`` passed to
+            :class:`~lazycogs._backend.MultiBandStacBackendArray`.  See
+            :func:`open` for full documentation.
+        errors: ``"ignore"`` or ``"raise"`` passed to
             :class:`~lazycogs._backend.MultiBandStacBackendArray`.  See
             :func:`open` for full documentation.
 
@@ -478,6 +482,7 @@ def _build_dataarray(
         store=store,
         max_concurrent_reads=max_concurrent_reads,
         path_from_href=path_from_href,
+        errors=errors,
     )
     lazy = indexing.LazilyIndexedArray(multi)
     var = Variable(("band", "time", "y", "x"), lazy)
@@ -592,6 +597,7 @@ def open(  # noqa: A001
     max_concurrent_reads: int = 32,
     path_from_href: Callable[[str], str] | None = None,
     duckdb_client: DuckdbClient | None = None,
+    errors: Literal["ignore", "raise"] = "raise",
 ) -> DataArray:
     """Open a mosaic of STAC items as a lazy ``(band, time, y, x)`` DataArray.
 
@@ -642,13 +648,18 @@ def open(  # noqa: A001
             without relying on automatic store resolution from each HREF. When
             ``None`` (default), each asset URL is parsed to create or reuse a
             shared cached obstore-backed store behind a small lock.
-        max_concurrent_reads: Maximum number of COG reads to run concurrently
-            per chunk.  Concurrency is bounded to this size with an
-            ``asyncio.Semaphore``, which bounds peak in-flight memory when a
-            chunk overlaps many files. Methods that support early exit (e.g. the default
-            :class:`~lazycogs._mosaic_methods.FirstMethod`) will stop
-            reading once every output pixel is filled, so lower values also
-            reduce unnecessary I/O on dense datasets.  Defaults to 32.
+        max_concurrent_reads: Maximum number of lazycogs item reads to run
+            concurrently within one chunk materialization, shared across all
+            selected time steps in that chunk. Concurrency is bounded to this
+            size with an ``asyncio.Semaphore``, which bounds peak in-flight
+            memory when a chunk overlaps many files. This is not a raw
+            object-store request-rate limiter: one item read can open/read
+            multiple band COGs, and underlying COG operations may issue
+            multiple range requests and retries. Methods that support early
+            exit (e.g. the default
+            :class:`~lazycogs._mosaic_methods.FirstMethod`) will stop reading
+            once every output pixel is filled, so lower values also reduce
+            unnecessary I/O on dense datasets. Defaults to 32.
         path_from_href: Optional callable ``(href: str) -> str`` that extracts
             the object path from an asset HREF.  When provided, it replaces the
             default ``urlparse``-based extraction used in
@@ -692,6 +703,16 @@ def open(  # noqa: A001
                     crs=...,
                     resolution=...,
                 )
+
+        errors: How to handle a failed item-band read during chunk
+            materialization (e.g. a storage error or rate-limit response).
+            ``"raise"`` (default) raises the first such failure as
+            :class:`~lazycogs._chunk_reader.ChunkReadError`, which wraps the
+            original exception and carries the failing ``item_id`` and
+            ``bands``. ``"ignore"`` logs a warning and leaves the mosaic fill
+            value in place for that item's pixels instead. Contract
+            violations (mismatched dtype or nodata) are always raised
+            regardless of this setting.
 
     Returns:
         Lazy ``xr.DataArray`` with dimensions ``(band, time, y, x)``.
@@ -821,4 +842,5 @@ def open(  # noqa: A001
         store=store,
         max_concurrent_reads=max_concurrent_reads,
         path_from_href=path_from_href,
+        errors=errors,
     )

@@ -14,6 +14,7 @@ from xarray.core import indexing
 
 from lazycogs import _executor
 from lazycogs._backend import MultiBandStacBackendArray
+from lazycogs._chunk_reader import ChunkReadError
 from lazycogs._executor import run_duckdb, run_on_loop
 from lazycogs._mosaic_methods import FirstMethod
 from lazycogs._temporal import _TimeStep
@@ -57,6 +58,8 @@ def _make_array(
     dst_affine: Affine | None = None,
     dst_height: int = 1,
     dst_width: int = 4,
+    max_concurrent_reads: int = 32,
+    errors: str = "raise",
 ) -> MultiBandStacBackendArray:
     """Return a minimal MultiBandStacBackendArray for unit testing."""
     if bands is None:
@@ -81,6 +84,8 @@ def _make_array(
         mosaic_method_cls=FirstMethod,
         dtype_was_explicit=True,
         nodata_was_explicit=True,
+        max_concurrent_reads=max_concurrent_reads,
+        errors=errors,
     )
 
 
@@ -171,6 +176,43 @@ def test_raw_getitem_with_items_calls_mosaic(wgs84):
 
     assert result.shape == (1, 4)
     np.testing.assert_array_equal(result, 42.0)
+
+
+def test_raw_getitem_passes_errors_flag_to_read_chunk_async(wgs84):
+    """The array's errors= setting is forwarded to read_chunk_async."""
+    arr = _make_array(wgs84, dates=["2023-01-01"], errors="raise")
+    band = "B04"
+    fake_items = [{"id": "item-1", "assets": {band: {"href": "s3://b/f.tif"}}}]
+    fake_chunk = {band: np.full((1, 1, 4), 42.0, dtype=np.float32)}
+
+    with (
+        patch("rustac.DuckdbClient.search", return_value=fake_items),
+        patch(
+            "lazycogs._backend.read_chunk_async",
+            new_callable=AsyncMock,
+            return_value=fake_chunk,
+        ) as mock_read,
+    ):
+        arr._sync_getitem((0, 0, slice(0, 1), slice(0, 4)))
+
+    assert mock_read.call_args.kwargs["errors"] == "raise"
+
+
+def test_raw_getitem_propagates_chunk_read_error(wgs84):
+    """errors="raise" lets a ChunkReadError from read_chunk_async propagate."""
+    arr = _make_array(wgs84, dates=["2023-01-01"], errors="raise")
+    band = "B04"
+    fake_items = [{"id": "item-1", "assets": {band: {"href": "s3://b/f.tif"}}}]
+
+    async def _raise(*args, **kwargs):
+        raise ChunkReadError("item-1", [band], RuntimeError("429"))
+
+    with (
+        patch("rustac.DuckdbClient.search", return_value=fake_items),
+        patch("lazycogs._backend.read_chunk_async", side_effect=_raise),
+        pytest.raises(ChunkReadError),
+    ):
+        arr._sync_getitem((0, 0, slice(0, 1), slice(0, 4)))
 
 
 def test_raw_getitem_passes_time_step_datetime_filter(wgs84):
@@ -371,6 +413,80 @@ def test_async_getitem_concurrent_chunk_reads(wgs84):
     assert isinstance(out2, np.ndarray)
     assert out1.shape == (1, 1, 1, 2)
     assert out2.shape == (1, 1, 1, 2)
+
+
+def test_async_getitem_shares_read_limit_across_timesteps(wgs84):
+    """One chunk read shares max_concurrent_reads across selected time steps."""
+    arr = _make_array(
+        wgs84,
+        dates=["2023-01-01", "2023-01-02", "2023-01-03"],
+        max_concurrent_reads=1,
+    )
+    fake_items = [{"id": "item-1", "assets": {"B04": {"href": "s3://b/f.tif"}}}]
+    peak_concurrent = [0]
+    current_concurrent = [0]
+
+    async def _fake_read_chunk_async(*args, **kwargs):
+        async with kwargs["_read_semaphore"]:
+            current_concurrent[0] += 1
+            peak_concurrent[0] = max(peak_concurrent[0], current_concurrent[0])
+            await asyncio.sleep(0)
+            current_concurrent[0] -= 1
+        return {"B04": np.full((1, 1, 4), 1.0, dtype=np.float32)}
+
+    async def _inner() -> np.ndarray:
+        with (
+            patch("lazycogs._backend._search_items_async", return_value=fake_items),
+            patch(
+                "lazycogs._backend.read_chunk_async",
+                side_effect=_fake_read_chunk_async,
+            ),
+        ):
+            return await arr._async_getitem(
+                (slice(0, 1), slice(0, 3), slice(0, 1), slice(0, 4)),
+            )
+
+    result = asyncio.run(_inner())
+
+    assert result.shape == (1, 3, 1, 4)
+    assert peak_concurrent[0] <= 1
+
+
+def test_async_getitem_still_allows_configured_timestep_read_parallelism(wgs84):
+    """Sharing the semaphore does not serialize every time step read."""
+    arr = _make_array(
+        wgs84,
+        dates=["2023-01-01", "2023-01-02", "2023-01-03"],
+        max_concurrent_reads=2,
+    )
+    fake_items = [{"id": "item-1", "assets": {"B04": {"href": "s3://b/f.tif"}}}]
+    peak_concurrent = [0]
+    current_concurrent = [0]
+
+    async def _fake_read_chunk_async(*args, **kwargs):
+        async with kwargs["_read_semaphore"]:
+            current_concurrent[0] += 1
+            peak_concurrent[0] = max(peak_concurrent[0], current_concurrent[0])
+            await asyncio.sleep(0)
+            current_concurrent[0] -= 1
+        return {"B04": np.full((1, 1, 4), 1.0, dtype=np.float32)}
+
+    async def _inner() -> np.ndarray:
+        with (
+            patch("lazycogs._backend._search_items_async", return_value=fake_items),
+            patch(
+                "lazycogs._backend.read_chunk_async",
+                side_effect=_fake_read_chunk_async,
+            ),
+        ):
+            return await arr._async_getitem(
+                (slice(0, 1), slice(0, 3), slice(0, 1), slice(0, 4)),
+            )
+
+    result = asyncio.run(_inner())
+
+    assert result.shape == (1, 3, 1, 4)
+    assert peak_concurrent[0] == 2
 
 
 # ---------------------------------------------------------------------------

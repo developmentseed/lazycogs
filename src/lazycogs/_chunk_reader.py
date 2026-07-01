@@ -6,7 +6,7 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 from async_geotiff import GeoTIFF, Window
@@ -30,6 +30,28 @@ if TYPE_CHECKING:
     from pyproj import CRS, Transformer
 
 logger = logging.getLogger(__name__)
+
+
+class ChunkReadError(RuntimeError):
+    """Raised when ``errors="raise"`` and a STAC item's bands fail to read.
+
+    Wraps the original exception (storage error, decode error, etc.) with
+    the item and bands that were being read. The original exception is
+    available as ``original`` and is also chained via ``__cause__``.
+    """
+
+    def __init__(
+        self,
+        item_id: str,
+        bands: list[str],
+        original: BaseException,
+    ) -> None:
+        super().__init__(
+            f"Failed to read bands {bands!r} from item {item_id!r}: {original}",
+        )
+        self.item_id = item_id
+        self.bands = bands
+        self.original = original
 
 
 @dataclass(frozen=True)
@@ -612,8 +634,10 @@ async def read_chunk_async(  # noqa: C901
     mosaic_method_cls: type[MosaicMethodBase] | None = None,
     store: Store | None = None,
     max_concurrent_reads: int = 32,
+    _read_semaphore: asyncio.Semaphore | None = None,
     warp_cache: dict | None = None,
     path_fn: Callable[[str], str] | None = None,
+    errors: Literal["ignore", "raise"] = "raise",
 ) -> dict[str, np.ndarray]:
     """Read, reproject, and mosaic multiple bands from a list of STAC items.
 
@@ -640,12 +664,20 @@ async def read_chunk_async(  # noqa: C901
             Defaults to :class:`~lazycogs._mosaic_methods.FirstMethod`.
         store: Optional pre-configured :class:`async_geotiff.Store`
             accepted by ``GeoTIFF.open``.
-        max_concurrent_reads: Maximum number of COG reads to run concurrently.
+        max_concurrent_reads: Maximum number of item reads to run concurrently
+            when ``_read_semaphore`` is not supplied.
+        _read_semaphore: Optional caller-supplied semaphore used by backend
+            orchestration to share item-read admission across multiple
+            ``read_chunk_async`` calls in one chunk materialisation.
         warp_cache: Optional cache shared across calls for reusing warp maps
             from earlier time steps.
         path_fn: Optional callable that takes an asset HREF and returns the
             object path to use with *store*.  Forwarded to
             :func:`_read_item_band`.
+        errors: When ``"raise"`` (default), the first item whose bands fail to
+            read (e.g. a storage error) is raised as :class:`ChunkReadError`.
+            When ``"ignore"``, the failure is logged as a warning and
+            skipped instead, so its pixels keep the mosaic fill value.
 
     Returns:
         ``dict`` mapping each band name to an array of shape
@@ -674,7 +706,7 @@ async def read_chunk_async(  # noqa: C901
         warp_cache=warp_cache,
     )
 
-    semaphore = asyncio.Semaphore(max_concurrent_reads)
+    semaphore = _read_semaphore or asyncio.Semaphore(max_concurrent_reads)
     fill = nodata if nodata is not None else 0
 
     async def _guarded(item: dict) -> dict[str, tuple[np.ndarray, float | None]] | None:
@@ -704,7 +736,10 @@ async def read_chunk_async(  # noqa: C901
     def _error(idx: int, exc: BaseException) -> None:
         if isinstance(exc, ValueError):
             raise exc
-        _log_read_failure("bands", bands, items[idx].get("id", "<unknown>"), exc)
+        item_id = items[idx].get("id", "<unknown>")
+        if errors == "raise":
+            raise ChunkReadError(item_id, bands, exc) from exc
+        _log_read_failure("bands", bands, item_id, exc)
 
     await _drain_in_order(task_list, _feed, _done, _error)
 

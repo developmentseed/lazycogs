@@ -189,6 +189,59 @@ def test_time_step_parallelism(
 
 
 @pytest.mark.benchmark
+@pytest.mark.parametrize("max_concurrent_reads", [1, 4, 32])
+def test_shared_read_concurrency_many_timesteps_point(
+    benchmark,
+    expanded_benchmark_parquet: str,
+    max_concurrent_reads: int,
+) -> None:
+    """Measure point time-series reads with shared per-chunk read admission."""
+
+    def run() -> object:
+        da = lazycogs.open(
+            expanded_benchmark_parquet,
+            bbox=BENCHMARK_BBOX,
+            crs=BENCHMARK_CRS,
+            resolution=60.0,
+            time_period="P1M",
+            chunks=None,
+            max_concurrent_reads=max_concurrent_reads,
+        )
+        return da.isel(x=da.sizes["x"] // 2, y=da.sizes["y"] // 2).compute()
+
+    benchmark(run)
+
+
+@pytest.mark.benchmark
+@pytest.mark.parametrize("max_concurrent_reads", [1, 4, 32])
+def test_shared_read_concurrency_many_timesteps_subset(
+    benchmark,
+    expanded_benchmark_parquet: str,
+    max_concurrent_reads: int,
+) -> None:
+    """Measure moderate spatial time-series reads under shared read admission."""
+
+    def run() -> object:
+        da = lazycogs.open(
+            expanded_benchmark_parquet,
+            bbox=BENCHMARK_BBOX,
+            crs=BENCHMARK_CRS,
+            resolution=60.0,
+            time_period="P1M",
+            chunks=None,
+            max_concurrent_reads=max_concurrent_reads,
+        )
+        x_mid = da.sizes["x"] // 2
+        y_mid = da.sizes["y"] // 2
+        return da.isel(
+            x=slice(x_mid - 32, x_mid + 32),
+            y=slice(y_mid - 32, y_mid + 32),
+        ).compute()
+
+    benchmark(run)
+
+
+@pytest.mark.benchmark
 @pytest.mark.parametrize(
     "bands",
     [BENCHMARK_SINGLE_BAND, BENCHMARK_MULTIBAND],
