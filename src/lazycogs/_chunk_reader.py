@@ -104,11 +104,6 @@ def _log_read_failure(
     )
 
 
-def _dtype_is_compatible(source: np.dtype, resolved: np.dtype) -> bool:
-    """Return True when *source* can be represented safely by *resolved*."""
-    return bool(np.can_cast(source, resolved, casting="safe"))
-
-
 def _nodata_matches(
     source: float | None,
     resolved: float | None,
@@ -135,9 +130,10 @@ def _validate_source_contract(
 ) -> float | int | None:
     """Validate one source asset against the resolved output contract."""
     source_dtype = np.dtype(geotiff.dtype)
-    if not ctx.dtype_was_explicit and not _dtype_is_compatible(
+    if not ctx.dtype_was_explicit and not np.can_cast(
         source_dtype,
         ctx.out_dtype,
+        casting="safe",
     ):
         raise ValueError(
             "Auto-inferred output dtype "

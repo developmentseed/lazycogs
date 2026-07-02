@@ -32,6 +32,22 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 _INT_WIDTHS = (8, 16, 32, 64)
+_ZARR_CONVENTIONS = (
+    {
+        "schema_url": "https://raw.githubusercontent.com/zarr-experimental/geo-proj/refs/tags/v1/schema.json",
+        "spec_url": "https://github.com/zarr-experimental/geo-proj/blob/v1/README.md",
+        "uuid": "f17cb550-5864-4468-aeb7-f3180cfb622f",
+        "name": "proj:",
+        "description": "Coordinate reference system information for geospatial data",
+    },
+    {
+        "schema_url": "https://raw.githubusercontent.com/zarr-conventions/spatial/refs/tags/v1/schema.json",
+        "spec_url": "https://github.com/zarr-conventions/spatial/blob/v1/README.md",
+        "uuid": "689b58e2-cf7b-45e0-9fff-9cfc0883d6b4",
+        "name": "spatial:",
+        "description": "Spatial coordinate information",
+    },
+)
 
 
 @dataclass(frozen=True)
@@ -468,24 +484,7 @@ def _build_dataarray(
 
     attributes = {
         "grid_mapping": "spatial_ref",
-        "zarr_conventions": [
-            {
-                "schema_url": "https://raw.githubusercontent.com/zarr-experimental/geo-proj/refs/tags/v1/schema.json",
-                "spec_url": "https://github.com/zarr-experimental/geo-proj/blob/v1/README.md",
-                "uuid": "f17cb550-5864-4468-aeb7-f3180cfb622f",
-                "name": "proj:",
-                "description": (
-                    "Coordinate reference system information for geospatial data"
-                ),
-            },
-            {
-                "schema_url": "https://raw.githubusercontent.com/zarr-conventions/spatial/refs/tags/v1/schema.json",
-                "spec_url": "https://github.com/zarr-conventions/spatial/blob/v1/README.md",
-                "uuid": "689b58e2-cf7b-45e0-9fff-9cfc0883d6b4",
-                "name": "spatial:",
-                "description": "Spatial coordinate information",
-            },
-        ],
+        "zarr_conventions": [dict(convention) for convention in _ZARR_CONVENTIONS],
         "spatial:dimensions": ["y", "x"],
         "spatial:bbox": bbox,
         "spatial:transform_type": "affine",
