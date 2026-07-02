@@ -240,14 +240,6 @@ def _select_overview(geotiff: GeoTIFF, target_res: float) -> Overview | None:
     output pixel samples at least as much original detail as it represents.
     This preserves spatial variation rather than smearing it with a coarser
     overview level.
-
-    Args:
-        geotiff: Open GeoTIFF object.
-        target_res: Target pixel size in the COG's native CRS units.
-
-    Returns:
-        An ``Overview`` instance, or ``None`` to use full resolution.
-
     """
     if not geotiff.overviews:
         return None
@@ -303,19 +295,7 @@ def _native_window(
     width: int,
     height: int,
 ) -> Window | None:
-    """Compute the pixel window in a source image that covers ``bbox_native``.
-
-    Args:
-        geotiff: Full-resolution ``GeoTIFF`` or ``Overview`` to read from.
-        bbox_native: ``(minx, miny, maxx, maxy)`` in the source image's CRS.
-        width: Image width in pixels (used for bounds clamping).
-        height: Image height in pixels (used for bounds clamping).
-
-    Returns:
-        A ``Window`` clipped to the image extent, or ``None`` if the bbox
-        falls entirely outside the image.
-
-    """
+    """Compute the pixel window in a source image that covers ``bbox_native``."""
     inv = ~geotiff.transform
     minx, miny, maxx, maxy = bbox_native
 
@@ -404,7 +384,7 @@ def _apply_bands_with_warp_cache(
 ) -> dict[str, tuple[np.ndarray, float | None]]:
     """Apply warp maps to multiple band rasters, reusing maps for identical geometries.
 
-    Checks ``warp_cache`` (keyed on ``(tuple(raster.transform), src_crs.to_wkt())``)
+    Checks ``warp_cache`` (keyed on ``(tuple(raster.transform), src_crs)``)
     before computing a new warp map.  When ``warp_cache`` is shared across calls
     (e.g. across time steps in a single chunk read), warp maps for recurring tile
     geometries are computed only once.  Bands with different geometries each get
@@ -415,21 +395,6 @@ def _apply_bands_with_warp_cache(
     is shared across concurrent executor calls, two threads may both compute the
     same warp map before either stores it; this is safe because ``compute_warp_map``
     is deterministic and the duplicate result is simply overwritten.
-
-    Args:
-        band_rasters: List of ``(band_name, raster, src_crs, effective_nodata)``
-            tuples.  ``raster`` must have ``.transform`` (Affine) and ``.data``
-            (ndarray of shape ``(bands, h, w)``) attributes.
-        dst_transform: Affine transform of the destination grid.
-        dst_crs: CRS of the destination grid.
-        dst_width: Width of the destination grid in pixels.
-        dst_height: Height of the destination grid in pixels.
-        warp_cache: Optional external cache shared across calls.  When ``None``
-            a fresh local dict is used (original per-item behaviour).
-
-    Returns:
-        ``dict`` mapping band name to ``(reprojected_array, effective_nodata)``.
-
     """
     cache: dict[tuple[tuple[float, ...], CRS], WarpMap] = (
         warp_cache if warp_cache is not None else {}
@@ -477,17 +442,6 @@ async def _read_item_band(
     reads all windows concurrently, then dispatches a single thread-executor call
     that applies warp maps with caching: bands sharing the same source CRS and
     window transform reuse the same warp map.
-
-    Args:
-        item: STAC item dict containing an ``assets`` key.
-        bands: Asset keys to read from this item.
-        ctx: Per-chunk invariants (affine, CRS, dimensions, nodata, store, etc.).
-
-    Returns:
-        ``dict`` mapping band name to ``(array, effective_nodata)`` where
-        *array* has shape ``(bands, chunk_height, chunk_width)``.  Returns
-        ``None`` if no requested band overlaps the chunk.
-
     """
     # Collect hrefs for all requested bands.
     band_hrefs: dict[str, str] = {}
@@ -577,16 +531,6 @@ async def _drain_in_order(
 
     Stops early when is_done() returns True. Cancels and drains all remaining
     tasks on exit, whether done early or exhausted.
-
-    Args:
-        tasks: Pre-created asyncio tasks, in the order results should be fed.
-        on_result: Called with (index, result) for each completed task, in
-            source order. result is whatever the task returned (may be None).
-        is_done: Called after each on_result; if it returns True, remaining
-            tasks are cancelled and the function returns.
-        on_error: Called with (index, exception) for tasks that raised. The
-            task's slot is treated as None for ordering purposes.
-
     """
     task_index: dict[int, int] = {id(t): i for i, t in enumerate(tasks)}
     completed: dict[int, Any] = {}

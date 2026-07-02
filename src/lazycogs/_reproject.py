@@ -22,14 +22,6 @@ def _get_transformer(src_crs: CRS, dst_crs: CRS) -> Transformer:
     in a collection, so caching avoids recreating the same object hundreds of
     times per chunk read.  ``pyproj.CRS`` is hashable via its WKT
     representation, and ``Transformer`` is thread-safe from PROJ 6+.
-
-    Args:
-        src_crs: Source CRS.
-        dst_crs: Destination CRS.
-
-    Returns:
-        A ``Transformer`` that maps ``src_crs`` → ``dst_crs``.
-
     """
     return Transformer.from_crs(src_crs, dst_crs, always_xy=True)
 

@@ -309,22 +309,6 @@ def _build_time_steps(
     Queries *parquet_path* and buckets matching items by *temporal_grouper*.
     Only groups that have at least one matching item produce a time step, so
     the time axis never contains empty slices.
-
-    Args:
-        parquet_path: Path to a geoparquet file or hive-partitioned directory.
-        duckdb_client: ``DuckdbClient`` used to query the parquet source.
-        bbox: Bounding box ``[minx, miny, maxx, maxy]`` in EPSG:4326.
-        datetime: RFC 3339 datetime or range to pre-filter items.
-        filter: CQL2 filter expression (text string or JSON dict).
-        ids: List of STAC item IDs to restrict results to.
-        sortby: Sort keys forwarded to the DuckDB query.
-        temporal_grouper: Grouper that maps item datetimes to group labels,
-            datetime filter strings, and coordinate values.
-
-    Returns:
-        ``_TimeStep`` values sorted in temporal order. Each step carries the
-        coordinate value and the opaque rustac ``datetime=`` predicate.
-
     """
     filter_fields = _extract_filter_fields(filter) if filter else set()
 
@@ -372,13 +356,6 @@ def _spatial_coords_with_eager_variables(index: RasterIndex) -> Coordinates:
     This helper keeps the ``RasterIndex`` itself for spatial selection semantics
     while materialising the x/y coordinate variables as plain NumPy arrays so
     scalar coordinate loads stay scalar after chunking.
-
-    Args:
-        index: Raster index describing the output grid.
-
-    Returns:
-        Coordinates containing eager x/y variables and the original RasterIndex.
-
     """
     index_variables = index.create_variables()
     return Coordinates(
@@ -416,45 +393,7 @@ def _build_dataarray(
 ) -> DataArray:
     """Assemble the lazy DataArray from pre-computed parameters.
 
-    This is the shared implementation used by both :func:`open` and
-    the STAC search completes.
-
-    Args:
-        parquet_path: Path to a geoparquet file or hive-partitioned directory.
-        duckdb_client: ``DuckdbClient`` instance passed to each
-            :class:`~lazycogs._backend.MultiBandStacBackendArray` for per-chunk
-        queries.
-        resolved_bands: Ordered list of band/asset keys.
-        time_steps: Sorted temporal steps carrying xarray coordinates and
-            ``rustac``-compatible datetime filters.
-        bbox: Output bounding box in ``dst_crs``.
-        bbox_4326: Bounding box in EPSG:4326.
-        dst_crs: Target output CRS.
-        resolution: Output pixel size in ``dst_crs`` units.
-        sortby: Optional rustac sort keys.
-        filter: CQL2 filter expression forwarded to per-chunk DuckDB queries.
-        ids: STAC item IDs forwarded to per-chunk DuckDB queries.
-        nodata: No-data fill value.
-        out_dtype: Output array dtype.
-        dtype_was_explicit: Whether the caller passed ``dtype=`` explicitly.
-        nodata_was_explicit: Whether the caller passed ``nodata=`` explicitly.
-        method_cls: Mosaic method class.
-        chunks: Passed to ``DataArray.chunk()`` if not ``None``.
-        store: Pre-configured :class:`async_geotiff.Store` accepted by
-            ``GeoTIFF.open``. When provided, it is used directly for all asset
-            reads instead of resolving an obstore-backed store from each HREF.
-        max_concurrent_reads: Maximum number of item reads to run concurrently
-            per chunk, shared across selected time steps.
-        path_from_href: Optional callable ``(href: str) -> str`` passed to
-            :class:`~lazycogs._backend.MultiBandStacBackendArray`.  See
-            :func:`open` for full documentation.
-        errors: ``"ignore"`` or ``"raise"`` passed to
-            :class:`~lazycogs._backend.MultiBandStacBackendArray`.  See
-            :func:`open` for full documentation.
-
-    Returns:
-        Lazy ``xr.DataArray`` with dimensions ``(band, time, y, x)``.
-
+    Used after startup inspection and time-step discovery have completed.
     """
     dst_affine, dst_width, dst_height = compute_output_grid(
         bbox=bbox,
@@ -639,9 +578,8 @@ def open(  # noqa: A001
             (one step per unique normalized timestamp), ``PnD`` (days),
             ``P1W`` (ISO calendar week), ``P1M`` (calendar month), ``P1Y``
             (calendar year), and ``PTnH`` (fixed hour windows). Defaults to
-            ``"P1D"`` (one step per calendar day), which preserves the previous
-            behaviour. Multi-day and multi-hour windows are aligned to an
-            epoch of 2000-01-01.
+            ``"P1D"`` (one step per calendar day). Multi-day and multi-hour
+            windows are aligned to an epoch of 2000-01-01.
         store: Pre-configured :class:`async_geotiff.Store` accepted by
             ``GeoTIFF.open`` to use for all asset reads. Useful when
             credentials, custom endpoints, or non-default options are needed
@@ -688,10 +626,8 @@ def open(  # noqa: A001
                 )
 
         duckdb_client: Optional ``DuckdbClient`` instance.  When
-            ``None`` (default), a plain ``DuckdbClient()`` is created,
-            which is equivalent to the previous ``rustac.search_sync``
-            behaviour.  Pass a custom client to enable features such as
-            hive-partitioned datasets::
+            ``None`` (default), a plain ``DuckdbClient()`` is created. Pass a
+            custom client to enable features such as hive-partitioned datasets::
 
                 import rustac, lazycogs
 

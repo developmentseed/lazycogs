@@ -222,7 +222,7 @@ class ExplainPlan:
         chunk_height: Spatial chunk height in pixels.
         chunk_reads: One entry per (band, time step, spatial tile).
         fetch_headers: Whether COG headers were opened to populate overview
-            and window fields on each :class:`ItemRead`.
+            and window fields on each :class:`CogRead`.
 
     """
 
@@ -366,9 +366,6 @@ class ExplainPlan:
             A ``pandas.DataFrame`` with columns for chunk metadata, item
             metadata, and (when available) COG header details.
 
-        Raises:
-            ImportError: If ``pandas`` is not installed.
-
         """
         rows = []
         for chunk in self.chunk_reads:
@@ -428,18 +425,7 @@ def _compute_chunk_bbox_4326(
     chunk_height: int,
     dst_crs: CRS,
 ) -> list[float]:
-    """Return the bounding box of a chunk in EPSG:4326.
-
-    Args:
-        chunk_affine: Affine transform of the chunk (top-left origin).
-        chunk_width: Chunk width in pixels.
-        chunk_height: Chunk height in pixels.
-        dst_crs: CRS of the chunk.
-
-    Returns:
-        ``[minx, miny, maxx, maxy]`` in EPSG:4326.
-
-    """
+    """Return the bounding box of a chunk in EPSG:4326."""
     minx = chunk_affine.c
     maxy = chunk_affine.f
     maxx = minx + chunk_width * chunk_affine.a
@@ -464,20 +450,7 @@ def _iter_spatial_chunks(
     chunk_w: int,
     chunk_h: int,
 ) -> Iterator[tuple[int, int, Affine, int, int]]:
-    """Yield spatial tile descriptors for a region of interest.
-
-    Args:
-        roi_affine: Affine transform of the ROI top-left corner.
-        roi_width: ROI width in pixels.
-        roi_height: ROI height in pixels.
-        chunk_w: Tile width in pixels (edge tiles may be smaller).
-        chunk_h: Tile height in pixels (edge tiles may be smaller).
-
-    Yields:
-        ``(chunk_row, chunk_col, tile_affine, actual_width, actual_height)``
-        tuples, one per tile.
-
-    """
+    """Yield spatial tile descriptors for a region of interest."""
     y_off = 0
     row = 0
     while y_off < roi_height:
@@ -495,16 +468,7 @@ def _iter_spatial_chunks(
 
 
 def _infer_chunk_sizes(da: xr.DataArray) -> tuple[int, int]:
-    """Return ``(chunk_height, chunk_width)`` from dask chunks or full extent.
-
-    Args:
-        da: DataArray to inspect.
-
-    Returns:
-        Tile dimensions in pixels.  When the array is not dask-backed, the
-        full spatial extent is returned as a single tile.
-
-    """
+    """Return ``(chunk_height, chunk_width)`` from dask chunks or full extent."""
     chunksizes = da.chunksizes
     chunk_h = int(chunksizes["y"][0]) if "y" in chunksizes else da.sizes["y"]
     chunk_w = int(chunksizes["x"][0]) if "x" in chunksizes else da.sizes["x"]
@@ -515,20 +479,7 @@ def _roi_pixel_offsets(
     da: xr.DataArray,
     backend: MultiBandStacBackendArray,
 ) -> tuple[int, int, int, int]:
-    """Map the DataArray's coordinate extent to pixel offsets in the full grid.
-
-    Args:
-        da: DataArray whose spatial extent to map.  Must have ``y`` and ``x``
-            dimensions.
-        backend: Backend whose ``dst_affine`` defines the full grid.
-
-    Returns:
-        ``(x_start, y_start_physical, roi_width, roi_height)`` where
-        ``x_start`` is the column offset from the left edge of the full grid,
-        ``y_start_physical`` is the row offset from the top (physical, top-down),
-        and ``roi_width`` / ``roi_height`` are the dimensions in pixels.
-
-    """
+    """Map the DataArray's coordinate extent to pixel offsets in the full grid."""
     resolution = backend.dst_affine.a
     affine = backend.dst_affine
 
@@ -558,21 +509,6 @@ async def _inspect_item_async(
     """Open a COG header and compute the overview level and read window.
 
     Does not read any pixel data.
-
-    Args:
-        item: STAC item dict.
-        band: Asset key to inspect.
-        chunk_affine: Affine transform of the destination chunk.
-        dst_crs: CRS of the destination chunk.
-        chunk_width: Chunk width in pixels.
-        chunk_height: Chunk height in pixels.
-        store: Optional pre-configured :class:`async_geotiff.Store`
-            accepted by ``GeoTIFF.open``.
-
-    Returns:
-        A :class:`CogRead` with all header fields populated, or ``None`` if
-        the item has no matching asset or the chunk does not overlap.
-
     """
     ctx = _WindowContext(
         chunk_affine=chunk_affine,
@@ -616,16 +552,6 @@ async def _explain_async(
     construction and result processing overlap.  Each query result is then
     fanned across all active bands to produce one :class:`ChunkRead` per
     ``(band, time, tile)`` combination.
-
-    Args:
-        da: DataArray whose extent and chunking define the explain scope.
-        backend: :class:`MultiBandStacBackendArray` discovered from the
-            DataArray's lazy backing array.
-        fetch_headers: When ``True``, open each matched COG header.
-
-    Returns:
-        An :class:`ExplainPlan` with one :class:`ChunkRead` per combination.
-
     """
     if "y" not in da.sizes or "x" not in da.sizes:
         raise ValueError(
@@ -813,8 +739,8 @@ class StacCogAccessor:
 
         Args:
             fetch_headers: When ``True``, open each matched COG header to
-                populate :attr:`ItemRead.overview_level` and the window
-                fields.  Requires network I/O.  Defaults to ``False``.
+                populate :attr:`CogRead.overview_level` and the window fields.
+                Requires network I/O.  Defaults to ``False``.
 
         Returns:
             An :class:`ExplainPlan` describing all (band, time step, spatial

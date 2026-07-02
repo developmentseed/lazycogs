@@ -184,12 +184,10 @@ rather than a transient read failure.
   first created; changes after that are ignored for the life of the process.
 - DuckDB queries yield the event loop by running through one small bounded
   internal submission path and explicit executor instead of on the loop
-  thread. On the local benchmark fixture, DuckDB stayed under 2% of
-  per-date chunk wall time, so there is no separate per-thread DuckDB
-  client pool today.
-- `scripts/prepare_benchmark_data.py` also powers offline regression coverage
-  under `tests/benchmarks/`, so the contract tests run on local cached files
-  instead of live network reads.
+  thread.
+- `scripts/prepare_benchmark_data.py` powers offline regression coverage
+  under `tests/benchmarks/`, so benchmark-style checks can run on local cached
+  files instead of live network reads.
 - If you need to construct a loop-bound resource for lazycogs internals,
   use `lazycogs.run_on_loop(...)`.
 - Low-level callers should use `await lazycogs.read_chunk_async(...)`.

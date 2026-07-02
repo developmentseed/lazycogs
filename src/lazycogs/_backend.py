@@ -127,17 +127,7 @@ def _resolve_time_indices(
     time_key: int | np.integer | slice,
     n_time_steps: int,
 ) -> tuple[list[int], bool]:
-    """Resolve a time indexer to a list of integer indices.
-
-    Args:
-        time_key: Integer or slice indexer for the time dimension.
-        n_time_steps: Total number of time steps (size of the time dimension).
-
-    Returns:
-        ``(time_indices, squeeze_time)`` where ``squeeze_time`` is ``True``
-        when ``time_key`` was a scalar integer.
-
-    """
+    """Resolve a time indexer to a list of integer indices."""
     if isinstance(time_key, (int, np.integer)):
         return [int(time_key)], True
     start = time_key.start if time_key.start is not None else 0
@@ -150,17 +140,7 @@ def _resolve_band_indices(
     band_key: int | np.integer | slice,
     n_bands: int,
 ) -> tuple[list[int], bool]:
-    """Resolve a band indexer to a list of integer indices.
-
-    Args:
-        band_key: Integer or slice indexer for the band dimension.
-        n_bands: Total number of bands.
-
-    Returns:
-        ``(band_indices, squeeze_band)`` where ``squeeze_band`` is ``True``
-        when ``band_key`` was a scalar integer.
-
-    """
+    """Resolve a band indexer to a list of integer indices."""
     if isinstance(band_key, (int, np.integer)):
         return [int(band_key)], True
     start = band_key.start if band_key.start is not None else 0
@@ -173,16 +153,7 @@ def _search_items_sync(
     plan: _ChunkReadPlan,
     time_step: _TimeStep,
 ) -> list[Any]:
-    """Query the STAC parquet for items overlapping a chunk.
-
-    Args:
-        plan: Read plan carrying all parameters for this chunk.
-        time_step: Temporal step carrying the rustac datetime filter.
-
-    Returns:
-        List of STAC items returned by DuckDB.
-
-    """
+    """Query the STAC parquet for items overlapping a chunk."""
     label = f"bands={plan.selected_bands!r}"
     t0 = time.perf_counter()
     items = plan.duckdb_client.search(
@@ -223,14 +194,6 @@ async def _search_items_async(
     DuckDB queries serialise on a single connection internally, so this
     yields the event loop during the query but does not produce parallel
     queries against the same DuckdbClient.
-
-    Args:
-        plan: Read plan carrying all parameters for this chunk.
-        time_step: Temporal step carrying the rustac datetime filter.
-
-    Returns:
-        List of STAC items returned by DuckDB.
-
     """
     return await run_duckdb(_search_items_sync, plan, time_step)
 
@@ -245,15 +208,6 @@ async def _run_one_date(
     Issues one DuckDB query for items overlapping the chunk at this date, then
     calls read_chunk_async to fetch and reproject all tiles.
     Returns None if no items match the query.
-
-    Args:
-        t_idx: Index into ``plan.time_steps`` for the time step to read.
-        plan: Read plan carrying all parameters for this chunk.
-        read_semaphore: Chunk-local semaphore shared across all time steps.
-
-    Returns:
-        Per-band arrays keyed by band name, or ``None`` if no items matched.
-
     """
     time_step = plan.time_steps[t_idx]
     items = await _search_items_async(plan, time_step)
@@ -303,14 +257,6 @@ async def _read_chunk_all_dates(
     same ``DuckdbClient`` are safe but not parallel.  Mosaic coroutines for
     all time steps are gathered concurrently, while their item reads share one
     chunk-local semaphore so admission is bounded across time steps.
-
-    Args:
-        time_indices: Ordered list of time-dimension indices to materialise.
-        plan: Read plan carrying all parameters for this chunk.
-
-    Returns:
-        One entry per time index; ``None`` where no items matched.
-
     """
     read_semaphore = asyncio.Semaphore(plan.max_concurrent_reads)
     return list(
@@ -444,14 +390,6 @@ class MultiBandStacBackendArray(BackendArray):
 
         Computes the chunk affine transform and EPSG:4326 bounding box from
         the top-down y/x indexers.
-
-        Args:
-            y_key: Integer or slice indexer for the y dimension.
-            x_key: Integer or slice indexer for the x dimension.
-
-        Returns:
-            A :class:`_SpatialWindow` describing the chunk geometry.
-
         """
         if isinstance(y_key, (int, np.integer)):
             yi = int(y_key)
@@ -546,16 +484,7 @@ class MultiBandStacBackendArray(BackendArray):
         )
 
     def _sync_getitem(self, key: tuple[Any, ...]) -> np.ndarray:
-        """Sync adapter that runs ``_async_getitem`` on the background loop.
-
-        Args:
-            key: A tuple of ``int | slice`` objects for the
-                ``(band, time, y, x)`` dimensions.
-
-        Returns:
-            Numpy array with shape determined by the indexing key.
-
-        """
+        """Sync adapter that runs ``_async_getitem`` on the background loop."""
         return run_on_loop(self._async_getitem(key))
 
     async def _async_getitem(self, key: tuple[Any, ...]) -> np.ndarray:
@@ -566,14 +495,6 @@ class MultiBandStacBackendArray(BackendArray):
         :func:`~lazycogs._chunk_reader.read_chunk_async`, issuing a single
         DuckDB query per time step and sharing reprojection warp maps across
         bands that have identical source geometry.
-
-        Args:
-            key: A tuple of ``int | slice`` objects for the
-                ``(band, time, y, x)`` dimensions.
-
-        Returns:
-            Numpy array with shape determined by the indexing key.
-
         """
         band_key, time_key, y_key, x_key = key
 
@@ -625,8 +546,6 @@ class MultiBandStacBackendArray(BackendArray):
         )
         result: np.ndarray | None = None
 
-        expected_dims = 3
-
         for i, chunk_data in enumerate(all_chunk_data):
             if chunk_data is None:
                 continue
@@ -634,7 +553,7 @@ class MultiBandStacBackendArray(BackendArray):
                 result = np.full(out_shape, fill, dtype=self.dtype)
             for bi, band in enumerate(selected_bands):
                 arr = chunk_data[band]
-                slice_ = arr[0] if arr.ndim == expected_dims else arr
+                slice_ = arr[0] if arr.ndim == 3 else arr  # noqa: PLR2004
                 result[bi, i] = slice_.astype(self.dtype, copy=False)
 
         if result is None:

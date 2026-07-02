@@ -4,15 +4,7 @@ from cql2 import Expr
 
 
 def _extract_filter_fields(filter_expr: str | dict[str, Any]) -> set[str]:
-    """Extract all property field names from a CQL2 filter expression.
-
-    Args:
-        filter_expr: A CQL2-Text string or CQL2-JSON dict.
-
-    Returns:
-        Set of property field name strings referenced in the filter.
-
-    """
+    """Extract all property field names from a CQL2 filter expression."""
     properties: set[str] = set()
 
     def _traverse(node: object) -> None:
@@ -33,17 +25,7 @@ def _extract_filter_fields(filter_expr: str | dict[str, Any]) -> set[str]:
 
 
 def _sortby_fields(sortby: str | list[str | dict[str, str]] | None) -> set[str]:
-    """Extract property field names from a rustac sortby value.
-
-    Args:
-        sortby: A rustac sort specification -- a bare field name string, a list
-            of field name strings (with optional ``+``/``-`` direction prefix),
-            or a list of ``{"field": ..., "direction": ...}`` dicts.
-
-    Returns:
-        Set of bare field name strings (direction prefixes stripped).
-
-    """
+    """Extract property field names from a rustac sortby value."""
     if sortby is None:
         return set()
 
