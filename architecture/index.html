@@ -1118,10 +1118,21 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#why-parquet-not-a-stac-api-url" class="md-nav__link">
+  <a href="#module-map" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Why parquet, not a STAC API URL
+        Module map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stac-query-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        STAC query contract
       
     </span>
   </a>
@@ -1137,49 +1148,33 @@
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#module-overview" class="md-nav__link">
+    <nav class="md-nav" aria-label="Two-phase execution model">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-0-open-time" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Module overview
+        Phase 0: open time
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#phase-0-in-detail" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-compute-time" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Phase 0 in detail
+        Phase 1: compute time
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#explain-dry-run-read-estimator" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Explain: dry-run read estimator
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#phase-1-in-detail" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Phase 1 in detail
-      
-    </span>
-  </a>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1195,74 +1190,24 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#per-chunk-read-and-resample-pipeline" class="md-nav__link">
+  <a href="#per-chunk-read-pipeline" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Per-chunk read and resample pipeline
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Per-chunk read and resample pipeline">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#1-overview-selection" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        1. Overview selection
+        Per-chunk read pipeline
       
     </span>
   </a>
   
 </li>
-        
-          <li class="md-nav__item">
-  <a href="#2-source-window-computation" class="md-nav__link">
+      
+        <li class="md-nav__item">
+  <a href="#explain-plans" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Source window computation
+        Explain plans
       
     </span>
   </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#3-tile-read" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3. Tile read
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#4-nearest-neighbor-reprojection" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        4. Nearest-neighbor reprojection
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#5-read-failures" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        5. Read failures
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -1278,52 +1223,13 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#chunking-strategy-and-throughput-tradeoffs" class="md-nav__link">
+  <a href="#chunking-strategy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Chunking strategy and throughput tradeoffs
+        Chunking strategy
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="Chunking strategy and throughput tradeoffs">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#why-spatial-chunks-hurt" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Why spatial chunks hurt
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#where-dask-helps" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Where dask helps
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#recommended-defaults" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Recommended defaults
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -1339,10 +1245,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#mosaic-methods" class="md-nav__link">
+  <a href="#mosaic-and-temporal-compositing" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Mosaic methods
+        Mosaic and temporal compositing
       
     </span>
   </a>
@@ -1350,10 +1256,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#temporal-compositing" class="md-nav__link">
+  <a href="#store-resolution" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Temporal compositing
+        Store resolution
       
     </span>
   </a>
@@ -1361,32 +1267,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#store-caching-and-the-store-parameter" class="md-nav__link">
+  <a href="#documentation-surfaces" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Store caching and the store parameter
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#key-dependencies" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Key dependencies
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#documentation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Documentation
+        Documentation surfaces
       
     </span>
   </a>
@@ -1455,10 +1339,21 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#why-parquet-not-a-stac-api-url" class="md-nav__link">
+  <a href="#module-map" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Why parquet, not a STAC API URL
+        Module map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stac-query-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        STAC query contract
       
     </span>
   </a>
@@ -1474,49 +1369,33 @@
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#module-overview" class="md-nav__link">
+    <nav class="md-nav" aria-label="Two-phase execution model">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-0-open-time" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Module overview
+        Phase 0: open time
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#phase-0-in-detail" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-compute-time" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Phase 0 in detail
+        Phase 1: compute time
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#explain-dry-run-read-estimator" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Explain: dry-run read estimator
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#phase-1-in-detail" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Phase 1 in detail
-      
-    </span>
-  </a>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1532,74 +1411,24 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#per-chunk-read-and-resample-pipeline" class="md-nav__link">
+  <a href="#per-chunk-read-pipeline" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Per-chunk read and resample pipeline
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Per-chunk read and resample pipeline">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#1-overview-selection" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        1. Overview selection
+        Per-chunk read pipeline
       
     </span>
   </a>
   
 </li>
-        
-          <li class="md-nav__item">
-  <a href="#2-source-window-computation" class="md-nav__link">
+      
+        <li class="md-nav__item">
+  <a href="#explain-plans" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Source window computation
+        Explain plans
       
     </span>
   </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#3-tile-read" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3. Tile read
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#4-nearest-neighbor-reprojection" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        4. Nearest-neighbor reprojection
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#5-read-failures" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        5. Read failures
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -1615,52 +1444,13 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#chunking-strategy-and-throughput-tradeoffs" class="md-nav__link">
+  <a href="#chunking-strategy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Chunking strategy and throughput tradeoffs
+        Chunking strategy
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="Chunking strategy and throughput tradeoffs">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#why-spatial-chunks-hurt" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Why spatial chunks hurt
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#where-dask-helps" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Where dask helps
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#recommended-defaults" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Recommended defaults
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -1676,10 +1466,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#mosaic-methods" class="md-nav__link">
+  <a href="#mosaic-and-temporal-compositing" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Mosaic methods
+        Mosaic and temporal compositing
       
     </span>
   </a>
@@ -1687,10 +1477,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#temporal-compositing" class="md-nav__link">
+  <a href="#store-resolution" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Temporal compositing
+        Store resolution
       
     </span>
   </a>
@@ -1698,32 +1488,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#store-caching-and-the-store-parameter" class="md-nav__link">
+  <a href="#documentation-surfaces" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Store caching and the store parameter
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#key-dependencies" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Key dependencies
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#documentation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Documentation
+        Documentation surfaces
       
     </span>
   </a>
@@ -1751,141 +1519,77 @@
 
 
 <h1 id="architecture-lazycogs">Architecture: lazycogs<a class="headerlink" href="#architecture-lazycogs" title="Permanent link">&para;</a></h1>
-<p>lazycogs turns a geoparquet STAC item index into a lazy <code>(band, time, y, x)</code> xarray DataArray backed by Cloud-Optimized GeoTIFFs. It requires no GDAL. All raster I/O is done through <code>async-geotiff</code> (Rust-backed), spatial queries go through DuckDB via <code>rustac</code>, and reprojection is pure <code>pyproj</code> + numpy.</p>
-<h2 id="why-parquet-not-a-stac-api-url">Why parquet, not a STAC API URL<a class="headerlink" href="#why-parquet-not-a-stac-api-url" title="Permanent link">&para;</a></h2>
-<p><code>open()</code> accepts a path to a geoparquet file or directory, not a STAC API endpoint. This is intentional. When dask computes a large DataArray, it may execute hundreds of chunk tasks in parallel. If each task queried a remote STAC API directly, that would fire hundreds of concurrent HTTP requests at the API, which is both impolite and likely to trigger rate limiting or outright bans.</p>
-<p>Instead, the expected workflow is to run one <code>rustac.search_to("items.parquet", api_url, ...)</code> call upfront to download the matching items into a local geoparquet file, and then pass that file to <code>open()</code>. Per-chunk spatial filtering is then a fast DuckDB query, with no network traffic and no API involvement.</p>
-<p>For large pre-existing STAC archives stored as hive-partitioned parquet directories (e.g. <code>year=2023/month=01/...</code>), pass a <code>DuckdbClient(use_hive_partitioning=True)</code> via the <code>duckdb_client</code> parameter to enable DuckDB partition pruning. All internal queries in <code>open()</code> use <code>duckdb_client.search()</code>. When <code>duckdb_client</code> is <code>None</code>, a plain <code>DuckdbClient()</code> is created automatically.</p>
-<h2 id="two-phase-execution-model">Two-phase execution model<a class="headerlink" href="#two-phase-execution-model" title="Permanent link">&para;</a></h2>
-<p>Work is split sharply into two phases.</p>
-<p><strong>Phase 0 — open time</strong> runs at <code>open()</code> call time. It does the minimum needed to build a fully-described lazy DataArray: one DuckDB query to inspect the first matching item, one DuckDB query to build the time axis, concurrent COG metadata opens for the requested bands, and a grid computation. No pixel windows are read. No dask task graph is built. A single <code>MultiBandStacBackendArray</code> is wrapped in an xarray <code>LazilyIndexedArray</code>.</p>
-<p><strong>Phase 1 — compute time</strong> runs inside a dask worker when a chunk is actually computed. <code>MultiBandStacBackendArray.__getitem__</code> receives the exact <code>(band, time, y, x)</code> index for the chunk, derives the chunk's spatial footprint, queries DuckDB for only the COGs that overlap that footprint and time step, reads and reprojects all selected bands concurrently with <code>asyncio</code>, and mosaics the results.</p>
-<p>This split means that <code>open()</code> is nearly instant even for large queries, and the DuckDB spatial filter runs once per chunk rather than over the entire bbox at open time. The startup inspection is still deliberately small: one representative item and one <code>GeoTIFF.open(...)</code> per requested band, just enough to validate store access and infer the output dtype/nodata contract. That contract is enforced later during chunk reads unless the caller passed <code>dtype=</code> or <code>nodata=</code> explicitly.</p>
-<h2 id="module-overview">Module overview<a class="headerlink" href="#module-overview" title="Permanent link">&para;</a></h2>
+<p>lazycogs turns a geoparquet STAC item index into a lazy <code>(band, time, y, x)</code> xarray <code>DataArray</code> backed by Cloud-Optimized GeoTIFFs. Raster I/O is handled by <code>async-geotiff</code>; STAC filtering is handled by <code>rustac</code> and DuckDB; reprojection is implemented with <code>pyproj</code> and numpy.</p>
+<h2 id="module-map">Module map<a class="headerlink" href="#module-map" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>src/lazycogs/
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  _core.py           Entry point. open(), representative-item inspection, dtype/nodata resolution, time-step building.
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>  _backend.py        MultiBandStacBackendArray — xarray BackendArray implementation that bridges xarray indexing to chunk reads.
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>  _chunk_reader.py   Async mosaic logic: open COGs, select overviews, read windows, reproject, mosaic.
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>  _executor.py       Shared background loop and bounded executors. Exposes run_on_loop().
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>  _explain.py        Dry-run read estimator. Registers the da.lazycogs.explain() xarray accessor.
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>  _grid.py           Compute output affine transform and dimensions from bbox + resolution.
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>  _reproject.py      Nearest-neighbor reprojection using pyproj Transformer + numpy fancy indexing.
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>  _storage_ext.py    STAC Storage Extension metadata parsing (version detection, kwargs extraction for v1 and v2).
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>  _store.py          Resolve cloud HREFs into obstore Store instances (or route through a user-supplied store) with a shared cache; store_for() factory for constructing stores from parquet STAC files.
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>  _temporal.py       Temporal grouping strategies and _TimeStep predicates (exact, hour, day, week, month, year, fixed-day-count).
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>  _mosaic_methods.py Pixel-selection strategies (First, Highest, Lowest, Mean, Median, Stdev, Count).
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  _core.py           open(), representative-item inspection, dtype/nodata resolution, time-step building, DataArray assembly
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>  _backend.py        MultiBandStacBackendArray, xarray indexing bridge, per-chunk orchestration
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>  _chunk_reader.py   async COG opening, overview/window selection, reads, reprojection, mosaicking
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>  _executor.py       shared background event loop and bounded executors
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>  _explain.py        dry-run read estimator exposed as da.lazycogs.explain()
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>  _grid.py           output affine transform and grid dimensions
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>  _reproject.py      warp-map computation and nearest-neighbor sampling
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>  _storage_ext.py    STAC Storage Extension metadata parsing
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>  _store.py          HREF-to-store resolution and store_for()
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>  _temporal.py       temporal grouping strategies and _TimeStep predicates
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>  _mosaic_methods.py pixel-selection strategies
 </code></pre></div>
-<h2 id="phase-0-in-detail">Phase 0 in detail<a class="headerlink" href="#phase-0-in-detail" title="Permanent link">&para;</a></h2>
-<p><code>open()</code> in <code>_core.py</code>:</p>
+<h2 id="stac-query-contract">STAC query contract<a class="headerlink" href="#stac-query-contract" title="Permanent link">&para;</a></h2>
+<p><code>open()</code> accepts a local geoparquet file or, when a custom <code>DuckdbClient</code> is supplied, a parquet directory such as a hive-partitioned archive. It does not query a remote STAC API directly. The intended workflow is to run <code>rustac.search_to("items.parquet", api_url, ...)</code> once, then pass that parquet source to lazycogs. This keeps dask chunk execution from turning into hundreds of concurrent STAC API calls.</p>
+<p>When <code>duckdb_client=None</code>, <code>open()</code> creates a plain <code>DuckdbClient()</code> and requires a <code>.parquet</code> or <code>.geoparquet</code> path. A caller-supplied client is used for every startup and per-chunk query, including clients configured for hive partition pruning.</p>
+<h2 id="two-phase-execution-model">Two-phase execution model<a class="headerlink" href="#two-phase-execution-model" title="Permanent link">&para;</a></h2>
+<h3 id="phase-0-open-time">Phase 0: open time<a class="headerlink" href="#phase-0-open-time" title="Permanent link">&para;</a></h3>
+<p><code>open()</code> does only enough eager work to return a fully described lazy array:</p>
 <ol>
-<li>Resolves <code>duckdb_client</code>: if not provided, creates a plain <code>DuckdbClient()</code>. Validates that <code>href</code> ends in <code>.parquet</code>/<code>.geoparquet</code> when no client is supplied (a directory path is accepted when a custom client is passed).</li>
-<li>Parses <code>time_period</code> into a <code>_TemporalGrouper</code> (see <code>_temporal.py</code>). Supported values include <code>None</code>, <code>PTnH</code>, and the existing date durations.</li>
-<li>Converts <code>bbox</code> from the target CRS to EPSG:4326 using <code>pyproj.Transformer</code>.</li>
-<li>Calls <code>_inspect_first_item()</code>: queries the parquet source via <code>duckdb_client.search(..., max_items=1)</code> to fetch one representative item, resolves preferred data assets (or caller-requested <code>bands=</code>), and opens one COG per requested band concurrently through <code>run_on_loop(...)</code>.</li>
-<li>Resolves the output contract from that inspection result:</li>
-<li><code>bands</code>: explicit <code>bands=</code> wins, otherwise the inspected preferred-band order</li>
-<li><code>dtype</code>: explicit <code>dtype=</code> wins unless it is an integer paired with a float-only mosaic method; otherwise lazycogs infers from <code>_promote_dtypes(...)</code> and auto-promotes integer inference to <code>float32</code> for float-only methods</li>
-<li><code>nodata</code>: explicit <code>nodata=</code> wins, otherwise <code>_resolve_output_nodata(...)</code></li>
-<li>float-only mosaic methods (<code>MeanMethod</code>, <code>MedianMethod</code>, <code>StdevMethod</code>) fail early only when the caller explicitly forces an integer dtype</li>
-<li>inferred <code>dtype</code> and <code>nodata</code> are runtime-validated during chunk reads so later heterogeneous assets fail loudly instead of truncating or silently remapping nodata</li>
-<li>Calls <code>_build_time_steps()</code>: queries the parquet source via <code>duckdb_client.search_to_arrow(...)</code> to obtain an Arrow table containing only the <code>datetime</code> and <code>start_datetime</code> columns (plus any filter/sort fields). Extracts timestamps from the Arrow columns without Python-level dict walking, buckets them with the <code>_TemporalGrouper</code>, deduplicates, and returns sorted <code>_TimeStep</code> objects. Each <code>_TimeStep</code> carries the xarray coordinate and the exact rustac <code>datetime=</code> predicate; callers do not reconstruct predicates from coordinates. Only groups with at least one item produce a time step.</li>
-<li>Calls <code>compute_output_grid()</code> to get the output affine transform and dimensions (width, height). No eager coordinate arrays are produced.</li>
-<li>Creates a single <code>MultiBandStacBackendArray</code> (a dataclass) with shape <code>(band, time, y, x)</code> holding all the parameters needed to materialise any chunk later, then wraps it in one <code>xarray.core.indexing.LazilyIndexedArray</code>. This avoids <code>xr.concat</code> (used internally by <code>ds.to_array()</code>), which would eagerly load <code>LazilyIndexedArray</code>-backed objects.</li>
-<li>Uses <code>rasterix.RasterIndex</code> for spatial indexing, but materialises the x/y coordinate variables eagerly as numpy arrays so chunked scalar spatial selections compute reliably.</li>
-<li>Constructs the <code>xr.DataArray</code> directly from the 4-D variable. If <code>chunks</code> is provided, calls <code>.chunk(chunks)</code> to convert to a dask-backed array; otherwise the <code>LazilyIndexedArray</code> remains in play so narrow slices (e.g. a single pixel) translate to minimal I/O. Spatial metadata is serialized for both GeoZarr-style consumers and GDAL/rioxarray consumers: <code>spatial:transform</code> stays in affine coefficient order, while <code>spatial_ref.attrs["GeoTransform"]</code> uses GDAL geotransform order. When output nodata is known, the returned array sets <code>da.attrs["_FillValue"]</code> without duplicating it in <code>da.encoding</code>, which keeps rioxarray export paths compatible with xarray CF encoding. When unknown, no <code>_FillValue</code> metadata is attached.</li>
-<li>Keeps lazy runtime state on the backing array rather than in <code>da.attrs</code>. This lets xarray operations such as <code>sortby()</code> and deep copies clone metadata safely without trying to pickle live objects like <code>DuckdbClient</code>.</li>
+<li>Resolve the DuckDB client and validate the source path contract.</li>
+<li>Parse <code>time_period</code> into a temporal grouper.</li>
+<li>Transform the requested bbox into EPSG:4326 for STAC spatial filtering.</li>
+<li>Query one representative item and open one COG per selected band to infer the output dtype/nodata contract.</li>
+<li>Query Arrow-backed datetime columns and build sorted <code>_TimeStep</code> objects. Each time step carries the exact <code>rustac</code> <code>datetime=</code> predicate used later during reads.</li>
+<li>Compute the output grid.</li>
+<li>Build one <code>MultiBandStacBackendArray</code> with shape <code>(band, time, y, x)</code> and wrap it in an xarray <code>LazilyIndexedArray</code>, or chunk it only when <code>chunks</code> is explicitly provided.</li>
+<li>Attach spatial coordinates and metadata. <code>spatial:transform</code> uses affine coefficient order; <code>spatial_ref.attrs["GeoTransform"]</code> uses GDAL geotransform order.</li>
 </ol>
-<h2 id="explain-dry-run-read-estimator">Explain: dry-run read estimator<a class="headerlink" href="#explain-dry-run-read-estimator" title="Permanent link">&para;</a></h2>
-<p><code>da.lazycogs.explain()</code> (registered in <code>_explain.py</code> as an xarray accessor) provides an <code>EXPLAIN ANALYZE</code>-style dry run. It issues one DuckDB spatial query per <code>(time step, spatial chunk)</code> combination — not per band, because the query result is band-independent. Query results are fanned across all active bands in Python, and execution stops before any pixel I/O. All <code>(time × spatial tile)</code> queries are dispatched concurrently via <code>asyncio.gather</code>, while DuckDB submission is routed through the same small bounded helper used by backend reads.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">plan</span> <span class="o">=</span> <span class="n">da</span><span class="o">.</span><span class="n">lazycogs</span><span class="o">.</span><span class="n">explain</span><span class="p">()</span>          <span class="c1"># DuckDB queries only, no pixel reads</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">plan</span> <span class="o">=</span> <span class="n">da</span><span class="o">.</span><span class="n">lazycogs</span><span class="o">.</span><span class="n">explain</span><span class="p">(</span><span class="n">fetch_headers</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>  <span class="c1"># also reads COG IFD headers</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="nb">print</span><span class="p">(</span><span class="n">plan</span><span class="o">.</span><span class="n">summary</span><span class="p">())</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">df</span> <span class="o">=</span> <span class="n">plan</span><span class="o">.</span><span class="n">to_dataframe</span><span class="p">()</span>
-</code></pre></div>
-<p>The accessor discovers the <code>MultiBandStacBackendArray</code> from the DataArray's lazy backing array and respects the current extent, indexing, and chunk sizes, so explaining a sliced or reordered DataArray (<code>da.isel(time=0).lazycogs.explain()</code> or <code>da.sortby("time").lazycogs.explain()</code>) queries only the reads needed for that view. If the array has been materialized or transformed into a different backing array, <code>explain()</code> raises and asks for a still-lazy lazycogs array.</p>
-<p><code>ExplainPlan</code> exposes:
-- <code>total_chunk_reads</code> — number of <code>(band, time, spatial tile)</code> combinations
-- <code>total_cog_reads</code> — total COG files matched across all chunks
-- <code>empty_chunk_count</code> — chunks with no matching COG files (useful for diagnosing sparse series)
-- <code>summary()</code> — multi-line human-readable report with COG-read distribution histogram
-- <code>to_dataframe()</code> — one row per <code>(chunk, COG file)</code> for further analysis in pandas</p>
-<p>With <code>fetch_headers=True</code>, each matched COG header is fetched (a small HTTP range request to read the IFD block) and <code>CogRead.overview_level</code>, <code>window_col_off</code>, <code>window_row_off</code>, <code>window_width</code>, and <code>window_height</code> are populated. This path shares <code>_chunk_reader._open_and_window()</code> with real reads through a lightweight window context, but does not construct the full read context or resolve dtype/nodata pixel contracts.</p>
-<h2 id="phase-1-in-detail">Phase 1 in detail<a class="headerlink" href="#phase-1-in-detail" title="Permanent link">&para;</a></h2>
-<p><code>MultiBandStacBackendArray.__getitem__</code> in <code>_backend.py</code>:</p>
+<p>No pixel windows are read at open time. Runtime state such as the DuckDB client and store is kept on the backend array, not in <code>DataArray.attrs</code>, so xarray copies do not try to pickle live resources.</p>
+<h3 id="phase-1-compute-time">Phase 1: compute time<a class="headerlink" href="#phase-1-compute-time" title="Permanent link">&para;</a></h3>
+<p>When xarray asks the backend array for data, <code>MultiBandStacBackendArray.__getitem__</code> resolves the <code>(band, time, y, x)</code> key into a concrete chunk:</p>
 <ol>
-<li>xarray calls <code>__getitem__</code> with an <code>ExplicitIndexer</code>. The call is forwarded through <code>indexing.explicit_indexing_adapter</code> to <code>_sync_getitem</code>, which calls <code>run_on_loop(self._async_getitem(key))</code> with a basic <code>(int | slice, int | slice, int | slice, int | slice)</code> key for <code>(band, time, y, x)</code>.
-   When the caller is already inside an async event loop (for example, an interactive map running in Jupyter), xarray can dispatch reads via <code>async_getitem</code> instead. <code>async_getitem</code> calls <code>indexing.async_explicit_indexing_adapter</code> with the same <code>_async_getitem</code> method, so the sync and async paths share a single source of truth and produce identical results. The only difference is that <code>async_getitem</code> stays on the caller's loop and avoids the background-thread overhead of <code>run_on_loop</code>.</li>
-<li>The band key is resolved to a list of integer band indices. If it was an integer the band dimension is squeezed in the output.</li>
-<li>The time key is resolved to a list of integer positions. Integer keys squeeze the time dimension.</li>
-<li>Integer y or x keys are normalised to size-1 slices; the dimension is squeezed before returning.</li>
-<li>Physical top-down y-indices are used directly; no conversion is needed.</li>
-<li>The chunk's affine transform is derived: <code>chunk_affine = dst_affine * Affine.translation(x_start, y_start_physical)</code>.</li>
-<li>The chunk's EPSG:4326 bounding box is computed from the four corners of the chunk using <code>_dst_to_4326</code>, a <code>pyproj.Transformer</code> cached on the <code>MultiBandStacBackendArray</code> instance at construction time (or <code>None</code> when <code>dst_crs</code> is already EPSG:4326).</li>
-<li><code>_async_getitem</code> drives all time steps via <code>await _read_chunk_all_dates(...)</code>. Inside <code>_read_chunk_all_dates</code>, an <code>asyncio.gather</code> fans out one <code>_run_one_date</code> coroutine per time step, so DuckDB queries, empty-timestep short-circuits, and read orchestration overlap across dates, instants, or hour windows:
-   a. Each <code>_run_one_date</code> calls <code>await _search_items_async(plan, time_step)</code>, which dispatches the DuckDB query with <code>datetime=time_step.datetime_filter</code> through a shared bounded <code>run_duckdb(...)</code> helper onto the DuckDB executor. DuckDB serialises access internally, so concurrent queries on the same client are safe but not parallel. Empty results short-circuit to nodata immediately.
-   b. <code>_read_chunk_all_dates(...)</code> creates one <code>asyncio.Semaphore(max_concurrent_reads)</code> for the chunk materialisation and passes it into every <code>read_chunk_async(...)</code> call. This means item-read admission is shared across all selected time steps in that chunk instead of reset per time step.
-   c. <code>read_chunk_async(...)</code> materialises all selected bands for a time step. Band-level COG opens and window reads inside one admitted item read may still run concurrently.</li>
-<li>The result is returned in the same top-down orientation as the COG data.</li>
+<li>Resolve band and time indices, including dimension squeezes for scalar keys.</li>
+<li>Convert scalar y/x selections into size-1 slices and compute the chunk affine transform.</li>
+<li>Compute the chunk bbox in EPSG:4326.</li>
+<li>Run one DuckDB spatial query per selected time step.</li>
+<li>For each non-empty time step, call <code>read_chunk_async()</code> to read all selected bands from the matching COGs and feed them to the mosaic method.</li>
+<li>Return data in top-down raster order.</li>
 </ol>
+<p>The sync path submits this coroutine to the shared lazycogs event loop via <code>run_on_loop()</code>. The async path uses xarray's async indexing adapter and stays on the caller's loop.</p>
 <h2 id="grid-and-coordinate-convention">Grid and coordinate convention<a class="headerlink" href="#grid-and-coordinate-convention" title="Permanent link">&para;</a></h2>
-<p><code>compute_output_grid()</code> in <code>_grid.py</code> produces:</p>
-<ul>
-<li>An affine transform with origin at the top-left corner of the top-left pixel and a negative y-scale (standard north-up raster convention).</li>
-<li>x-coordinates and y-coordinates as 1-D arrays of pixel-centre values, with y descending (north to south) to match the standard raster convention used by GDAL, <code>odc-stac</code>, and <code>rioxarray</code>.</li>
-</ul>
-<p>The y coordinates are derived directly from the affine transform: <code>y[i] = f + e * (0.5 + i)</code>. Because <code>e &lt; 0</code>, <code>y[0]</code> is the northernmost pixel centre and the array is strictly decreasing. Spatial selection uses <code>sel(y=slice(north, south))</code> (high to low).</p>
-<p>A <code>rasterix.RasterIndex</code> is attached to every DataArray returned by <code>open()</code>. The index provides CRS discoverability via <code>da.proj.crs</code> and enables spatial alignment with other RasterIndex-backed arrays. The x/y coordinate variables themselves are still materialised eagerly from that index so operations like <code>da.chunk(...).sel(x=..., y=..., method="nearest").compute()</code> keep scalar spatial coordinates as true scalars instead of length-1 arrays.</p>
-<h2 id="per-chunk-read-and-resample-pipeline">Per-chunk read and resample pipeline<a class="headerlink" href="#per-chunk-read-and-resample-pipeline" title="Permanent link">&para;</a></h2>
-<p>Each call to <code>_read_item_band()</code> in <code>_chunk_reader.py</code> first validates the source asset against the inferred output contract, then follows a four-step pipeline to turn a remote COG into a correctly-sized, correctly-projected numpy array for one destination chunk. Header/window helpers consume the smaller <code>_WindowContext</code>; <code>_ChunkContext</code> extends it with read-only fields such as nodata, output dtype, explicitness flags, and the warp cache.</p>
-<h3 id="1-overview-selection">1. Overview selection<a class="headerlink" href="#1-overview-selection" title="Permanent link">&para;</a></h3>
-<p>Before fetching any pixels, <code>_select_overview()</code> picks the right level of the COG's built-in pyramid. The target resolution is estimated in the source image's native CRS: if <code>dst_crs</code> differs from the COG's CRS, a 1-pixel offset at the chunk centre is transformed with pyproj to approximate the pixel size in source units. The overview list (ordered finest → coarsest) is walked to find the coarsest overview whose pixel size is still ≤ the target — i.e. the finest source data that avoids upsampling. This preserves as much spatial detail as the output scale warrants without reading unnecessarily fine data. If no overview satisfies the condition (target falls between native and the finest overview), or no overviews exist, full-resolution is used.</p>
-<p>This is the primary resampling control: the pyramid level is chosen to match the output resolution, so the reprojection step works on roughly the right amount of data.</p>
-<p><strong>Why we don't use the STAC projection extension.</strong> The <a href="https://github.com/stac-extensions/projection">projection extension</a> fields (<code>proj:epsg</code>, <code>proj:transform</code>, <code>proj:shape</code>) could theoretically substitute for the CRS, affine transform, and full-resolution dimensions read from the COG header. But overview structure — the per-level pixel sizes, transforms, and dimensions needed by <code>_select_overview()</code> — is not part of any STAC extension. We would still need <code>GeoTIFF.open()</code> to read the IFD chain to get that. Beyond overviews, the IFD also holds the tile index (byte offsets per tile per level), which is required to issue the actual range requests; there is no way to skip the header open regardless of how complete the STAC metadata is. Using projection extension fields would add conditional logic and trust questions (not all catalogs populate them correctly) for zero I/O savings.</p>
-<h3 id="2-source-window-computation">2. Source window computation<a class="headerlink" href="#2-source-window-computation" title="Permanent link">&para;</a></h3>
-<p>The destination chunk's bounding box (in <code>dst_crs</code>) is reprojected to the source CRS via pyproj. The inverse of the source affine transform maps those four corners to fractional pixel coordinates. <code>floor</code>/<code>ceil</code> and clamping to image bounds gives the <code>Window</code> that covers exactly the source pixels needed. Only that window is fetched from the COG, minimising I/O.</p>
-<p>If the chunk bbox falls entirely outside the source image after clamping, <code>_native_window()</code> returns <code>None</code> and the item is skipped.</p>
-<h3 id="3-tile-read">3. Tile read<a class="headerlink" href="#3-tile-read" title="Permanent link">&para;</a></h3>
-<p><code>await reader.read(window=window)</code> fetches the windowed pixel data from the selected overview level (or full-res). The result is a <code>(bands, window_h, window_w)</code> array in the source CRS/grid.</p>
-<h3 id="4-nearest-neighbor-reprojection">4. Nearest-neighbor reprojection<a class="headerlink" href="#4-nearest-neighbor-reprojection" title="Permanent link">&para;</a></h3>
-<p><code>reproject_array()</code> in <code>_reproject.py</code> warps the source tile onto the destination chunk grid without GDAL:</p>
+<p><code>compute_output_grid()</code> creates a north-up raster grid with an affine transform whose origin is the top-left corner of the top-left pixel and whose y scale is negative. Pixel-centre x coordinates increase west-to-east; y coordinates decrease north-to-south. Label-based y slicing therefore uses <code>sel(y=slice(north, south))</code>.</p>
+<p>A <code>rasterix.RasterIndex</code> is attached to every returned array for CRS discovery and spatial alignment. The x/y coordinate variables are materialised as eager numpy arrays so chunked scalar spatial selections remain scalars after compute.</p>
+<h2 id="per-chunk-read-pipeline">Per-chunk read pipeline<a class="headerlink" href="#per-chunk-read-pipeline" title="Permanent link">&para;</a></h2>
+<p>Each item-band read validates the source COG against the resolved output contract, then follows this pipeline:</p>
 <ol>
-<li>Build a meshgrid of destination pixel-centre coordinates.</li>
-<li>Transform all coordinates from <code>dst_crs</code> to <code>src_crs</code> in one vectorised <code>Transformer.transform()</code> call.</li>
-<li>Apply the inverse source affine transform to get fractional source pixel indices.</li>
-<li><code>np.floor</code> rounds to the nearest-neighbor sample; numpy fancy indexing populates the output array.</li>
-<li>Out-of-bounds pixels get the nodata fill value.</li>
+<li><strong>Overview selection.</strong> <code>_select_overview()</code> picks the coarsest overview whose pixel size is still no larger than the target pixel size in the source CRS. Full resolution is used when no overview avoids upsampling.</li>
+<li><strong>Source window computation.</strong> The destination chunk bbox is transformed to the source CRS, mapped through the inverse source affine, clamped to image bounds, and skipped if it does not overlap.</li>
+<li><strong>Tile read.</strong> <code>async-geotiff</code> reads the selected window from the chosen overview or full-resolution image.</li>
+<li><strong>Warp-map reprojection.</strong> <code>_apply_bands_with_warp_cache()</code> uses <code>compute_warp_map()</code> and <code>apply_warp_map()</code> to nearest-neighbor sample source pixels onto the destination chunk grid. The cache key is <code>(tuple(raster.transform), src_crs)</code> so bands or time steps with identical source geometry can reuse the same map.</li>
+<li><strong>Mosaic.</strong> <code>_drain_in_order()</code> feeds completed reads to the mosaic method in source order even though network reads may complete out of order.</li>
 </ol>
-<p>Nearest-neighbor is the only supported resampling method.</p>
-<h3 id="5-read-failures">5. Read failures<a class="headerlink" href="#5-read-failures" title="Permanent link">&para;</a></h3>
-<p><code>read_chunk_async()</code> schedules one task per item and drains them via <code>_drain_in_order()</code>, which feeds results to the per-band mosaic methods strictly in source order while tolerating out-of-order completion. Per-item exceptions are handled by an <code>_error</code> callback: dtype/nodata contract violations (<code>ValueError</code>) always propagate, since they indicate a configuration problem rather than a transient failure. All other exceptions — storage errors, timeouts, 429 rate-limit responses, etc. — are governed by <code>errors=</code>, threaded from <code>lazycogs.open()</code> through <code>_ChunkReadPlan</code> and <code>MultiBandStacBackendArray</code>:</p>
-<ul>
-<li><code>errors="raise"</code> (default): the failure is wrapped in <code>ChunkReadError</code> (carrying <code>item_id</code>, <code>bands</code>, and the original exception as <code>original</code>/<code>__cause__</code>) and raised, propagating out of <code>_drain_in_order</code>, <code>read_chunk_async</code>, <code>_run_one_date</code>, and <code>asyncio.gather</code> in <code>_read_chunk_all_dates</code> to the caller of <code>.compute()</code>/<code>.load()</code>.</li>
-<li><code>errors="ignore"</code>: the failure is logged as a warning via <code>_log_read_failure</code> and the item is treated as <code>None</code>, so its pixels keep the mosaic fill value. This was the original behaviour and can silently leave gaps in compute output.</li>
-</ul>
+<p>Nearest-neighbor is the only supported resampling method. The STAC projection extension cannot replace COG header reads because overview transforms, dimensions, and tile byte ranges still come from the COG IFD chain.</p>
+<p>Read failures are controlled by <code>errors=</code>. <code>errors="raise"</code> wraps non-contract failures in <code>ChunkReadError</code> with <code>item_id</code>, <code>bands</code>, and the original exception. <code>errors="ignore"</code> logs a warning and leaves the mosaic fill value for that item's pixels. Dtype and nodata contract violations always raise.</p>
+<h2 id="explain-plans">Explain plans<a class="headerlink" href="#explain-plans" title="Permanent link">&para;</a></h2>
+<p><code>da.lazycogs.explain()</code> discovers the underlying <code>MultiBandStacBackendArray</code> from a still-lazy DataArray and runs the same DuckDB spatial queries needed for the current view. It issues one query per <code>(time step, spatial tile)</code> combination and fans those results across active bands in Python. It stops before pixel I/O.</p>
+<p>With <code>fetch_headers=True</code>, explain also opens COG headers and populates <code>CogRead.overview_level</code>, window offsets, and window sizes. That path uses <code>_chunk_reader._open_and_window()</code> with a lightweight <code>_WindowContext</code>, shared with real reads, without constructing the full pixel-read context.</p>
 <h2 id="concurrency-model">Concurrency model<a class="headerlink" href="#concurrency-model" title="Permanent link">&para;</a></h2>
-<p>There are two load-bearing concurrency layers in a chunk read, plus dask as an orthogonal scheduler.</p>
-<p><strong>Dask (optional, chunk level).</strong> When a dask-backed DataArray is computed, dask dispatches chunk tasks to worker threads. Each worker thread calls <code>_sync_getitem()</code> in <code>_backend.py</code>, which uses <code>run_on_loop(_async_getitem(...))</code> to submit the chunk read to lazycogs' shared persistent background loop. Dask controls how many chunk tasks run at once; it does not create extra lazycogs event loops.</p>
-<p><strong>One shared asyncio loop (I/O fan-out).</strong> A single background event loop is created lazily and reused for every sync caller. Startup is only considered ready once that loop is actually running, so first-use sync bridge calls do not depend on thread scheduling luck. Inside <code>_async_getitem</code>, <code>asyncio.gather</code> fans out one <code>_run_one_date</code> coroutine per requested time step. <code>_read_chunk_all_dates</code> creates one <code>asyncio.Semaphore(max_concurrent_reads)</code> for the whole chunk materialisation and shares it with every <code>read_chunk_async</code> call, so item reads are admitted across all selected time steps under one per-chunk limit. COG header reads and tile fetches from <code>async-geotiff</code> are all awaitable, so the loop multiplexes network I/O without blocking. This is not a raw object-store request-rate limit: one admitted item read can still open/read multiple band COGs concurrently, and each COG operation can issue multiple range requests or retries underneath. DuckDB work never runs on the loop thread: <code>_search_items_async</code> and <code>_explain_async</code> both route queries through <code>run_duckdb(...)</code>, a small internal helper that applies a private submission bound before dispatching onto the DuckDB executor. The executor is still bounded (<code>max_workers=1</code> today), so DuckDB yields the event loop but still matches the effective single-connection serialization of the current client model. The current local benchmark fixture keeps DuckDB well below the U4 threshold for a separate client pool (1.9% of per-date chunk wall time on a small-bbox / many-time-step workload, 0.2% on a large-bbox / few-time-step workload), so the single-worker executor remains the intended design for now. That same prepared benchmark dataset also backs offline regression coverage in <code>tests/benchmarks/</code>, which keeps dtype/nodata contract tests off the network while exercising real local COGs.</p>
-<p><strong>One bounded reprojection thread pool (CPU work).</strong> <code>_apply_bands_with_warp_cache</code> is synchronous CPU-bound work that processes all bands for one item together. <code>_read_item_band</code> dispatches it via <code>loop.run_in_executor(get_reproject_pool(), ...)</code>, so the event loop stays free while reprojections run on a shared bounded thread pool. The default bound is <code>min(os.cpu_count() or 1, 4)</code>, configurable before first use via <code>LAZYCOGS_REPROJECT_WORKERS</code>. That environment variable is read once when the pool is first created; later changes are ignored. The <code>warp_cache</code> is shared across coroutines; <code>compute_warp_map</code> is deterministic, so duplicate concurrent writes are safe.</p>
-<p><strong>Why threads, not a process pool.</strong> <code>pyproj.Transformer.transform()</code> and numpy's fancy-indexing both release the GIL during their heavy inner loops. Threads therefore give real CPU parallelism here without the process-spawn and array-pickling overhead of a <code>ProcessPoolExecutor</code>.</p>
-<p><strong>Why reprojection is memory-bandwidth-bound, not compute-bound.</strong> <code>compute_warp_map</code> builds two meshgrids the size of the output chunk, transforms all coordinates in one vectorised call, and produces large index arrays. <code>apply_warp_map</code> samples the source array with random-access fancy indexing (<code>out[:, valid] = data[:, row_idx[valid], col_idx[valid]]</code>), which produces near-constant cache misses. Both phases are dominated by memory latency and bandwidth rather than arithmetic, so pushing far past 4 threads usually hurts more than it helps.</p>
-<p><strong>Persistent background loop.</strong> The loop stays alive for the life of the process because <code>async-geotiff</code> and <code>obstore</code> may fire callbacks after the awaited coroutine returns; a fresh per-call loop would tear down before those callbacks land. Because there is now one shared lazycogs loop, loop-bound resources can be constructed on the right loop with <code>lazycogs.run_on_loop(...)</code>. This replaces the old per-thread-loop credential footgun: async credential providers that need an <code>aiohttp</code> session should build that session on the lazycogs loop rather than on an arbitrary caller loop.</p>
-<h2 id="chunking-strategy-and-throughput-tradeoffs">Chunking strategy and throughput tradeoffs<a class="headerlink" href="#chunking-strategy-and-throughput-tradeoffs" title="Permanent link">&para;</a></h2>
-<p>The <code>chunks</code> argument to <code>open()</code> controls whether the returned DataArray is backed by dask. Choosing the wrong chunking strategy — particularly adding spatial chunks — can significantly reduce throughput compared to leaving the array unchunked.</p>
-<h3 id="why-spatial-chunks-hurt">Why spatial chunks hurt<a class="headerlink" href="#why-spatial-chunks-hurt" title="Permanent link">&para;</a></h3>
-<p>Without spatial chunks, xarray calls <code>MultiBandStacBackendArray.__getitem__</code> once per time step for the full spatial extent. That single call fires one <code>asyncio.gather</code> that reads every overlapping COG for that time step concurrently. This is the maximum possible I/O parallelism for a time step: all tile fetches are in flight simultaneously in a single event loop.</p>
-<p>With spatial chunks (e.g. <code>chunks={"x": 512, "y": 512}</code>), dask splits the extent into N tasks. Each task:</p>
+<p>lazycogs uses three layers of concurrency:</p>
 <ul>
-<li>Runs a separate DuckDB query (via <code>_search_items_async</code> on the bounded DuckDB executor) to find overlapping items.</li>
-<li>Fires a smaller <code>asyncio.gather</code> over only the COGs that overlap its sub-region.</li>
+<li><strong>Dask chunk scheduling</strong> is optional. If the array is dask-backed, dask decides how many chunk tasks run at once.</li>
+<li><strong>One shared asyncio loop</strong> handles COG header reads, window reads, per-time-step fan-out, and the sync bridge. The loop is persistent for the lifetime of the process because async storage libraries can retain loop-bound resources and callbacks after an awaited read returns.</li>
+<li><strong>Bounded executors</strong> keep blocking work off the event loop. DuckDB calls go through <code>run_duckdb()</code> and a single-worker executor. CPU-heavy reprojection work runs in a shared thread pool sized by <code>LAZYCOGS_REPROJECT_WORKERS</code> before first use, defaulting to <code>min(os.cpu_count() or 1, 4)</code>.</li>
 </ul>
-<p>The total number of COG reads is the same, but they are spread across N smaller gathers rather than one large one. Dask workers do provide some task-level parallelism, but the overhead of N DuckDB queries and N smaller event loop gathers typically outweighs the benefit, especially for small chunk sizes. A COG that spans multiple spatial chunks is also opened once per overlapping chunk rather than once per time step.</p>
-<p>The async layer already handles spatial I/O concurrency. Dask spatial chunks add overhead without adding concurrency.</p>
-<h3 id="where-dask-helps">Where dask helps<a class="headerlink" href="#where-dask-helps" title="Permanent link">&para;</a></h3>
-<p><strong>The time dimension.</strong> Without dask, <code>_async_getitem()</code> already parallelises all time steps concurrently within a single chunk read via <code>asyncio.gather</code>. Dask adds a second level of time parallelism when the array has more time steps than fit in one chunk: <code>chunks={"time": N}</code> lets dask run multiple chunks in parallel across worker threads, each chunk running its own internal gather. For most use cases without dask, the built-in time-step parallelism is sufficient and avoids dask scheduling overhead entirely.</p>
-<p><strong>Band dimension chunking does not help.</strong> Within a single time step, all bands are read together by <code>_read_item_bands</code>. Splitting bands into separate dask tasks (<code>chunks={"band": 1}</code>) creates the same per-task overhead as spatial chunks (separate DuckDB queries and gather orchestration) without a meaningful parallelism benefit. Keep all bands in a single chunk.</p>
-<p><strong>Memory pressure</strong> is the other legitimate reason to add spatial chunks. If the full array does not fit in memory, spatial chunking limits how much is materialised at once even if it costs throughput.</p>
-<h3 id="recommended-defaults">Recommended defaults<a class="headerlink" href="#recommended-defaults" title="Permanent link">&para;</a></h3>
+<p>Threads are used for reprojection because <code>pyproj.Transformer.transform()</code> and numpy's indexing kernels release the GIL during heavy work, avoiding process-pool serialization and array-pickling overhead. <code>compute_warp_map()</code> and <code>apply_warp_map()</code> are usually memory-bandwidth-bound, so increasing the thread count far beyond the default often hurts more than it helps.</p>
+<h2 id="chunking-strategy">Chunking strategy<a class="headerlink" href="#chunking-strategy" title="Permanent link">&para;</a></h2>
+<p>The async read layer already fans out COG I/O within one chunk. Spatial dask chunks add more DuckDB queries, more COG opens, and more smaller gathers. Use spatial chunks only when the full array cannot fit in memory, and make them as large as memory allows.</p>
+<p>Recommended defaults:</p>
 <table>
 <thead>
 <tr>
@@ -1896,171 +1600,65 @@
 <tbody>
 <tr>
 <td>Maximum throughput, array fits in memory</td>
-<td>omit <code>chunks</code> (or <code>chunks={}</code>)</td>
+<td>omit <code>chunks</code> or pass <code>chunks={}</code></td>
 </tr>
 <tr>
-<td>Array too large to fit in memory</td>
-<td><code>{"time": 1, "x": N, "y": N}</code> with N as large as memory allows</td>
+<td>Array too large for memory</td>
+<td><code>{"time": 1, "x": N, "y": N}</code> with large spatial chunks</td>
 </tr>
 </tbody>
 </table>
-<p>When spatial chunks are necessary for memory reasons, making them as large as possible minimises per-chunk overhead and keeps the <code>asyncio.gather</code> fan-out wide. An alternative to adding spatial chunks is reducing <code>max_concurrent_reads</code> on <code>open()</code>: this limits peak in-flight item reads per chunk, shared across all selected timesteps, without the overhead of smaller dask tasks or additional DuckDB queries.</p>
+<p>Band chunking does not help because all selected bands are read together per item. Time chunking can help when dask should run multiple time chunks in parallel, but non-dask reads already parallelise selected time steps inside one event loop gather.</p>
 <h2 id="temporal-grouping">Temporal grouping<a class="headerlink" href="#temporal-grouping" title="Permanent link">&para;</a></h2>
-<p><code>_temporal.py</code> defines the <code>_TemporalGrouper</code> protocol, the frozen <code>_TimeStep</code> model, and the concrete implementations:</p>
+<p><code>_temporal.py</code> converts <code>time_period</code> into <code>_TimeStep</code> objects. <code>_TimeStep.coord</code> is the xarray coordinate; <code>_TimeStep.datetime_filter</code> is passed directly to <code>rustac</code> during chunk reads.</p>
 <table>
 <thead>
 <tr>
-<th>Class</th>
 <th><code>time_period</code></th>
-<th>Bucket boundary</th>
+<th>Grouping</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>_ExactTimestampGrouper</code></td>
 <td><code>None</code></td>
-<td>Unique normalized UTC timestamp</td>
+<td>unique normalized timestamp</td>
 </tr>
 <tr>
-<td><code>_HourGrouper</code></td>
 <td><code>PTnH</code></td>
-<td>Fixed hour windows aligned to 2000-01-01T00:00:00Z</td>
+<td>fixed hour windows aligned to 2000-01-01T00:00:00Z</td>
 </tr>
 <tr>
-<td><code>_DayGrouper</code></td>
 <td><code>P1D</code></td>
-<td>Calendar day</td>
+<td>calendar day</td>
 </tr>
 <tr>
-<td><code>_WeekGrouper</code></td>
 <td><code>P1W</code></td>
-<td>ISO 8601 calendar week (Monday anchor)</td>
+<td>ISO calendar week</td>
 </tr>
 <tr>
-<td><code>_MonthGrouper</code></td>
 <td><code>P1M</code></td>
-<td>Calendar month</td>
+<td>calendar month</td>
 </tr>
 <tr>
-<td><code>_YearGrouper</code></td>
 <td><code>P1Y</code></td>
-<td>Calendar year</td>
+<td>calendar year</td>
 </tr>
 <tr>
-<td><code>_FixedDayGrouper</code></td>
-<td><code>PnD</code> (n&gt;1) or <code>PnW</code> (n&gt;1)</td>
-<td>Fixed-length windows aligned to 2000-01-01</td>
+<td><code>PnD</code> / <code>PnW</code> where n &gt; 1</td>
+<td>fixed day windows aligned to 2000-01-01</td>
 </tr>
 </tbody>
 </table>
-<p>Each grouper provides <code>group_key()</code>, <code>datetime_filter()</code>, <code>to_datetime64()</code>, and <code>time_step()</code>. <code>_TimeStep.coord</code> is the xarray time coordinate; <code>_TimeStep.datetime_filter</code> is the only value passed to rustac's <code>datetime=</code> parameter at read time. Day-or-coarser groupers keep <code>datetime64[D]</code> coordinates. Exact grouping uses <code>datetime64[ns]</code> coordinates and normalized UTC timestamp predicates. Hour grouping uses <code>datetime64[s]</code> coordinates and closed second-precision ranges such as <code>2025-01-01T00:00:00Z/2025-01-01T00:59:59Z</code>.</p>
-<p>Exact and hourly grouping reject bare dates because <code>YYYY-MM-DD</code> is a day-wide rustac predicate, not an exact instant. First-pass sub-daily support is limited to positive integer hour windows; arbitrary ISO 8601 durations, interval semantics based on <code>end_datetime</code>, and item-identity grouping are intentionally out of scope.</p>
-<h2 id="mosaic-methods">Mosaic methods<a class="headerlink" href="#mosaic-methods" title="Permanent link">&para;</a></h2>
-<p><code>_mosaic_methods.py</code> contains pure-numpy pixel-selection strategies operating on <code>numpy.ma.MaskedArray</code>:</p>
-<ul>
-<li><code>FirstMethod</code>: Returns the first valid pixel seen. Short-circuits when all pixels are filled.</li>
-<li><code>HighestMethod</code> / <code>LowestMethod</code>: Tracks the running max / min across items.</li>
-<li><code>MeanMethod</code> / <code>MedianMethod</code> / <code>StdevMethod</code>: Accumulates all arrays and reduces at the end. These methods advertise <code>requires_float = True</code>, so <code>open()</code> auto-promotes inferred integer outputs to <code>float32</code> and rejects explicit integer <code>dtype=</code> overrides.</li>
-<li><code>CountMethod</code>: Counts valid (non-masked) observations per pixel.</li>
-</ul>
-<p>For nodata-aware methods, any pixels that remain masked after mosaicking are materialized with the resolved output nodata sentinel when one is known, or with <code>0</code> only when output nodata is unknown.</p>
-<p>These are copied from <code>rio-tiler</code> (MIT licence, zero GDAL imports) to avoid pulling in rasterio as a transitive dependency.</p>
-<h2 id="temporal-compositing">Temporal compositing<a class="headerlink" href="#temporal-compositing" title="Permanent link">&para;</a></h2>
-<p>Combining <code>time_period</code> with a mosaic method is the idiomatic way to produce
-temporal composites. Setting <code>time_period="P1W"</code> groups every STAC item within
-the same ISO calendar week into a single time step; <code>time_period="PT1H"</code> does
-the same for each hour; <code>time_period=None</code> keeps one step per unique normalized
-timestamp. When a chunk is read, <code>read_chunk_async</code> feeds all items for that
-time step to the mosaic method in order. With <code>FirstMethod</code> (the default),
-reading stops as soon as every output pixel has a valid (non-nodata) value —
-the remaining items in that time step are never fetched.</p>
-<p>Note that mosaic methods operate on nodata masks only; they have no awareness
-of semantic content like clouds. Pixels that are not masked as nodata in the
-source COG will be treated as valid regardless of what they represent. If
-cloud masking is desired, it must be applied to the source data before
-lazycogs reads it (for example, by using scene-level cloud-mask bands
-to set nodata at the COG level).</p>
-<p>This approach is substantially more efficient than applying temporal reductions
-as post-processing steps on a daily array. Operations like <code>ffill(dim="time")</code>
-or <code>max(dim="time")</code> over a dask-backed DataArray force xarray to materialise
-every time step before reducing, because each step's result depends on the
-previous one (for <code>ffill</code>) or all steps at once (for <code>max</code>). A weekly composite
-opened with <code>time_period="P1W"</code> reads at most one week's worth of COGs per
-output time step, with early exit when the mosaic is complete.</p>
-<p>The general rule: push compositing logic into <code>time_period</code> and <code>mosaic_method</code>
-at <code>open()</code> time. Reach for post-hoc xarray reductions only for operations that
-cannot be expressed as a per-time-step mosaic (for example, a multi-week
-mean that requires all weeks to be present before reducing).</p>
-<h2 id="store-caching-and-the-store-parameter">Store caching and the <code>store</code> parameter<a class="headerlink" href="#store-caching-and-the-store-parameter" title="Permanent link">&para;</a></h2>
-<p><code>lazycogs.open(..., store=...)</code> accepts the same store contract that <code>async-geotiff</code> consumes. In practice, any object that satisfies <code>async_geotiff.Store</code> can be passed through and will be forwarded unchanged to <code>GeoTIFF.open(...)</code>.</p>
-<p><code>resolve()</code> in <code>_store.py</code> remains the default convenience layer. When <code>store=None</code>, it defers to <code>obstore.store.from_url</code> for scheme detection — including the special-case HTTPS routing for <code>amazonaws.com</code>, <code>r2.cloudflarestorage.com</code>, and Azure hosts — rather than maintaining its own list of known object-store domains. The constructed obstore-backed store is cached in a shared process-local <code>dict[str, ObjectStore]</code> keyed by root URL (<code>scheme://netloc</code>) behind a small lock. This avoids repeated connection setup while keeping direct threaded callers safe.</p>
-<p>No credential defaults are applied; auto-resolved stores are constructed with obstore's own environment-based credential discovery (environment variables, instance metadata, config files, etc.). For public buckets that do not require signed requests, callers pass <code>skip_signature=True</code> explicitly. For authenticated access or any non-default configuration, callers may still construct an obstore <code>ObjectStore</code> and pass it via <code>store=</code>; <code>resolve()</code> then returns it unchanged and only extracts the object path from each HREF. No introspection is done on a user-supplied store — the caller is responsible for ensuring it satisfies the <code>GeoTIFF.open</code> read contract and is rooted at the same <code>scheme://netloc</code> the HREFs point to.</p>
-<p><code>store_for(href, *, asset=None, **kwargs)</code> is a public convenience factory that automates the default obstore path. It reads one sample item from the geoparquet file, extracts a data asset HREF, and calls <code>from_url</code> using obstore's environment-based credential discovery. If the item carries STAC Storage Extension metadata (v1.0.0 flat fields or v2.0.0 <code>storage:schemes</code>/<code>storage:refs</code>), <code>region</code> and <code>requester_pays</code> are also extracted and forwarded. Caller <code>kwargs</code> override all inferred values (e.g. <code>skip_signature=True</code> for public buckets). The returned store is not cached — the caller owns its lifetime and passes it to <code>open()</code> via <code>store=</code>.</p>
-<p>When the store root does not align with the URL structure of the asset HREFs — for example, an Azure Blob Storage store rooted at a container while the HREFs include the container name in the path — the caller can provide a <code>path_from_href</code> callable to <code>open()</code>. The callable takes the full HREF string and returns the object path to use with the store. When supplied, it replaces the default <code>urlparse</code>-based extraction in <code>resolve()</code>.</p>
-<h2 id="key-dependencies">Key dependencies<a class="headerlink" href="#key-dependencies" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Package</th>
-<th>Role</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>rustac[arrow]</code></td>
-<td>STAC search against local geoparquet files via DuckDB; Arrow output via <code>arro3-core</code></td>
-</tr>
-<tr>
-<td><code>arro3-core</code></td>
-<td>Zero-copy Arrow table output from DuckDB queries (installed via <code>rustac[arrow]</code>)</td>
-</tr>
-<tr>
-<td><code>async-geotiff</code></td>
-<td>Async COG header reads and windowed tile reads (Rust, no GDAL)</td>
-</tr>
-<tr>
-<td><code>obstore</code></td>
-<td>Cloud object store abstraction layer for async-geotiff</td>
-</tr>
-<tr>
-<td><code>pyproj</code></td>
-<td>CRS transforms: bbox reprojection, warp map generation</td>
-</tr>
-<tr>
-<td><code>xarray</code></td>
-<td>DataArray / Dataset assembly, <code>BackendArray</code> / <code>LazilyIndexedArray</code> protocol</td>
-</tr>
-<tr>
-<td><code>rasterix</code></td>
-<td>CRS-aware <code>RasterIndex</code> for spatial indexing and coordinate metadata</td>
-</tr>
-<tr>
-<td><code>xproj</code></td>
-<td>CRS accessor and alignment for xarray Flexible Indexes</td>
-</tr>
-<tr>
-<td><code>dask</code></td>
-<td>Parallel chunk execution</td>
-</tr>
-<tr>
-<td><code>affine</code></td>
-<td>Affine transform arithmetic</td>
-</tr>
-<tr>
-<td><code>numpy</code></td>
-<td>Array operations throughout</td>
-</tr>
-</tbody>
-</table>
-<h2 id="documentation">Documentation<a class="headerlink" href="#documentation" title="Permanent link">&para;</a></h2>
-<p>The documentation site is built with <a href="https://squidfunk.github.io/mkdocs-material/">mkdocs-material</a> and deployed to GitHub Pages via GitHub Actions (<code>.github/workflows/docs.yml</code>). It includes:</p>
-<ul>
-<li><strong>Introduction</strong>: rendered from <code>README.md</code> (symlinked as <code>docs/index.md</code>)</li>
-<li><strong>Examples</strong>: two Jupyter notebooks rendered by <code>mkdocs-jupyter</code> — <code>docs/demo_midwest_daily.ipynb</code> (daily Sentinel-2 array over the Midwest US) and <code>docs/demo_southwest_monthly.ipynb</code> (monthly low-cloud composite over the US Southwest)</li>
-<li><strong>API Reference</strong>: auto-generated from docstrings by <code>mkdocstrings[python]</code></li>
-<li><strong>Guides</strong>: focused docs for topics like STAC queries, chunking, cloud storage, and dtype/nodata handling</li>
-</ul>
-<p>To preview locally: <code>uv run mkdocs serve</code></p>
+<p>Exact and hourly grouping reject bare dates because <code>YYYY-MM-DD</code> is a day-wide <code>rustac</code> predicate, not an exact instant.</p>
+<h2 id="mosaic-and-temporal-compositing">Mosaic and temporal compositing<a class="headerlink" href="#mosaic-and-temporal-compositing" title="Permanent link">&para;</a></h2>
+<p>Mosaic methods operate on nodata masks only. <code>FirstMethod</code> returns the first valid pixel and can stop early once the output is filled. <code>HighestMethod</code>, <code>LowestMethod</code>, <code>MeanMethod</code>, <code>MedianMethod</code>, <code>StdevMethod</code>, and <code>CountMethod</code> implement other pure-numpy reductions. Float-only methods advertise <code>requires_float=True</code>; <code>open()</code> auto-promotes inferred integer outputs to <code>float32</code> and rejects explicit integer dtypes for those methods.</p>
+<p>Combining <code>time_period</code> with a mosaic method is the preferred way to build temporal composites. For example, <code>time_period="P1W"</code> groups all items in each ISO week into one output time step, and the mosaic method receives only that week's items. Post-hoc xarray reductions over a daily array usually require materialising every time step first.</p>
+<h2 id="store-resolution">Store resolution<a class="headerlink" href="#store-resolution" title="Permanent link">&para;</a></h2>
+<p><code>open(..., store=...)</code> forwards any caller-supplied <code>async_geotiff.Store</code> to <code>GeoTIFF.open()</code>. When <code>store=None</code>, <code>_store.resolve()</code> delegates scheme handling to <code>obstore.store.from_url()</code> and caches the resulting store per root URL (<code>scheme://netloc</code>) behind a lock.</p>
+<p>No credential defaults are applied by lazycogs. Obstore's own environment-based credential discovery is used. For public buckets, authenticated access, requester-pays buckets, custom endpoints, or unusual URL layouts, construct a store explicitly and pass it to <code>open()</code>. <code>path_from_href</code> can override object-path extraction when the store root does not match the asset URL structure.</p>
+<p><code>store_for()</code> is a public convenience factory that samples one STAC item from a geoparquet source, derives the data asset root URL, applies supported STAC Storage Extension hints, and returns a fresh uncached obstore <code>ObjectStore</code>.</p>
+<h2 id="documentation-surfaces">Documentation surfaces<a class="headerlink" href="#documentation-surfaces" title="Permanent link">&para;</a></h2>
+<p>Keep durable architecture invariants here. Keep user-facing usage in <code>README.md</code> and the guides. Keep benchmark numbers, one-off design rebuttals, and implementation-history notes in <code>dev-docs/</code> or the changelog rather than in this file.</p>
 
 
 

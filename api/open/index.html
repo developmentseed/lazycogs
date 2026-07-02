@@ -1517,9 +1517,8 @@ to :class:<code>~lazycogs._mosaic_methods.FirstMethod</code>.</p>
 (one step per unique normalized timestamp), <code>PnD</code> (days),
 <code>P1W</code> (ISO calendar week), <code>P1M</code> (calendar month), <code>P1Y</code>
 (calendar year), and <code>PTnH</code> (fixed hour windows). Defaults to
-<code>"P1D"</code> (one step per calendar day), which preserves the previous
-behaviour. Multi-day and multi-hour windows are aligned to an
-epoch of 2000-01-01.</p>
+<code>"P1D"</code> (one step per calendar day). Multi-day and multi-hour
+windows are aligned to an epoch of 2000-01-01.</p>
               </div>
             </td>
             <td>
@@ -1624,10 +1623,8 @@ da = lazycogs.open(
             <td>
               <div class="doc-md-description">
                 <p>Optional <code>DuckdbClient</code> instance.  When
-<code>None</code> (default), a plain <code>DuckdbClient()</code> is created,
-which is equivalent to the previous <code>rustac.search_sync</code>
-behaviour.  Pass a custom client to enable features such as
-hive-partitioned datasets::</p>
+<code>None</code> (default), a plain <code>DuckdbClient()</code> is created. Pass a
+custom client to enable features such as hive-partitioned datasets::</p>
 <div class="highlight"><pre><span></span><code>import rustac, lazycogs
 
 client = DuckdbClient(use_hive_partitioning=True)

@@ -2075,7 +2075,7 @@ loop-bound resources on that loop.</p>
             <td>
               <div class="doc-md-description">
                 <p>Whether COG headers were opened to populate overview
-and window fields on each :class:<code>ItemRead</code>.</p>
+and window fields on each :class:<code>CogRead</code>.</p>
               </div>
             </td>
           </tr>
@@ -2260,29 +2260,6 @@ all <code>None</code>.</p>
             <td>
               <div class="doc-md-description">
                 <p>metadata, and (when available) COG header details.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-<p><span class="doc-section-title">Raises:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="ImportError">ImportError</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>If <code>pandas</code> is not installed.</p>
               </div>
             </td>
           </tr>
@@ -2821,8 +2798,8 @@ level and pixel window would be read.</p>
             <td>
               <div class="doc-md-description">
                 <p>When <code>True</code>, open each matched COG header to
-populate :attr:<code>ItemRead.overview_level</code> and the window
-fields.  Requires network I/O.  Defaults to <code>False</code>.</p>
+populate :attr:<code>CogRead.overview_level</code> and the window fields.
+Requires network I/O.  Defaults to <code>False</code>.</p>
               </div>
             </td>
             <td>
