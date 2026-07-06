@@ -167,16 +167,26 @@ def _build_band_read_entry(
     effective_nodata: float | None,
 ) -> tuple[str, GeoTIFF, GeoTIFF | Overview, Window, float | None, CRS] | None:
     """Build the read plan entry for one band, or ``None`` if no overlap."""
-    src_crs = geotiff.crs
+    reader, window, _, _ = _plan_reader_window(geotiff, ctx)
+    if window is None:
+        return None
+    return (band, geotiff, reader, window, effective_nodata, geotiff.crs)
+
+
+def _plan_reader_window(
+    geotiff: GeoTIFF,
+    ctx: _WindowContext,
+) -> tuple[GeoTIFF | Overview, Window | None, float, Overview | None]:
+    """Pick a reader and source window for an opened GeoTIFF."""
     target_res_native, transformer = _target_res_and_transformer(
         ctx.chunk_affine,
         ctx.chunk_width,
         ctx.chunk_height,
         ctx.dst_crs,
-        src_crs,
+        geotiff.crs,
     )
     overview = _select_overview(geotiff, target_res_native)
-    reader = overview if overview is not None else geotiff
+    reader: GeoTIFF | Overview = overview if overview is not None else geotiff
     bbox_native = _chunk_bbox_native(
         ctx.chunk_affine,
         ctx.chunk_width,
@@ -184,9 +194,7 @@ def _build_band_read_entry(
         transformer,
     )
     window = _native_window(reader, bbox_native, reader.width, reader.height)
-    if window is None:
-        return None
-    return (band, geotiff, reader, window, effective_nodata, src_crs)
+    return reader, window, target_res_native, overview
 
 
 def _target_res_and_transformer(
@@ -343,14 +351,7 @@ async def _open_and_window(
     geotiff = await GeoTIFF.open(path, store=store)
     logger.debug("GeoTIFF.open %s took %.3fs", path, time.perf_counter() - t0)
 
-    target_res_native, t = _target_res_and_transformer(
-        ctx.chunk_affine,
-        ctx.chunk_width,
-        ctx.chunk_height,
-        ctx.dst_crs,
-        geotiff.crs,
-    )
-    overview = _select_overview(geotiff, target_res_native)
+    reader, window, target_res_native, overview = _plan_reader_window(geotiff, ctx)
     if overview is not None:
         logger.debug(
             "Selected overview level %d (res=%.2f) for target_res=%.2f on %s",
@@ -359,14 +360,6 @@ async def _open_and_window(
             target_res_native,
             path,
         )
-    reader: GeoTIFF | Overview = overview if overview is not None else geotiff
-    bbox_native = _chunk_bbox_native(
-        ctx.chunk_affine,
-        ctx.chunk_width,
-        ctx.chunk_height,
-        t,
-    )
-    window = _native_window(reader, bbox_native, reader.width, reader.height)
     return geotiff, reader, window, path
 
 

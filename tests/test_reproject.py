@@ -1,16 +1,11 @@
-"""Tests for _reproject: reproject_array, compute_warp_map, apply_warp_map."""
+"""Tests for _reproject: compute_warp_map and apply_warp_map."""
 
 import numpy as np
 import pytest
 from affine import Affine
 from pyproj import CRS
 
-from lazycogs._reproject import (
-    WarpMap,
-    apply_warp_map,
-    compute_warp_map,
-    reproject_array,
-)
+from lazycogs._reproject import WarpMap, apply_warp_map, compute_warp_map
 
 
 @pytest.fixture
@@ -27,11 +22,33 @@ def _make_transform(minx: float, maxy: float, res: float) -> Affine:
     return Affine(res, 0.0, minx, 0.0, -res, maxy)
 
 
+def _apply(
+    data: np.ndarray,
+    src_transform: Affine,
+    src_crs: CRS,
+    dst_transform: Affine,
+    dst_crs: CRS,
+    dst_width: int,
+    dst_height: int,
+    nodata: float | None = None,
+) -> np.ndarray:
+    """Compute then apply a warp map."""
+    warp_map = compute_warp_map(
+        src_transform,
+        src_crs,
+        dst_transform,
+        dst_crs,
+        dst_width,
+        dst_height,
+    )
+    return apply_warp_map(data, warp_map, nodata)
+
+
 def test_identity_same_crs_same_transform(wgs84):
     """Reprojecting to the identical grid returns the same values."""
     transform = _make_transform(0.0, 3.0, 1.0)
     data = np.arange(9, dtype=np.float32).reshape(1, 3, 3)
-    out = reproject_array(data, transform, wgs84, transform, wgs84, 3, 3)
+    out = _apply(data, transform, wgs84, transform, wgs84, 3, 3)
     np.testing.assert_array_equal(out, data)
 
 
@@ -40,7 +57,7 @@ def test_output_shape(wgs84):
     src_transform = _make_transform(0.0, 2.0, 1.0)
     dst_transform = _make_transform(0.0, 4.0, 2.0)
     data = np.ones((2, 2, 2), dtype=np.float32)
-    out = reproject_array(data, src_transform, wgs84, dst_transform, wgs84, 1, 2)
+    out = _apply(data, src_transform, wgs84, dst_transform, wgs84, 1, 2)
     assert out.shape == (2, 2, 1)
 
 
@@ -50,7 +67,7 @@ def test_out_of_bounds_pixels_get_nodata(wgs84):
     data = np.ones((1, 3, 3), dtype=np.float32)
     # Destination covers x=0..3, entirely outside source
     dst_transform = _make_transform(0.0, 3.0, 1.0)
-    out = reproject_array(
+    out = _apply(
         data,
         src_transform,
         wgs84,
@@ -68,7 +85,7 @@ def test_out_of_bounds_default_fill_is_zero(wgs84):
     src_transform = _make_transform(100.0, 100.0, 1.0)
     data = np.ones((1, 2, 2), dtype=np.float32)
     dst_transform = _make_transform(0.0, 2.0, 1.0)
-    out = reproject_array(data, src_transform, wgs84, dst_transform, wgs84, 2, 2)
+    out = _apply(data, src_transform, wgs84, dst_transform, wgs84, 2, 2)
     np.testing.assert_array_equal(out, 0.0)
 
 
@@ -77,7 +94,7 @@ def test_dtype_preserved(wgs84):
     transform = _make_transform(0.0, 2.0, 1.0)
     for dtype in (np.uint8, np.int16, np.float64):
         data = np.zeros((1, 2, 2), dtype=dtype)
-        out = reproject_array(data, transform, wgs84, transform, wgs84, 2, 2)
+        out = _apply(data, transform, wgs84, transform, wgs84, 2, 2)
         assert out.dtype == dtype
 
 
@@ -87,7 +104,7 @@ def test_multiband_preserved(wgs84):
     data = np.stack(
         [np.ones((2, 2), dtype=np.float32) * b for b in range(4)],
     )  # shape (4, 2, 2)
-    out = reproject_array(data, transform, wgs84, transform, wgs84, 2, 2)
+    out = _apply(data, transform, wgs84, transform, wgs84, 2, 2)
     assert out.shape == (4, 2, 2)
     for b in range(4):
         np.testing.assert_array_equal(out[b], b)
@@ -107,7 +124,7 @@ def test_cross_crs_reproject(wgs84, utm32n):
     # (which maps to roughly lon 9.0-9.14, lat 50.01-50.10)
     wgs84_transform = _make_transform(9.0, 50.1, 0.01)
 
-    out = reproject_array(
+    out = _apply(
         data,
         utm_transform,
         utm32n,
@@ -131,7 +148,7 @@ def test_partial_overlap_nodata(wgs84):
 
     # Destination covers x=2..6 — right half overlaps, left half does not
     dst_transform = _make_transform(2.0, 1.0, 1.0)
-    out = reproject_array(
+    out = _apply(
         data,
         src_transform,
         wgs84,
@@ -160,29 +177,19 @@ def test_compute_warp_map_returns_correct_shape(wgs84):
     assert wm.src_row_idx.shape == (3, 4)
 
 
-def test_apply_warp_map_matches_reproject_array(wgs84):
-    """apply_warp_map with a precomputed map matches reproject_array."""
-    src_transform = _make_transform(0.0, 3.0, 1.0)
-    dst_transform = _make_transform(0.0, 3.0, 1.0)
+def test_apply_warp_map_samples_source_pixels(wgs84):
+    """apply_warp_map samples source pixels selected by the warp map."""
+    transform = _make_transform(0.0, 3.0, 1.0)
     data = np.arange(9, dtype=np.float32).reshape(1, 3, 3)
 
-    wm = compute_warp_map(src_transform, wgs84, dst_transform, wgs84, 3, 3)
-    out_warp = apply_warp_map(data, wm, nodata=0.0)
-    out_reproject = reproject_array(
-        data,
-        src_transform,
-        wgs84,
-        dst_transform,
-        wgs84,
-        3,
-        3,
-        nodata=0.0,
-    )
-    np.testing.assert_array_equal(out_warp, out_reproject)
+    wm = compute_warp_map(transform, wgs84, transform, wgs84, 3, 3)
+    out = apply_warp_map(data, wm, nodata=0.0)
+
+    np.testing.assert_array_equal(out, data)
 
 
 def test_apply_warp_map_reused_across_bands(wgs84):
-    """A single WarpMap applied to two bands matches reproject_array per band."""
+    """A single WarpMap can be applied to two bands."""
     transform = _make_transform(0.0, 2.0, 1.0)
     band_a = np.full((1, 2, 2), 1.0, dtype=np.float32)
     band_b = np.full((1, 2, 2), 2.0, dtype=np.float32)
@@ -192,14 +199,8 @@ def test_apply_warp_map_reused_across_bands(wgs84):
     out_a = apply_warp_map(band_a, wm)
     out_b = apply_warp_map(band_b, wm)
 
-    np.testing.assert_array_equal(
-        out_a,
-        reproject_array(band_a, transform, wgs84, transform, wgs84, 2, 2),
-    )
-    np.testing.assert_array_equal(
-        out_b,
-        reproject_array(band_b, transform, wgs84, transform, wgs84, 2, 2),
-    )
+    np.testing.assert_array_equal(out_a, band_a)
+    np.testing.assert_array_equal(out_b, band_b)
 
 
 def test_apply_warp_map_different_src_dimensions(wgs84):

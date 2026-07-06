@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 from async_geotiff import GeoTIFF
-from pyproj import CRS, Transformer
+from pyproj import CRS
 from rasterix import RasterIndex
 from rustac import DuckdbClient
 from xarray import Coordinates, DataArray, Variable
@@ -21,6 +21,7 @@ from lazycogs._cql2 import _extract_filter_fields, _sortby_fields
 from lazycogs._executor import run_on_loop
 from lazycogs._grid import compute_output_grid
 from lazycogs._mosaic_methods import FirstMethod, MosaicMethodBase
+from lazycogs._spatial import bbox_to_4326
 from lazycogs._store import resolve
 from lazycogs._temporal import _TemporalGrouper, _TimeStep, grouper_from_period
 
@@ -674,16 +675,7 @@ def open(  # noqa: A001
 
     dst_crs = CRS.from_user_input(crs)
 
-    epsg_4326 = CRS.from_epsg(4326)
-    if dst_crs.equals(epsg_4326):
-        bbox_4326 = list(bbox)
-    else:
-        t = Transformer.from_crs(dst_crs, epsg_4326, always_xy=True)
-        xs, ys = t.transform(
-            [bbox[0], bbox[2], bbox[0], bbox[2]],
-            [bbox[1], bbox[1], bbox[3], bbox[3]],
-        )
-        bbox_4326 = [float(min(xs)), float(min(ys)), float(max(xs)), float(max(ys))]
+    bbox_4326 = bbox_to_4326(bbox, dst_crs)
 
     t0 = time.perf_counter()
     inspection = _inspect_first_item(

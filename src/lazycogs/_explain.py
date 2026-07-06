@@ -12,17 +12,18 @@ import numpy as np
 import xarray as xr
 from affine import Affine
 from pandas import DataFrame
-from pyproj import CRS, Transformer
 from xarray.core import indexing
 
 from lazycogs._backend import MultiBandStacBackendArray
 from lazycogs._chunk_reader import _open_and_window, _WindowContext
 from lazycogs._executor import run_duckdb, run_on_loop
+from lazycogs._spatial import affine_window_bbox_4326
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from async_geotiff import Store
+    from pyproj import CRS
 
 
 logger = logging.getLogger(__name__)
@@ -426,21 +427,7 @@ def _compute_chunk_bbox_4326(
     dst_crs: CRS,
 ) -> list[float]:
     """Return the bounding box of a chunk in EPSG:4326."""
-    minx = chunk_affine.c
-    maxy = chunk_affine.f
-    maxx = minx + chunk_width * chunk_affine.a
-    miny = maxy + chunk_height * chunk_affine.e  # e < 0
-
-    epsg_4326 = CRS.from_epsg(4326)
-    if dst_crs.equals(epsg_4326):
-        return [minx, miny, maxx, maxy]
-
-    transformer = Transformer.from_crs(dst_crs, epsg_4326, always_xy=True)
-    xs, ys = transformer.transform(
-        [minx, maxx, minx, maxx],
-        [maxy, maxy, miny, miny],
-    )
-    return [float(min(xs)), float(min(ys)), float(max(xs)), float(max(ys))]
+    return affine_window_bbox_4326(chunk_affine, chunk_width, chunk_height, dst_crs)
 
 
 def _iter_spatial_chunks(

@@ -169,88 +169,50 @@ class MeanMethod(MosaicMethodBase):
         return ma.filled(self._mosaic, self._fill_value)
 
 
-class MedianMethod(MosaicMethodBase):
+class _StackedMethod(MosaicMethodBase):
+    """Base for methods that reduce the full stack lazily in ``data``."""
+
+    requires_float = True
+
+    def __init__(self, *, fill_value: float = 0) -> None:
+        """Initialise the tile stack."""
+        super().__init__(fill_value=fill_value)
+        self._stack: list[ma.MaskedArray] = []
+
+    def feed(self, arr: ma.MaskedArray) -> None:
+        """Add ``arr`` to the stack and maintain the mask union for ``is_done``."""
+        self._stack.append(arr)
+        if self._mosaic is None:
+            self._mosaic = arr.copy()
+            return
+
+        cur_mask = ma.getmaskarray(self._mosaic)
+        new_mask = ma.getmaskarray(arr)
+        self._mosaic = ma.MaskedArray(self._mosaic.data, mask=cur_mask & new_mask)
+
+    def _stacked(self) -> ma.MaskedArray:
+        """Return the fed tiles as one masked stack."""
+        if not self._stack:
+            raise ValueError("No data has been fed to the mosaic method.")
+        return ma.array(self._stack)
+
+
+class MedianMethod(_StackedMethod):
     """Use the median of all valid pixel values across tiles."""
 
-    requires_float = True
-
-    def __init__(self, *, fill_value: float = 0) -> None:
-        """Initialise the tile stack."""
-        super().__init__(fill_value=fill_value)
-        self._stack: list[ma.MaskedArray] = []
-
-    def feed(self, arr: ma.MaskedArray) -> None:
-        """Add ``arr`` to the stack; maintain mask union for ``is_done``.
-
-        The median is computed lazily in ``data``.
-
-        Args:
-            arr: Masked array with shape ``(bands, height, width)``.
-
-        """
-        self._stack.append(arr)
-        if self._mosaic is None:
-            self._mosaic = arr.copy()
-        else:
-            cur_mask = ma.getmaskarray(self._mosaic)
-            new_mask = ma.getmaskarray(arr)
-            combined_mask = cur_mask & new_mask
-            self._mosaic = ma.MaskedArray(self._mosaic.data, mask=combined_mask)
-
     @property
     def data(self) -> np.ndarray:
-        """Return the pixel-wise median of all fed tiles.
-
-        Returns:
-            Numpy array with shape ``(bands, height, width)``.
-
-        """
-        if not self._stack:
-            raise ValueError("No data has been fed to the mosaic method.")
-        stacked = ma.array(self._stack)
-        return ma.filled(ma.median(stacked, axis=0), self._fill_value)
+        """Return the pixel-wise median of all fed tiles."""
+        return ma.filled(ma.median(self._stacked(), axis=0), self._fill_value)
 
 
-class StdevMethod(MosaicMethodBase):
+class StdevMethod(_StackedMethod):
     """Use the standard deviation of all valid pixel values across tiles."""
 
-    requires_float = True
-
-    def __init__(self, *, fill_value: float = 0) -> None:
-        """Initialise the tile stack."""
-        super().__init__(fill_value=fill_value)
-        self._stack: list[ma.MaskedArray] = []
-
-    def feed(self, arr: ma.MaskedArray) -> None:
-        """Add ``arr`` to the stack; maintain mask union for ``is_done``.
-
-        The standard deviation is computed lazily in ``data``.
-
-        Args:
-            arr: Masked array with shape ``(bands, height, width)``.
-
-        """
-        self._stack.append(arr)
-        if self._mosaic is None:
-            self._mosaic = arr.copy()
-        else:
-            cur_mask = ma.getmaskarray(self._mosaic)
-            new_mask = ma.getmaskarray(arr)
-            combined_mask = cur_mask & new_mask
-            self._mosaic = ma.MaskedArray(self._mosaic.data, mask=combined_mask)
-
     @property
     def data(self) -> np.ndarray:
-        """Return the pixel-wise standard deviation of all fed tiles.
-
-        Returns:
-            Numpy array with shape ``(bands, height, width)``.
-
-        """
-        if not self._stack:
-            raise ValueError("No data has been fed to the mosaic method.")
-        stacked = ma.array(self._stack)
-        return ma.filled(stacked.std(axis=0), self._fill_value)
+        """Return the pixel-wise standard deviation of all fed tiles."""
+        return ma.filled(self._stacked().std(axis=0), self._fill_value)
 
 
 class CountMethod(MosaicMethodBase):

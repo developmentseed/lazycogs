@@ -10,13 +10,13 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 from affine import Affine
-from pyproj import CRS, Transformer
 from xarray.backends.common import BackendArray
 from xarray.core import indexing
 
 from lazycogs._chunk_reader import read_chunk_async
 from lazycogs._cql2 import _extract_filter_fields, _sortby_fields
 from lazycogs._executor import run_duckdb, run_on_loop
+from lazycogs._spatial import affine_window_bbox_4326
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from async_geotiff import Store
+    from pyproj import CRS
     from rustac import DuckdbClient
 
     from lazycogs._mosaic_methods import MosaicMethodBase
@@ -289,25 +290,15 @@ class MultiBandStacBackendArray(BackendArray):
     path_from_href: Callable[[str], str] | None = field(default=None)
     errors: Literal["ignore", "raise"] = field(default="raise")
     shape: tuple[int, ...] = field(init=False)
-    _dst_to_4326: Transformer | None = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
-        """Derive shape and cache the dst→EPSG:4326 transformer."""
+        """Derive shape."""
         self.shape = (
             len(self.bands),
             len(self.time_steps),
             self.dst_height,
             self.dst_width,
         )
-        epsg_4326 = CRS.from_epsg(4326)
-        if self.dst_crs.equals(epsg_4326):
-            self._dst_to_4326: Transformer | None = None
-        else:
-            self._dst_to_4326 = Transformer.from_crs(
-                self.dst_crs,
-                epsg_4326,
-                always_xy=True,
-            )
 
     def __repr__(self) -> str:
         """Return a compact string representation."""
@@ -356,24 +347,12 @@ class MultiBandStacBackendArray(BackendArray):
 
         chunk_affine = self.dst_affine * Affine.translation(x_start, y_start)
 
-        minx = chunk_affine.c
-        maxy = chunk_affine.f
-        maxx = minx + chunk_width * chunk_affine.a
-        miny = maxy + chunk_height * chunk_affine.e  # e < 0
-
-        if self._dst_to_4326 is None:
-            chunk_bbox_4326 = [minx, miny, maxx, maxy]
-        else:
-            xs, ys = self._dst_to_4326.transform(
-                [minx, maxx, minx, maxx],
-                [maxy, maxy, miny, miny],
-            )
-            chunk_bbox_4326 = [
-                float(min(xs)),
-                float(min(ys)),
-                float(max(xs)),
-                float(max(ys)),
-            ]
+        chunk_bbox_4326 = affine_window_bbox_4326(
+            chunk_affine,
+            chunk_width,
+            chunk_height,
+            self.dst_crs,
+        )
 
         return _SpatialWindow(
             chunk_affine=chunk_affine,
