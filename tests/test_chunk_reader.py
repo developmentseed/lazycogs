@@ -19,6 +19,7 @@ from lazycogs._chunk_reader import (
     _drain_in_order,
     _native_window,
     _open_and_window,
+    _read_item_band,
     _select_overview,
     _WindowContext,
     read_chunk_async,
@@ -243,6 +244,63 @@ def test_open_and_window_accepts_chunk_context():
     assert window.width == 4
     assert window.height == 4
     assert path == "/tmp/red.tif"
+
+
+def test_read_path_uses_open_and_window_window():
+    """Read and explain header paths pick the same window for one asset."""
+    ctx = _ChunkContext(
+        chunk_affine=Affine(1.0, 0.0, 2.0, 0.0, -1.0, 6.0),
+        dst_crs=CRS.from_epsg(4326),
+        chunk_width=4,
+        chunk_height=4,
+        store=None,
+        path_fn=None,
+        nodata=None,
+        out_dtype=np.dtype("float32"),
+        dtype_was_explicit=False,
+        nodata_was_explicit=False,
+        warp_cache=None,
+    )
+    item = {"id": "item-0", "assets": {"red": {"href": "file:///tmp/red.tif"}}}
+    geotiff = SimpleNamespace(
+        crs=ctx.dst_crs,
+        dtype="float32",
+        nodata=None,
+        overviews=[],
+        transform=Affine(1.0, 0.0, 0.0, 0.0, -1.0, 8.0),
+        width=8,
+        height=8,
+        read=AsyncMock(
+            return_value=SimpleNamespace(
+                transform=ctx.chunk_affine,
+                data=np.ones((1, ctx.chunk_height, ctx.chunk_width), dtype=np.float32),
+            ),
+        ),
+    )
+
+    async def _run():
+        with (
+            patch(
+                "lazycogs._chunk_reader._resolve_store",
+                return_value=(None, "/tmp/red.tif"),
+            ),
+            patch(
+                "lazycogs._chunk_reader.GeoTIFF.open",
+                new_callable=AsyncMock,
+                return_value=geotiff,
+            ),
+        ):
+            opened = await _open_and_window(item, "red", ctx)
+            assert opened is not None
+            expected_window = opened[2]
+            result = await _read_item_band(item, ["red"], ctx)
+
+        geotiff.read.assert_awaited_once()
+        assert geotiff.read.await_args.kwargs["window"] == expected_window
+        assert result is not None
+        np.testing.assert_array_equal(result["red"][0], 1.0)
+
+    asyncio.run(_run())
 
 
 # ---------------------------------------------------------------------------

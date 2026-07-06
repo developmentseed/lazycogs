@@ -4,7 +4,7 @@ Ported from rio-tiler's ``mosaic/methods/`` (MIT licence). These are pure
 numpy operations with no GDAL dependency.
 
 All methods operate on ``numpy.ma.MaskedArray`` values with shape
-``(bands, height, width)``.  Masked pixels (``mask == True``) are treated as
+``(bands, height, width)``. Masked pixels (``mask == True``) are treated as
 no-data and filled in from subsequent tiles until the mosaic is complete.
 """
 

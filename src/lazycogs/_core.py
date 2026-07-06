@@ -16,6 +16,7 @@ from rustac import DuckdbClient
 from xarray import Coordinates, DataArray, Variable
 from xarray.core import indexing
 
+from lazycogs._assets import _preferred_data_assets
 from lazycogs._backend import MultiBandStacBackendArray
 from lazycogs._cql2 import _extract_filter_fields, _sortby_fields
 from lazycogs._executor import run_on_loop
@@ -85,17 +86,7 @@ def _ordered_bands(
             )
         return bands
 
-    data_bands: list[str] = []
-    other_bands: list[str] = []
-    for key, asset in assets.items():
-        roles = asset.get("roles", [])
-        media_type = asset.get("type", "")
-        if "data" in roles or "image/tiff" in media_type:
-            data_bands.append(key)
-        else:
-            other_bands.append(key)
-
-    return data_bands or other_bands or list(assets)
+    return _preferred_data_assets(assets)
 
 
 async def _inspect_first_item_async(
@@ -275,11 +266,6 @@ def _resolve_output_dtype(
     if method_cls.requires_float and not np.issubdtype(resolved, np.floating):
         return np.dtype("float32"), False
     return resolved, False
-
-
-def _dtype_is_compatible(source: np.dtype, resolved: np.dtype) -> bool:
-    """Return True when *source* can be represented safely by *resolved*."""
-    return bool(np.can_cast(source, resolved, casting="safe"))
 
 
 def _resolve_output_nodata(

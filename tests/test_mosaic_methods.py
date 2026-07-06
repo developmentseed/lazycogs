@@ -109,6 +109,13 @@ def test_highest_keeps_max():
     assert result[0, 0, 1] == pytest.approx(5.0)
 
 
+def test_highest_ignores_masked_pixels():
+    m = HighestMethod()
+    m.feed(_masked([3.0, 0.0], [False, True]))
+    m.feed(_masked([0.0, 5.0], [True, False]))
+    np.testing.assert_array_equal(m.data[0, 0], [3.0, 5.0])
+
+
 # ---------------------------------------------------------------------------
 # LowestMethod
 # ---------------------------------------------------------------------------
@@ -121,6 +128,13 @@ def test_lowest_keeps_min():
     result = m.data
     assert result[0, 0, 0] == pytest.approx(1.0)
     assert result[0, 0, 1] == pytest.approx(1.0)
+
+
+def test_lowest_ignores_masked_pixels():
+    m = LowestMethod()
+    m.feed(_masked([3.0, 0.0], [False, True]))
+    m.feed(_masked([0.0, 5.0], [True, False]))
+    np.testing.assert_array_equal(m.data[0, 0], [3.0, 5.0])
 
 
 # ---------------------------------------------------------------------------

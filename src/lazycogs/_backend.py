@@ -78,7 +78,7 @@ class _SpatialWindow:
     squeeze_x: bool
 
 
-def _resolve_indices(
+def _resolve_dim_indices(
     key: int | np.integer | slice,
     size: int,
 ) -> tuple[list[int], bool]:
@@ -418,10 +418,13 @@ class MultiBandStacBackendArray(BackendArray):
         """
         band_key, time_key, y_key, x_key = key
 
-        band_indices, squeeze_band = _resolve_indices(band_key, len(self.bands))
+        band_indices, squeeze_band = _resolve_dim_indices(band_key, len(self.bands))
         selected_bands = [self.bands[b] for b in band_indices]
 
-        time_indices, squeeze_time = _resolve_indices(time_key, len(self.time_steps))
+        time_indices, squeeze_time = _resolve_dim_indices(
+            time_key,
+            len(self.time_steps),
+        )
         win = self._resolve_spatial_window(y_key, x_key)
 
         fill = self.nodata if self.nodata is not None else 0

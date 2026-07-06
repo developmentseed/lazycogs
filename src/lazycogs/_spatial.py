@@ -2,22 +2,17 @@
 
 from __future__ import annotations
 
-import functools
 from typing import TYPE_CHECKING
 
-from pyproj import CRS, Transformer
+from pyproj import CRS
+
+from lazycogs._reproject import _get_transformer
 
 if TYPE_CHECKING:
     from affine import Affine
 
 
 _EPSG_4326 = CRS.from_epsg(4326)
-
-
-@functools.lru_cache(maxsize=128)
-def _to_4326(crs: CRS) -> Transformer:
-    """Return a cached transformer from ``crs`` to EPSG:4326."""
-    return Transformer.from_crs(crs, _EPSG_4326, always_xy=True)
 
 
 def bbox_to_4326(
@@ -29,7 +24,7 @@ def bbox_to_4326(
     if crs.equals(_EPSG_4326):
         return [minx, miny, maxx, maxy]
 
-    xs, ys = _to_4326(crs).transform(
+    xs, ys = _get_transformer(crs, _EPSG_4326).transform(
         [minx, maxx, minx, maxx],
         [maxy, maxy, miny, miny],
     )

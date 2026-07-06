@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 from obstore.store import from_url
 from rustac import DuckdbClient
 
+from lazycogs._assets import _preferred_data_assets
 from lazycogs._storage_ext import _extract_store_kwargs
 
 if TYPE_CHECKING:
@@ -140,11 +141,7 @@ def store_for(
             raise KeyError(f"Asset {asset!r} not found in item {item.get('id')!r}")
         asset_obj = assets_map[asset]
     else:
-        data_keys = [
-            k
-            for k, v in assets_map.items()
-            if "data" in v.get("roles", []) or "image/tiff" in v.get("type", "")
-        ]
+        data_keys = _preferred_data_assets(assets_map)
         key = data_keys[0] if data_keys else next(iter(assets_map))
         asset_obj = assets_map[key]
 

@@ -160,19 +160,6 @@ def _validate_source_contract(
     return ctx.nodata if ctx.nodata is not None else source_nodata
 
 
-def _build_band_read_entry(
-    band: str,
-    geotiff: GeoTIFF,
-    ctx: _ChunkContext,
-    effective_nodata: float | None,
-) -> tuple[str, GeoTIFF, GeoTIFF | Overview, Window, float | None, CRS] | None:
-    """Build the read plan entry for one band, or ``None`` if no overlap."""
-    reader, window, _, _ = _plan_reader_window(geotiff, ctx)
-    if window is None:
-        return None
-    return (band, geotiff, reader, window, effective_nodata, geotiff.crs)
-
-
 def _plan_reader_window(
     geotiff: GeoTIFF,
     ctx: _WindowContext,
@@ -432,40 +419,25 @@ async def _read_item_band(
     that applies warp maps with caching: bands sharing the same source CRS and
     window transform reuse the same warp map.
     """
-    # Collect hrefs for all requested bands.
-    band_hrefs: dict[str, str] = {}
-    for band in bands:
-        asset = item.get("assets", {}).get(band)
-        if asset is not None:
-            band_hrefs[band] = asset["href"]
-
-    if not band_hrefs:
-        return None
-
-    # Open all COGs concurrently for metadata.
-    async def _open_band(
-        band: str,
-        href: str,
-    ) -> tuple[str, GeoTIFF, Store]:
-        band_store, path = _resolve_store(href, ctx.store, ctx.path_fn)
-        geotiff = await GeoTIFF.open(path, store=band_store)
-        return band, geotiff, band_store
-
-    open_results = await asyncio.gather(
-        *[_open_band(b, h) for b, h in band_hrefs.items()],
+    opened_results = await asyncio.gather(
+        *[_open_and_window(item, band, ctx) for band in bands],
     )
 
-    # Per-band: select overview, compute window.
-    # Each band is handled independently so differing native resolutions or
-    # extents are handled correctly.
     band_read_plan: list[
-        tuple[str, GeoTIFF, GeoTIFF | Overview, Window, float | int | None, CRS]
+        tuple[str, GeoTIFF | Overview, Window, float | int | None, CRS]
     ] = []
-    for band, geotiff, _ in open_results:
+    for band, opened in zip(bands, opened_results, strict=True):
+        if opened is None:
+            continue
+        geotiff, reader, window, _ = opened
         effective_nodata = _validate_source_contract(item, band, geotiff, ctx)
-        plan_entry = _build_band_read_entry(band, geotiff, ctx, effective_nodata)
-        if plan_entry is not None:
-            band_read_plan.append(plan_entry)
+        if window is not None:
+            band_read_plan.append(
+                (band, reader, window, effective_nodata, geotiff.crs),
+            )
+
+    if not opened_results:
+        return None
 
     if not band_read_plan:
         return None
@@ -479,11 +451,11 @@ async def _read_item_band(
         return band, await reader.read(window=window)
 
     read_results = await asyncio.gather(
-        *[_read_band(b, r, w) for b, _, r, w, _, _ in band_read_plan],
+        *[_read_band(b, r, w) for b, r, w, _, _ in band_read_plan],
     )
 
-    effective_nodatas = {b: n for b, _, _, _, n, _ in band_read_plan}
-    crss = {b: c for b, _, _, _, _, c in band_read_plan}
+    effective_nodatas = {b: n for b, _, _, n, _ in band_read_plan}
+    crss = {b: c for b, _, _, _, c in band_read_plan}
 
     band_rasters = [
         (band, raster, crss[band], effective_nodatas[band])
