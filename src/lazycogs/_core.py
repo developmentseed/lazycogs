@@ -27,6 +27,7 @@ from lazycogs._temporal import _TemporalGrouper, _TimeStep, grouper_from_period
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from affine import Affine
     from arro3.core import Table
     from async_geotiff import Store
 
@@ -367,6 +368,19 @@ def _spatial_coords_with_eager_variables(index: RasterIndex) -> Coordinates:
     )
 
 
+def _spatial_ref_dataarray(crs: CRS, transform: Affine) -> DataArray:
+    """Return the scalar ``spatial_ref`` grid-mapping variable for a grid."""
+    crs_wkt = crs.to_wkt()
+    return DataArray(
+        np.array(0),
+        attrs={
+            "crs_wkt": crs_wkt,
+            "spatial_ref": crs_wkt,
+            "GeoTransform": " ".join(str(v) for v in transform.to_gdal()),
+        },
+    )
+
+
 def _build_dataarray(
     *,
     parquet_path: str,
@@ -454,17 +468,7 @@ def _build_dataarray(
         dst_affine.e,
         dst_affine.f,
     ]
-    gdal_transform = dst_affine.to_gdal()
-    crs_wkt = dst_crs.to_wkt()
-
-    spatial_ref = DataArray(
-        np.array(0),
-        attrs={
-            "crs_wkt": crs_wkt,
-            "spatial_ref": crs_wkt,
-            "GeoTransform": " ".join(str(v) for v in gdal_transform),
-        },
-    )
+    spatial_ref = _spatial_ref_dataarray(dst_crs, dst_affine)
 
     attributes = {
         "grid_mapping": "spatial_ref",

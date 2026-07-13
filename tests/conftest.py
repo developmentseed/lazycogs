@@ -104,33 +104,52 @@ def opened_dataarray(tmp_path):
         )
 
 
-@pytest.fixture(scope="session")
-def synthetic_cog(tmp_path_factory) -> Path:
-    """Write a small synthetic COG with four overview levels to a temp file.
+def _write_synthetic_cog(
+    cog_path: Path,
+    *,
+    size: int = 2048,
+    native_res: float = 10.0,
+    minx: float = 500_000.0,
+    maxy: float = 5_600_000.0,
+    epsg: int = 32632,
+    count: int = 1,
+    nodata: float | None = 0,
+    seed: int = 0,
+) -> Path:
+    """Write a tiled synthetic COG with four overview levels.
 
-    Properties:
-    - Native resolution: 10 m, 320 x 320 pixels
-    - CRS: UTM zone 32N (EPSG:32632)
-    - Origin: 500 000 E, 5 600 000 N
-    - Overview shrink factors: [2, 4, 8, 16] → resolutions 20, 40, 80, 160 m
-    - Pixel values: unique uint16 per pixel (col + row * width), so every
-      sampling position returns a deterministic, distinct value that lets
-      tests distinguish which source pixel was sampled.
-    - Nodata: 0 (pixels shifted by 1 to avoid accidental nodata)
+    Pixel values are unique per pixel (``col + row * size`` plus a per-band and
+    per-``seed`` offset) so tests can tell which source pixel and band was
+    sampled. The two-step recipe keeps both the full-resolution IFD and every
+    overview IFD tiled, which async_geotiff requires.
 
-    The file is written using the standard two-step COG recipe so that both
-    the full-resolution IFD and all overview IFDs are tiled (required by
-    async_geotiff).
+    Args:
+        cog_path: Destination path for the COG.
+        size: Width and height in pixels.
+        native_res: Pixel size in CRS units.
+        minx: Left edge (origin easting).
+        maxy: Top edge (origin northing).
+        epsg: CRS EPSG code.
+        count: Number of bands.
+        nodata: Nodata value, or ``None`` for no nodata.
+        seed: Offset added to pixel values so distinct COGs differ.
+
+    Returns:
+        ``cog_path``.
     """
-    cog_path = tmp_path_factory.mktemp("cog") / "synthetic.tif"
-    native_res = 10.0
-    size = 2048
-    minx, maxy = 500_000.0, 5_600_000.0
     transform = Affine(native_res, 0.0, minx, 0.0, -native_res, maxy)
-    crs_wkt = CRS.from_epsg(32632).to_wkt()
+    crs_wkt = CRS.from_epsg(epsg).to_wkt()
 
     rows, cols = np.meshgrid(np.arange(size), np.arange(size), indexing="ij")
-    data = ((cols + rows * size) % 65535 + 1).astype(np.uint16)
+    linear = cols + rows * size + seed
+    # count=1, seed=0 reproduces the original single-band fixture exactly:
+    # ((cols + rows * size) % 65535 + 1).
+    data = np.stack(
+        [
+            ((linear + band * 100) % 65535 + 1).astype(np.uint16)
+            for band in range(count)
+        ],
+    )
 
     # Step 1: write to a temporary stripped GeoTIFF and build overviews.
     with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as tmp:
@@ -142,13 +161,13 @@ def synthetic_cog(tmp_path_factory) -> Path:
         driver="GTiff",
         height=size,
         width=size,
-        count=1,
+        count=count,
         dtype="uint16",
         crs=crs_wkt,
         transform=transform,
-        nodata=0,
+        nodata=nodata,
     ) as dst:
-        dst.write(data[np.newaxis])
+        dst.write(data)
 
     with rasterio.open(tmp_path, "r+") as dst:
         dst.build_overviews([2, 4, 8, 16], rasterio.enums.Resampling.nearest)
@@ -167,3 +186,63 @@ def synthetic_cog(tmp_path_factory) -> Path:
     tmp_path.unlink()
 
     return cog_path
+
+
+@pytest.fixture(scope="session")
+def synthetic_cog(tmp_path_factory) -> Path:
+    """Write a small synthetic COG with four overview levels to a temp file.
+
+    Properties:
+    - Native resolution: 10 m, 2048 x 2048 pixels
+    - CRS: UTM zone 32N (EPSG:32632)
+    - Origin: 500 000 E, 5 600 000 N
+    - Overview shrink factors: [2, 4, 8, 16] → resolutions 20, 40, 80, 160 m
+    - Pixel values: unique uint16 per pixel (col + row * width), so every
+      sampling position returns a deterministic, distinct value that lets
+      tests distinguish which source pixel was sampled.
+    - Nodata: 0 (pixels shifted by 1 to avoid accidental nodata)
+
+    The file is written using the standard two-step COG recipe so that both
+    the full-resolution IFD and all overview IFDs are tiled (required by
+    async_geotiff).
+    """
+    return _write_synthetic_cog(tmp_path_factory.mktemp("cog") / "synthetic.tif")
+
+
+@pytest.fixture(scope="session")
+def synthetic_cog_b(tmp_path_factory) -> Path:
+    """A second single-band COG on the same grid as ``synthetic_cog``.
+
+    Different pixel values (``seed``) so a stacked ``open_item`` result carries
+    distinct data per band.
+    """
+    return _write_synthetic_cog(
+        tmp_path_factory.mktemp("cog_b") / "synthetic_b.tif",
+        seed=1000,
+    )
+
+
+@pytest.fixture(scope="session")
+def synthetic_cog_offgrid(tmp_path_factory) -> Path:
+    """A single-band COG on a different grid (20 m, shifted origin).
+
+    Used to check that ``open_item`` rejects assets that do not share one
+    native grid.
+    """
+    return _write_synthetic_cog(
+        tmp_path_factory.mktemp("cog_offgrid") / "synthetic_offgrid.tif",
+        native_res=20.0,
+        minx=600_000.0,
+    )
+
+
+@pytest.fixture(scope="session")
+def synthetic_cog_multiband(tmp_path_factory) -> Path:
+    """A two-band COG on the ``synthetic_cog`` grid.
+
+    Used to check that ``open_item`` rejects multi-band assets.
+    """
+    return _write_synthetic_cog(
+        tmp_path_factory.mktemp("cog_mb") / "synthetic_mb.tif",
+        count=2,
+    )

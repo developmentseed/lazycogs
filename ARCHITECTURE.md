@@ -14,6 +14,7 @@ src/lazycogs/
   _grid.py           output affine transform and grid dimensions
   _reproject.py      warp-map computation and nearest-neighbor sampling
   _storage_ext.py    STAC Storage Extension metadata parsing
+  _single.py         open_cog()/open_item(): native-resolution single-COG and single-item reads
   _store.py          HREF-to-store resolution and store_for()
   _temporal.py       temporal grouping strategies and _TimeStep predicates
   _mosaic_methods.py pixel-selection strategies
