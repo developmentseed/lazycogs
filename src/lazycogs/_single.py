@@ -165,7 +165,7 @@ def open_cog(
 
 
 def _assets_from_item(item: dict[str, Any]) -> dict[str, Any]:
-    """Return the ``assets`` mapping from a STAC item dict or pystac Item."""
+    """Return the ``assets`` mapping from a STAC item dict."""
     if hasattr(item, "to_dict"):
         item = item.to_dict()
     assets: dict[str, Any] = item.get("assets", {})
@@ -209,8 +209,7 @@ async def open_item_async(
     Async variant of :func:`open_item` for use inside a running event loop.
 
     Args:
-        item: A STAC item as a dict (e.g. a ``rustac`` search result) or a
-            pystac-like object exposing ``to_dict()``.
+        item: A STAC item as a dict (e.g. a ``rustac`` search result).
         bands: Asset keys to include, in output order. When ``None``, the
             item's preferred data assets are used (role ``"data"`` or media
             type ``image/tiff``), matching :func:`lazycogs.open`.
@@ -276,8 +275,7 @@ def open_item(
     reprojected mosaic across a whole collection.
 
     Args:
-        item: A STAC item as a dict (e.g. a ``rustac`` search result) or a
-            pystac-like object exposing ``to_dict()``.
+        item: A STAC item as a dict (e.g. a ``rustac`` search result).
         bands: Asset keys to include, in output order. When ``None``, the
             item's preferred data assets are used (role ``"data"`` or media
             type ``image/tiff``), matching :func:`lazycogs.open`.
