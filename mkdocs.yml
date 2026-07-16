@@ -46,6 +46,7 @@ nav:
       - FOSS4G North America 2026: /lazycogs/presentations/foss4gna-2026/
   - API Reference:
       - open / open_async: api/open.md
+      - Single COG / item: api/single.md
       - Mosaic methods: api/mosaic.md
       - Utilities: api/utils.md
   - Architecture: architecture.md
