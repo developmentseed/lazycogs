@@ -743,7 +743,7 @@ def test_accessor_explain_chunk_then_sel_time(wgs84):
     """explain() works after .chunk(...).sel(time=...), a dask getitem on top.
 
     Regression test: chunking before selecting a single time label builds the
-    dask graph with the time selection applied as a separate ``getitem``
+    dask graph with the time selection applied as a separate `getitem`
     layer rather than folded into the discovered backend's indexer key, so
     explain() must not rely on recovering that key to figure out which
     backend time step is active.

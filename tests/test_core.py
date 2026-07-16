@@ -36,9 +36,9 @@ def _items_to_arrow(items: list[dict]) -> rustac.DuckdbClient:
     """Convert simplified fake items to an Arrow table via rustac.to_arrow.
 
     Accepts the same simplified item dicts used in existing tests
-    (``{"properties": {"datetime": "..."}}``) and wraps them into
-    complete-enough STAC items for ``rustac.to_arrow`` to accept.
-    Returns ``None`` when *items* is empty, matching ``search_to_arrow``
+    (`{"properties": {"datetime": "..."}}`) and wraps them into
+    complete-enough STAC items for `rustac.to_arrow` to accept.
+    Returns `None` when *items* is empty, matching `search_to_arrow`
     behaviour.
     """
     if not items:

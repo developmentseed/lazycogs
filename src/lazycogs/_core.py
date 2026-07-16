@@ -27,6 +27,7 @@ from lazycogs._temporal import _TemporalGrouper, _TimeStep, grouper_from_period
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from affine import Affine
     from arro3.core import Table
     from async_geotiff import Store
 
@@ -347,13 +348,13 @@ def _build_time_steps(
 def _spatial_coords_with_eager_variables(index: RasterIndex) -> Coordinates:
     """Return RasterIndex-backed spatial coordinates with eager x/y variables.
 
-    ``Coordinates.from_xindex(index)`` keeps the x/y coordinate variables backed
-    by ``CoordinateTransformIndexingAdapter``. That works for normal access, but
-    after ``DataArray.chunk(...).sel(x=..., y=..., method="nearest")`` xarray can
+    `Coordinates.from_xindex(index)` keeps the x/y coordinate variables backed
+    by `CoordinateTransformIndexingAdapter`. That works for normal access, but
+    after `DataArray.chunk(...).sel(x=..., y=..., method="nearest")` xarray can
     end up computing scalar x/y coordinates as length-1 arrays, which then fail
-    shape validation during ``compute()``.
+    shape validation during `compute()`.
 
-    This helper keeps the ``RasterIndex`` itself for spatial selection semantics
+    This helper keeps the `RasterIndex` itself for spatial selection semantics
     while materialising the x/y coordinate variables as plain NumPy arrays so
     scalar coordinate loads stay scalar after chunking.
     """
@@ -364,6 +365,19 @@ def _spatial_coords_with_eager_variables(index: RasterIndex) -> Coordinates:
             for name, variable in index_variables.items()
         },
         indexes=dict.fromkeys(index_variables, index),
+    )
+
+
+def _spatial_ref_dataarray(crs: CRS, transform: Affine) -> DataArray:
+    """Return the scalar `spatial_ref` grid-mapping variable for a grid."""
+    crs_wkt = crs.to_wkt()
+    return DataArray(
+        np.array(0),
+        attrs={
+            "crs_wkt": crs_wkt,
+            "spatial_ref": crs_wkt,
+            "GeoTransform": " ".join(str(v) for v in transform.to_gdal()),
+        },
     )
 
 
@@ -454,17 +468,7 @@ def _build_dataarray(
         dst_affine.e,
         dst_affine.f,
     ]
-    gdal_transform = dst_affine.to_gdal()
-    crs_wkt = dst_crs.to_wkt()
-
-    spatial_ref = DataArray(
-        np.array(0),
-        attrs={
-            "crs_wkt": crs_wkt,
-            "spatial_ref": crs_wkt,
-            "GeoTransform": " ".join(str(v) for v in gdal_transform),
-        },
-    )
+    spatial_ref = _spatial_ref_dataarray(dst_crs, dst_affine)
 
     attributes = {
         "grid_mapping": "spatial_ref",
@@ -538,28 +542,28 @@ def open(  # noqa: A001
     duckdb_client: DuckdbClient | None = None,
     errors: Literal["ignore", "raise"] = "raise",
 ) -> DataArray:
-    """Open a mosaic of STAC items as a lazy ``(band, time, y, x)`` DataArray.
+    """Open a mosaic of STAC items as a lazy `(band, time, y, x)` DataArray.
 
-    ``href`` must be a path to a geoparquet file (``.parquet`` or
-    ``.geoparquet``) or, when *duckdb_client* is provided, to a
+    `href` must be a path to a geoparquet file (`.parquet` or
+    `.geoparquet`) or, when *duckdb_client* is provided, to a
     hive-partitioned parquet directory.
 
     Args:
-        href: Path to a geoparquet file (``.parquet`` or ``.geoparquet``)
+        href: Path to a geoparquet file (`.parquet` or `.geoparquet`)
             or a hive-partitioned parquet directory when *duckdb_client* is
-            provided with ``use_hive_partitioning=True``.
-        datetime: RFC 3339 datetime or range (e.g. ``"2023-01-01/2023-12-31"``)
+            provided with `use_hive_partitioning=True`.
+        datetime: RFC 3339 datetime or range (e.g. `"2023-01-01/2023-12-31"`)
             used to pre-filter items from the parquet.
-        bbox: ``(minx, miny, maxx, maxy)`` in the target ``crs``.
+        bbox: `(minx, miny, maxx, maxy)` in the target `crs`.
         crs: Target output CRS.
-        resolution: Output pixel size in ``crs`` units.
+        resolution: Output pixel size in `crs` units.
         filter: CQL2 filter expression (text string or JSON dict) forwarded
-            to DuckDB queries, e.g. ``"eo:cloud_cover < 20"``.
+            to DuckDB queries, e.g. `"eo:cloud_cover < 20"`.
         ids: STAC item IDs to restrict the search to.
-        bands: Asset keys to include. If ``None``, inferred from the first
+        bands: Asset keys to include. If `None`, inferred from the first
             matching item's preferred data assets.
-        chunks: Chunk sizes passed to ``DataArray.chunk()``.  If ``None``
-            (default), returns a ``LazilyIndexedArray``-backed DataArray
+        chunks: Chunk sizes passed to `DataArray.chunk()`.  If `None`
+            (default), returns a `LazilyIndexedArray`-backed DataArray
             where only the requested pixels are fetched on each access —
             ideal for point or small-region queries.  Pass an explicit dict
             to convert to a dask-backed array for parallel computation over
@@ -570,93 +574,96 @@ def open(  # noqa: A001
             bands agree on one.
         dtype: Output array dtype. When omitted, inferred from sampled asset
             dtypes on the first matching item. Float-only mosaic methods may
-            auto-promote inferred integer outputs to ``float32``. Explicit
-            integer ``dtype=`` still raises for those methods.
+            auto-promote inferred integer outputs to `float32`. Explicit
+            integer `dtype=` still raises for those methods.
         mosaic_method: Mosaic method class (not instance) to use.  Defaults
-            to :class:`~lazycogs._mosaic_methods.FirstMethod`.
-        time_period: Temporal grouping mode. Supported forms are ``None``
-            (one step per unique normalized timestamp), ``PnD`` (days),
-            ``P1W`` (ISO calendar week), ``P1M`` (calendar month), ``P1Y``
-            (calendar year), and ``PTnH`` (fixed hour windows). Defaults to
-            ``"P1D"`` (one step per calendar day). Multi-day and multi-hour
+            to `FirstMethod`.
+        time_period: Temporal grouping mode. Supported forms are `None`
+            (one step per unique normalized timestamp), `PnD` (days),
+            `P1W` (ISO calendar week), `P1M` (calendar month), `P1Y`
+            (calendar year), and `PTnH` (fixed hour windows). Defaults to
+            `"P1D"` (one step per calendar day). Multi-day and multi-hour
             windows are aligned to an epoch of 2000-01-01.
-        store: Pre-configured :class:`async_geotiff.Store` accepted by
-            ``GeoTIFF.open`` to use for all asset reads. Useful when
+        store: Pre-configured `async_geotiff.Store` accepted by
+            `GeoTIFF.open` to use for all asset reads. Useful when
             credentials, custom endpoints, or non-default options are needed
             without relying on automatic store resolution from each HREF. When
-            ``None`` (default), each asset URL is parsed to create or reuse a
+            `None` (default), each asset URL is parsed to create or reuse a
             shared cached obstore-backed store behind a small lock.
         max_concurrent_reads: Maximum number of lazycogs item reads to run
             concurrently within one chunk materialization, shared across all
             selected time steps in that chunk. Concurrency is bounded to this
-            size with an ``asyncio.Semaphore``, which bounds peak in-flight
+            size with an `asyncio.Semaphore`, which bounds peak in-flight
             memory when a chunk overlaps many files. This is not a raw
             object-store request-rate limiter: one item read can open/read
             multiple band COGs, and underlying COG operations may issue
             multiple range requests and retries. Methods that support early
-            exit (e.g. the default
-            :class:`~lazycogs._mosaic_methods.FirstMethod`) will stop reading
+            exit (e.g. the default `FirstMethod`) will stop reading
             once every output pixel is filled, so lower values also reduce
             unnecessary I/O on dense datasets. Defaults to 32.
-        path_from_href: Optional callable ``(href: str) -> str`` that extracts
+        path_from_href: Optional callable `(href: str) -> str` that extracts
             the object path from an asset HREF.  When provided, it replaces the
-            default ``urlparse``-based extraction used in
-            :func:`~lazycogs._store.resolve`.  Most useful when combined with
-            a custom ``store`` whose root does not align with the URL path
+            default `urlparse`-based extraction used in
+            `resolve`.  Most useful when combined with
+            a custom `store` whose root does not align with the URL path
             structure of the asset HREFs.
 
-            Example — NASA LPDAAC proxy https url for S3 asset::
+            Example — NASA LPDAAC proxy https url for S3 asset:
 
-                from obstore.store import S3Store
-                from urllib.parse import urlparse
+            ```python
+            from obstore.store import S3Store
+            from urllib.parse import urlparse
 
-                store = S3Store(bucket="lp-prod-protected", ...)
+            store = S3Store(bucket="lp-prod-protected", ...)
 
-                def strip_bucket(href: str) -> str:
-                    # href: https://data.lpdaac.earthdatacloud.nasa.gov/
-                    #   lp-prod-protected/path/to/file.tif
-                    # store is rooted at the bucket, so the path is
-                    # just path/to/file.tif
-                    return (
-                        urlparse(href).path.lstrip("/").removeprefix("lp-prod-protected/")
-                    )
-
-                da = lazycogs.open(
-                    "items.parquet", ..., store=store, path_from_href=strip_bucket
+            def strip_bucket(href: str) -> str:
+                # href: https://data.lpdaac.earthdatacloud.nasa.gov/
+                #   lp-prod-protected/path/to/file.tif
+                # store is rooted at the bucket, so the path is
+                # just path/to/file.tif
+                return (
+                    urlparse(href).path.lstrip("/").removeprefix("lp-prod-protected/")
                 )
 
-        duckdb_client: Optional ``DuckdbClient`` instance.  When
-            ``None`` (default), a plain ``DuckdbClient()`` is created. Pass a
-            custom client to enable features such as hive-partitioned datasets::
+            da = lazycogs.open(
+                "items.parquet", ..., store=store, path_from_href=strip_bucket
+            )
+            ```
 
-                import rustac, lazycogs
+        duckdb_client: Optional `DuckdbClient` instance.  When
+            `None` (default), a plain `DuckdbClient()` is created. Pass a
+            custom client to enable features such as hive-partitioned datasets:
 
-                client = DuckdbClient(use_hive_partitioning=True)
-                da = lazycogs.open(
-                    "s3://bucket/stac/",
-                    duckdb_client=client,
-                    bbox=...,
-                    crs=...,
-                    resolution=...,
-                )
+            ```python
+            import rustac, lazycogs
+
+            client = DuckdbClient(use_hive_partitioning=True)
+            da = lazycogs.open(
+                "s3://bucket/stac/",
+                duckdb_client=client,
+                bbox=...,
+                crs=...,
+                resolution=...,
+            )
+            ```
 
         errors: How to handle a failed item-band read during chunk
             materialization (e.g. a storage error or rate-limit response).
-            ``"raise"`` (default) raises the first such failure as
-            :class:`~lazycogs._chunk_reader.ChunkReadError`, which wraps the
-            original exception and carries the failing ``item_id`` and
-            ``bands``. ``"ignore"`` logs a warning and leaves the mosaic fill
+            `"raise"` (default) raises the first such failure as
+            `ChunkReadError`, which wraps the
+            original exception and carries the failing `item_id` and
+            `bands`. `"ignore"` logs a warning and leaves the mosaic fill
             value in place for that item's pixels instead. Contract
             violations (mismatched dtype or nodata) are always raised
             regardless of this setting.
 
     Returns:
-        Lazy ``xr.DataArray`` with dimensions ``(band, time, y, x)``.
+        Lazy `xr.DataArray` with dimensions `(band, time, y, x)`.
 
     Raises:
-        ValueError: If ``href`` is not a ``.parquet`` or ``.geoparquet`` file
+        ValueError: If `href` is not a `.parquet` or `.geoparquet` file
             and no *duckdb_client* is provided, if no matching items are
-            found, or if ``time_period`` is not a recognised ISO 8601
+            found, or if `time_period` is not a recognised ISO 8601
             duration.
 
     """

@@ -9,10 +9,10 @@ logger = logging.getLogger(__name__)
 
 
 def _storage_extension_version(stac_extensions: list[str]) -> str | None:
-    """Return the storage extension version string, or ``None`` if absent.
+    """Return the storage extension version string, or `None` if absent.
 
     Parses the version from a URL like
-    ``https://stac-extensions.github.io/storage/v1.0.0/schema.json``.
+    `https://stac-extensions.github.io/storage/v1.0.0/schema.json`.
     """
     for url in stac_extensions:
         if "stac-extensions.github.io/storage" in url:
@@ -28,8 +28,8 @@ def _extract_store_kwargs_v1(
 ) -> dict[str, Any]:
     """Extract obstore kwargs from a STAC Storage Extension v1.0.0 item.
 
-    Asset-level fields take precedence over item ``properties``-level fields.
-    Only ``region`` and ``requester_pays`` are mapped; ``tier`` has no obstore
+    Asset-level fields take precedence over item `properties`-level fields.
+    Only `region` and `requester_pays` are mapped; `tier` has no obstore
     equivalent and is ignored.
     """
     props = item.get("properties", {})
@@ -57,9 +57,9 @@ def _extract_store_kwargs_v2(
 ) -> dict[str, Any]:
     """Extract obstore kwargs from a STAC Storage Extension v2.0.0 item.
 
-    Resolves ``storage:refs`` on the asset against ``storage:schemes`` in item
-    properties.  Uses the first matching scheme.  Only ``region``,
-    ``requester_pays``, and custom S3 endpoints are mapped.
+    Resolves `storage:refs` on the asset against `storage:schemes` in item
+    properties.  Uses the first matching scheme.  Only `region`,
+    `requester_pays`, and custom S3 endpoints are mapped.
     """
     schemes: dict[str, Any] = item.get("properties", {}).get("storage:schemes", {})
     refs: list[str] = asset.get("storage:refs", [])

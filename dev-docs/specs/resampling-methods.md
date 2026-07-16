@@ -226,9 +226,9 @@ def apply_interp_map(
 ) -> np.ndarray:
     """Resample source array using fractional coordinates and an interpn kernel.
 
-    The source ``data`` is assumed to be the enlarged read window (including halo).
-    Coordinates in ``interp_map`` are shifted by the window origin before evaluation
-    so that they are relative to the sub-array passed to ``interpn``.
+    The source `data` is assumed to be the enlarged read window (including halo).
+    Coordinates in `interp_map` are shifted by the window origin before evaluation
+    so that they are relative to the sub-array passed to `interpn`.
     """
     ...
 ```

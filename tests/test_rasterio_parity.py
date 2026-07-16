@@ -196,7 +196,7 @@ def _assert_parity(
 ) -> None:
     """Assert that the two outputs are pixel-identical within the given tolerances.
 
-    ``max_differing_pixels`` and ``max_abs_diff`` may both be nonzero only for
+    `max_differing_pixels` and `max_abs_diff` may both be nonzero only for
     the cross-CRS test, where a handful of destination pixel centres can land
     within floating-point precision of a source pixel boundary and lazycogs
     (pyproj) and GDAL round to opposite sides.  These boundary pixels never

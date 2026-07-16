@@ -153,7 +153,7 @@ attributes = {
 | `height` | `dst_height` | From `compute_output_grid()`. |
 | `x_dim` | `"x"` | Matches existing lazycogs dimension name. |
 | `y_dim` | `"y"` | Matches existing lazycogs dimension name. |
-| `crs` | `dst_crs` | ``pyproj.CRS`` object passed to ``open()``. |
+| `crs` | `dst_crs` | `pyproj.CRS` object passed to `open()`. |
 
 ### Metadata attributes
 

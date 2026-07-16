@@ -31,11 +31,11 @@ def _parquet_path(
         href: STAC API endpoint URL.
         collections: Collection IDs to search.
         datetime: ISO 8601 datetime or interval string.
-        bbox: Bounding box as ``[minx, miny, maxx, maxy]`` in EPSG:4326.
+        bbox: Bounding box as `[minx, miny, maxx, maxy]` in EPSG:4326.
         limit: Maximum number of items to return.
 
     Returns:
-        Path under ``/tmp`` of the form ``stac_<12-char-hash>.parquet``.
+        Path under `/tmp` of the form `stac_<12-char-hash>.parquet`.
 
     """
     params = {

@@ -35,42 +35,42 @@ if TYPE_CHECKING:
 class _ChunkReadPlan:
     """Everything needed to materialise one chunk across all its time steps.
 
-    Built once in ``_async_getitem`` and passed through to
-    ``_read_chunk_all_dates`` and ``_run_one_date``. Frozen to make the
+    Built once in `_async_getitem` and passed through to
+    `_read_chunk_all_dates` and `_run_one_date`. Frozen to make the
     read-only intent explicit.
 
-    Note: ``warp_cache`` is a mutable dict despite the frozen dataclass. This
-    is intentional — concurrent writes from ``asyncio.gather`` coroutines are
-    safe because ``compute_warp_map`` is deterministic (a duplicate write
+    Note: `warp_cache` is a mutable dict despite the frozen dataclass. This
+    is intentional — concurrent writes from `asyncio.gather` coroutines are
+    safe because `compute_warp_map` is deterministic (a duplicate write
     simply overwrites an identical value).
 
     Attributes:
-        duckdb_client: ``DuckdbClient`` instance used for STAC queries.
+        duckdb_client: `DuckdbClient` instance used for STAC queries.
         parquet_path: Path to the geoparquet file or hive-partitioned directory.
-        sortby: Optional sort keys forwarded to ``client.search``.
-        filter_expr: Optional CQL2 filter forwarded to ``client.search``.
-        ids: Optional STAC item IDs forwarded to ``client.search``.
-        filter_fields: Field names extracted from ``filter_expr``.
+        sortby: Optional sort keys forwarded to `client.search`.
+        filter_expr: Optional CQL2 filter forwarded to `client.search`.
+        ids: Optional STAC item IDs forwarded to `client.search`.
+        filter_fields: Field names extracted from `filter_expr`.
         time_steps: Full list of temporal steps with runtime datetime filters.
-        chunk_bbox_4326: ``[minx, miny, maxx, maxy]`` in EPSG:4326.
+        chunk_bbox_4326: `[minx, miny, maxx, maxy]` in EPSG:4326.
         selected_bands: STAC asset keys to read.
         chunk_affine: Affine transform of the chunk.
         dst_crs: CRS of the output grid.
         chunk_width: Chunk width in pixels.
         chunk_height: Chunk height in pixels.
-        nodata: No-data fill value, or ``None``.
+        nodata: No-data fill value, or `None`.
         out_dtype: Output array dtype for the chunk.
-        dtype_was_explicit: Whether the caller passed ``dtype=`` explicitly.
-        nodata_was_explicit: Whether the caller passed ``nodata=`` explicitly.
-        mosaic_method_cls: Mosaic method class, or ``None`` for the default.
-        store: Pre-configured :class:`async_geotiff.Store` accepted by
-            ``GeoTIFF.open``, or ``None``.
+        dtype_was_explicit: Whether the caller passed `dtype=` explicitly.
+        nodata_was_explicit: Whether the caller passed `nodata=` explicitly.
+        mosaic_method_cls: Mosaic method class, or `None` for the default.
+        store: Pre-configured `async_geotiff.Store` accepted by
+            `GeoTIFF.open`, or `None`.
         max_concurrent_reads: Maximum concurrent item reads per chunk,
             shared across selected time steps.
         warp_cache: Shared warp map cache across time steps.
         path_fn: Optional callable extracting an object path from an asset HREF.
-        errors: ``"raise"`` (default) to raise the first failed item read as
-            ``ChunkReadError``, or ``"ignore"`` to log and fill it instead.
+        errors: `"raise"` (default) to raise the first failed item read as
+            `ChunkReadError`, or `"ignore"` to log and fill it instead.
 
     """
 
@@ -105,7 +105,7 @@ class _SpatialWindow:
 
     Attributes:
         chunk_affine: Affine transform of the chunk (top-left origin).
-        chunk_bbox_4326: ``[minx, miny, maxx, maxy]`` in EPSG:4326.
+        chunk_bbox_4326: `[minx, miny, maxx, maxy]` in EPSG:4326.
         chunk_height: Chunk height in pixels.
         chunk_width: Chunk width in pixels.
         x_start: First x pixel in the destination grid.
@@ -254,7 +254,7 @@ async def _read_chunk_all_dates(
 
     DuckDB queries run on the dedicated DuckDB executor; DuckDB itself
     serialises access on a single connection, so concurrent queries on the
-    same ``DuckdbClient`` are safe but not parallel.  Mosaic coroutines for
+    same `DuckdbClient` are safe but not parallel.  Mosaic coroutines for
     all time steps are gathered concurrently, while their item reads share one
     chunk-local semaphore so admission is bounded across time steps.
     """
@@ -268,60 +268,60 @@ async def _read_chunk_all_dates(
 
 @dataclass
 class MultiBandStacBackendArray(BackendArray):
-    """Lazy ``(band, time, y, x)`` array for a STAC collection.
+    """Lazy `(band, time, y, x)` array for a STAC collection.
 
-    One instance is created at ``open()`` time.  No pixel I/O happens until
-    ``__getitem__`` is called inside a dask task.  Reads all selected bands
+    One instance is created at `open()` time.  No pixel I/O happens until
+    `__getitem__` is called inside a dask task.  Reads all selected bands
     together per time step via
-    :func:`~lazycogs._chunk_reader.read_chunk_async`, issuing a
+    `read_chunk_async`, issuing a
     single DuckDB query per time step and sharing reprojection warp maps across
     bands that have identical source geometry.
 
     Attributes:
         parquet_path: Path to the geoparquet file or hive-partitioned directory
-            passed to ``duckdb_client.search``.
-        duckdb_client: ``DuckdbClient`` instance used for all STAC queries.
-            Constructed with default settings in :func:`open` when not supplied
+            passed to `duckdb_client.search`.
+        duckdb_client: `DuckdbClient` instance used for all STAC queries.
+            Constructed with default settings in `open` when not supplied
             by the caller.
         bands: Ordered list of STAC asset keys, one per band.
         time_steps: Sorted temporal steps, one entry per time step.
         dst_affine: Affine transform of the full output grid.
         dst_crs: CRS of the output grid.
-        bbox_4326: ``[minx, miny, maxx, maxy]`` in EPSG:4326, used as the
+        bbox_4326: `[minx, miny, maxx, maxy]` in EPSG:4326, used as the
             coarse spatial filter for the initial parquet query.
-        sortby: Optional list of ``rustac`` sort keys passed to DuckDB
-            queries (e.g. ``["-properties.datetime"]``).
+        sortby: Optional list of `rustac` sort keys passed to DuckDB
+            queries (e.g. `["-properties.datetime"]`).
         filter: CQL2 filter expression (text string or JSON dict) forwarded
             to per-chunk DuckDB queries.
         ids: STAC item IDs forwarded to per-chunk DuckDB queries.
         dst_width: Full output grid width in pixels.
         dst_height: Full output grid height in pixels.
         dtype: NumPy dtype of the output array.
-        nodata: No-data fill value, or ``None``.
-        dtype_was_explicit: Whether the caller passed ``dtype=`` explicitly.
-        nodata_was_explicit: Whether the caller passed ``nodata=`` explicitly.
+        nodata: No-data fill value, or `None`.
+        dtype_was_explicit: Whether the caller passed `dtype=` explicitly.
+        nodata_was_explicit: Whether the caller passed `nodata=` explicitly.
         mosaic_method_cls: Mosaic method class instantiated per chunk, or
-            ``None`` to use the default
-            :class:`~lazycogs._mosaic_methods.FirstMethod`.
-        store: Pre-configured :class:`async_geotiff.Store` accepted by
-            ``GeoTIFF.open`` and shared across all chunk reads. When ``None``,
+            `None` to use the default
+            `FirstMethod`.
+        store: Pre-configured `async_geotiff.Store` accepted by
+            `GeoTIFF.open` and shared across all chunk reads. When `None`,
             each asset HREF is resolved to an obstore-backed store via the
-            shared process-local cache in :func:`~lazycogs._store.resolve`.
+            shared process-local cache in `resolve`.
         max_concurrent_reads: Maximum number of item reads to run concurrently
             per chunk, shared across selected time steps.  Limits peak
             in-flight memory when a chunk overlaps many items. Defaults to 32.
-        path_from_href: Optional callable ``(href: str) -> str`` that extracts
+        path_from_href: Optional callable `(href: str) -> str` that extracts
             the object path from an asset HREF.  When provided, it replaces the
-            default ``urlparse``-based extraction in
-            :func:`~lazycogs._store.resolve`.  Most useful when combined with
-            a custom ``store`` whose root does not align with the URL structure
+            default `urlparse`-based extraction in
+            `resolve`.  Most useful when combined with
+            a custom `store` whose root does not align with the URL structure
             of the asset HREFs (e.g. Azure Blob Storage with a container-rooted
             store).
-        errors: ``"raise"`` (default) raises the first item-read failure as
-            :class:`~lazycogs._chunk_reader.ChunkReadError`. ``"ignore"``
+        errors: `"raise"` (default) raises the first item-read failure as
+            `ChunkReadError`. `"ignore"`
             logs a warning and leaves the fill value in place when an
             item's bands fail to read.
-        shape: ``(n_bands, n_time_steps, dst_height, dst_width)``.  Derived from
+        shape: `(n_bands, n_time_steps, dst_height, dst_width)`.  Derived from
             the other fields; not accepted as a constructor argument.
 
     """
@@ -373,11 +373,11 @@ class MultiBandStacBackendArray(BackendArray):
         return f"MultiBandStacBackendArray(bands={self.bands!r}, shape={self.shape})"
 
     def __copy__(self) -> MultiBandStacBackendArray:
-        """Return ``self`` because backend arrays are immutable runtime state."""
+        """Return `self` because backend arrays are immutable runtime state."""
         return self
 
     def __deepcopy__(self, memo: dict[int, object]) -> MultiBandStacBackendArray:
-        """Return ``self`` so xarray copies do not try to pickle DuckDB state."""
+        """Return `self` so xarray copies do not try to pickle DuckDB state."""
         memo[id(self)] = self
         return self
 
@@ -448,7 +448,7 @@ class MultiBandStacBackendArray(BackendArray):
         """Return the data for the requested index.
 
         Args:
-            key: An xarray ``ExplicitIndexer``.
+            key: An xarray `ExplicitIndexer`.
 
         Returns:
             A numpy array with shape determined by the indexing key.
@@ -469,7 +469,7 @@ class MultiBandStacBackendArray(BackendArray):
         reads without spawning a background thread.
 
         Args:
-            key: An xarray ``ExplicitIndexer``.
+            key: An xarray `ExplicitIndexer`.
 
         Returns:
             A numpy array (or array-like) with shape determined by the
@@ -484,15 +484,15 @@ class MultiBandStacBackendArray(BackendArray):
         )
 
     def _sync_getitem(self, key: tuple[Any, ...]) -> np.ndarray:
-        """Sync adapter that runs ``_async_getitem`` on the background loop."""
+        """Sync adapter that runs `_async_getitem` on the background loop."""
         return run_on_loop(self._async_getitem(key))
 
     async def _async_getitem(self, key: tuple[Any, ...]) -> np.ndarray:
-        """Materialise the chunk identified by ``key``.
+        """Materialise the chunk identified by `key`.
 
         Single source of truth for chunk reads. Reads all selected bands
         together per time step via
-        :func:`~lazycogs._chunk_reader.read_chunk_async`, issuing a single
+        `read_chunk_async`, issuing a single
         DuckDB query per time step and sharing reprojection warp maps across
         bands that have identical source geometry.
         """

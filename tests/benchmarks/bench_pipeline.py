@@ -106,7 +106,7 @@ def test_reproject_workers(
 ) -> None:
     """Measure throughput as reprojection thread count varies.
 
-    Uses the expanded 12-time-step dataset with ``chunks={"time": 1}`` so dask
+    Uses the expanded 12-time-step dataset with `chunks={"time": 1}` so dask
     dispatches many concurrent tasks, putting real pressure on the shared
     reprojection pool. Validates the claim that memory-bandwidth saturation
     causes diminishing returns above 4 threads.
@@ -139,7 +139,7 @@ def test_native_crs_resolution(benchmark, benchmark_parquet: str) -> None:
 
     Requests data in EPSG:32612 at 10 m — exactly the source COG projection and
     pixel size — so reprojection should be a no-op.  Compared against
-    ``test_full_compute`` (which reprojects to EPSG:5070 at 60 m) to quantify
+    `test_full_compute` (which reprojects to EPSG:5070 at 60 m) to quantify
     the overhead of the warp path when it is not needed.
     """
 
@@ -168,8 +168,8 @@ def test_time_step_parallelism(
 ) -> None:
     """Compare native time-step thread pool vs Dask across 24 time steps.
 
-    ``no_dask`` exercises the per-chunk ``ThreadPoolExecutor`` introduced in
-    ``_raw_getitem``; ``dask_time_1`` dispatches one Dask task per time step.
+    `no_dask` exercises the per-chunk `ThreadPoolExecutor` introduced in
+    `_raw_getitem`; `dask_time_1` dispatches one Dask task per time step.
     Both paths read the same data — the result shows relative overhead of Dask
     scheduling vs the built-in thread pool for this workload.
     """
@@ -254,9 +254,9 @@ def test_band_access_pattern(
 ) -> None:
     """Compare single-band vs multi-band compute cost.
 
-    Uses the expanded 12-time-step dataset with ``chunks={"time": 1}`` so each
+    Uses the expanded 12-time-step dataset with `chunks={"time": 1}` so each
     time step is a concurrent dask task.  Multi-band reads share a single
-    ``rustac.search_sync`` query and reuse reprojection warp maps across bands;
+    `rustac.search_sync` query and reuse reprojection warp maps across bands;
     this benchmark quantifies that gain under concurrent load.
     """
 

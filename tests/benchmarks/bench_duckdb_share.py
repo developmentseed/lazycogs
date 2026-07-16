@@ -1,6 +1,6 @@
 """Benchmark DuckDB's share of per-date chunk wall time.
 
-These benchmarks reuse the local fixtures from ``tests/benchmarks/conftest.py``.
+These benchmarks reuse the local fixtures from `tests/benchmarks/conftest.py`.
 They answer the U4 follow-up question from the concurrency refactor plan:
 should lazycogs add a per-thread DuckDB client pool for true parallel query
 execution, or is the current single-worker bounded executor already good enough?

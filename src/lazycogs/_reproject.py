@@ -15,13 +15,13 @@ if TYPE_CHECKING:
 
 @functools.lru_cache(maxsize=256)
 def _get_transformer(src_crs: CRS, dst_crs: CRS) -> Transformer:
-    """Return a cached ``Transformer`` for a CRS pair.
+    """Return a cached `Transformer` for a CRS pair.
 
-    ``Transformer.from_crs`` involves PROJ database lookups and pipeline
+    `Transformer.from_crs` involves PROJ database lookups and pipeline
     initialisation.  The same (src_crs, dst_crs) pair recurs for every item
     in a collection, so caching avoids recreating the same object hundreds of
-    times per chunk read.  ``pyproj.CRS`` is hashable via its WKT
-    representation, and ``Transformer`` is thread-safe from PROJ 6+.
+    times per chunk read.  `pyproj.CRS` is hashable via its WKT
+    representation, and `Transformer` is thread-safe from PROJ 6+.
     """
     return Transformer.from_crs(src_crs, dst_crs, always_xy=True)
 
@@ -31,18 +31,18 @@ class WarpMap:
     """Precomputed pixel-coordinate mapping from a destination grid to a source grid.
 
     Stores the source column and row index for every destination pixel centre,
-    computed by a single vectorised ``Transformer.transform`` call.  The ``valid``
-    mask is not stored here; ``apply_warp_map`` derives it from the actual source
-    array shape so the same ``WarpMap`` can be reused across bands that share the
+    computed by a single vectorised `Transformer.transform` call.  The `valid`
+    mask is not stored here; `apply_warp_map` derives it from the actual source
+    array shape so the same `WarpMap` can be reused across bands that share the
     same source CRS and window transform but may have slightly different window
     dimensions due to rounding.
 
     Attributes:
-        src_col_idx: Source column indices, shape ``(dst_height, dst_width)``,
-            dtype ``intp``.  May contain out-of-bounds values for pixels that
+        src_col_idx: Source column indices, shape `(dst_height, dst_width)`,
+            dtype `intp`.  May contain out-of-bounds values for pixels that
             map outside the source extent.
-        src_row_idx: Source row indices, shape ``(dst_height, dst_width)``,
-            dtype ``intp``.
+        src_row_idx: Source row indices, shape `(dst_height, dst_width)`,
+            dtype `intp`.
 
     """
 
@@ -61,9 +61,9 @@ def compute_warp_map(
     """Build a pixel-coordinate mapping from destination grid to source grid.
 
     Transforms every destination pixel centre into the source CRS with a single
-    vectorised ``Transformer.transform`` call, then converts to fractional source
+    vectorised `Transformer.transform` call, then converts to fractional source
     pixel coordinates.  The result can be reused across multiple bands that share
-    the same source CRS and window transform via :func:`apply_warp_map`.
+    the same source CRS and window transform via `apply_warp_map`.
 
     Args:
         src_transform: Affine transform of the source array (window transform).
@@ -74,8 +74,8 @@ def compute_warp_map(
         dst_height: Height of the destination grid in pixels.
 
     Returns:
-        :class:`WarpMap` with ``src_col_idx`` and ``src_row_idx`` arrays of
-        shape ``(dst_height, dst_width)``.
+        `WarpMap` with `src_col_idx` and `src_row_idx` arrays of
+        shape `(dst_height, dst_width)`.
 
     """
     col_idx = np.arange(dst_width)
@@ -104,21 +104,21 @@ def apply_warp_map(
     warp_map: WarpMap,
     nodata: float | None = None,
 ) -> np.ndarray:
-    """Sample a source array using a precomputed :class:`WarpMap`.
+    """Sample a source array using a precomputed `WarpMap`.
 
-    The valid mask is derived from ``data.shape`` at call time so the same
-    ``warp_map`` can be safely applied to bands with slightly different window
+    The valid mask is derived from `data.shape` at call time so the same
+    `warp_map` can be safely applied to bands with slightly different window
     dimensions.
 
     Args:
-        data: Source data with shape ``(bands, src_h, src_w)``.
+        data: Source data with shape `(bands, src_h, src_w)`.
         warp_map: Pixel-coordinate mapping from destination to source.
         nodata: Fill value for destination pixels that fall outside the source
-            extent, or ``None`` to use zero.
+            extent, or `None` to use zero.
 
     Returns:
-        Array with shape ``(bands, dst_height, dst_width)`` and the same dtype
-        as ``data``.
+        Array with shape `(bands, dst_height, dst_width)` and the same dtype
+        as `data`.
 
     """
     bands, src_h, src_w = data.shape
@@ -149,13 +149,13 @@ def reproject_array(
 ) -> np.ndarray:
     """Reproject a raster array using nearest-neighbor sampling.
 
-    Convenience wrapper around :func:`compute_warp_map` and
-    :func:`apply_warp_map`.  Use those functions directly when the same source
+    Convenience wrapper around `compute_warp_map` and
+    `apply_warp_map`.  Use those functions directly when the same source
     CRS and window transform are shared across multiple bands, so the warp map
     can be computed once and reused.
 
     Args:
-        data: Source data with shape ``(bands, src_h, src_w)``.
+        data: Source data with shape `(bands, src_h, src_w)`.
         src_transform: Affine transform of the source array.
         src_crs: CRS of the source array.
         dst_transform: Affine transform of the destination grid.
@@ -163,11 +163,11 @@ def reproject_array(
         dst_width: Width of the output array in pixels.
         dst_height: Height of the output array in pixels.
         nodata: Value to use for destination pixels that fall outside the
-            source extent, or ``None`` to use zero.
+            source extent, or `None` to use zero.
 
     Returns:
-        Reprojected array with shape ``(bands, dst_height, dst_width)`` and
-        the same dtype as ``data``.
+        Reprojected array with shape `(bands, dst_height, dst_width)` and
+        the same dtype as `data`.
 
     """
     warp_map = compute_warp_map(

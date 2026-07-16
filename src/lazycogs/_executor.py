@@ -165,7 +165,7 @@ def _submit_to_loop[T](
 
 
 def run_on_loop[T](coro: Coroutine[object, object, T]) -> T:
-    """Run ``coro`` on the shared lazycogs event loop and return its result.
+    """Run `coro` on the shared lazycogs event loop and return its result.
 
     This is the supported helper for sync code that must execute a coroutine on
     the lazycogs background loop, including callers that need to construct

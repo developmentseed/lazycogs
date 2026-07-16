@@ -28,7 +28,7 @@ from .conftest import (
 
 
 def _path_from_href(href: str) -> Path:
-    """Return the local filesystem path for a ``file://`` benchmark asset HREF."""
+    """Return the local filesystem path for a `file://` benchmark asset HREF."""
     return Path(urlparse(href).path)
 
 
@@ -166,7 +166,7 @@ def test_open_rejects_conflicting_sampled_nodata_on_local_benchmark_copy(
     tmp_path: Path,
     benchmark_items: list[dict[str, Any]],
 ) -> None:
-    """A derived offline parquet with band conflicts fails fast at ``open()``."""
+    """A derived offline parquet with band conflicts fails fast at `open()`."""
     item = deepcopy(benchmark_items[0])
     item["assets"]["nir08"]["href"] = _write_asset_variant(
         item["assets"]["nir08"]["href"],
@@ -189,7 +189,7 @@ def test_open_accepts_conflicting_sampled_nodata_with_explicit_override(
     tmp_path: Path,
     benchmark_items: list[dict[str, Any]],
 ) -> None:
-    """The same offline conflict opens successfully when ``nodata=`` is explicit."""
+    """The same offline conflict opens successfully when `nodata=` is explicit."""
     item = deepcopy(benchmark_items[0])
     item["assets"]["nir08"]["href"] = _write_asset_variant(
         item["assets"]["nir08"]["href"],

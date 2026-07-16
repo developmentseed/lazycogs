@@ -19,17 +19,17 @@ def compute_output_grid(
 
     The grid is aligned to the bbox corners, with x increasing left-to-right
     and y decreasing top-to-bottom (descending), following the standard
-    north-up raster convention.  Label-based slicing with ``xarray.sel`` on
-    the ``y`` dimension uses ``slice(north, south)`` (high to low).
+    north-up raster convention.  Label-based slicing with `xarray.sel` on
+    the `y` dimension uses `slice(north, south)` (high to low).
 
     Args:
-        bbox: ``(minx, miny, maxx, maxy)`` in the target CRS.
+        bbox: `(minx, miny, maxx, maxy)` in the target CRS.
         resolution: Pixel size in CRS units (assumed square).
 
     Returns:
-        A three-tuple ``(transform, width, height)`` where ``transform`` is
-        the affine mapping from pixel space to CRS space and ``width`` /
-        ``height`` are the grid dimensions.
+        A three-tuple `(transform, width, height)` where `transform` is
+        the affine mapping from pixel space to CRS space and `width` /
+        `height` are the grid dimensions.
 
     """
     minx, miny, maxx, maxy = bbox
@@ -51,19 +51,19 @@ def align_bbox(
 
     Expands the bbox outward so that all four edges fall exactly on a grid
     line. Useful for aligning an AOI to the native grid of a COG collection
-    (e.g. from a STAC item's ``proj:transform`` property) before calling
-    :func:`lazycogs.open`.
+    (e.g. from a STAC item's `proj:transform` property) before calling
+    `lazycogs.open`.
 
     Args:
         affine: Affine transform in row-major order, either 6-element
-            ``(pixel_w, 0, x_origin, 0, pixel_h, y_origin)`` or 9-element
-            ``(pixel_w, 0, x_origin, 0, pixel_h, y_origin, 0, 0, 1)``.
-            Accepts an :class:`affine.Affine` object or the list stored in
-            a STAC item's ``proj:transform`` property.
-        bbox: ``(minx, miny, maxx, maxy)`` in the same CRS as the transform.
+            `(pixel_w, 0, x_origin, 0, pixel_h, y_origin)` or 9-element
+            `(pixel_w, 0, x_origin, 0, pixel_h, y_origin, 0, 0, 1)`.
+            Accepts an `affine.Affine` object or the list stored in
+            a STAC item's `proj:transform` property.
+        bbox: `(minx, miny, maxx, maxy)` in the same CRS as the transform.
 
     Returns:
-        ``(minx, miny, maxx, maxy)`` snapped to the nearest enclosing grid
+        `(minx, miny, maxx, maxy)` snapped to the nearest enclosing grid
         lines.
 
     """

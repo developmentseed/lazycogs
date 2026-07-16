@@ -25,7 +25,7 @@ class _TimeStep:
     Attributes:
         coord: The xarray coordinate value for this time step.
         label: Opaque sortable grouping label.
-        datetime_filter: Predicate passed to ``rustac`` as ``datetime=``.
+        datetime_filter: Predicate passed to `rustac` as `datetime=`.
 
     """
 
@@ -39,7 +39,7 @@ class _TemporalGrouper(ABC):
 
     Each subclass buckets STAC item datetimes into discrete time steps,
     producing a group label (used for sorting and deduplication), a
-    ``rustac``-compatible datetime filter string, and a ``numpy.datetime64``
+    `rustac`-compatible datetime filter string, and a `numpy.datetime64`
     coordinate value.
 
     """
@@ -51,7 +51,7 @@ class _TemporalGrouper(ABC):
 
     @abstractmethod
     def datetime_filter(self, group_key: str) -> str:
-        """Return a ``rustac``-compatible datetime filter for a group."""
+        """Return a `rustac`-compatible datetime filter for a group."""
         ...
 
     @abstractmethod
@@ -72,7 +72,7 @@ def _parse_timestamp(datetime_str: str) -> datetime:
     """Parse a timestamp and normalize it to UTC.
 
     Bare dates are rejected because exact and sub-daily grouping need a real
-    instant rather than rustac's date-wide interpretation of ``YYYY-MM-DD``.
+    instant rather than rustac's date-wide interpretation of `YYYY-MM-DD`.
     Naive timestamps are treated as UTC for compatibility with STAC-like test
     fixtures that omit the offset.
     """
@@ -91,12 +91,12 @@ def _parse_timestamp(datetime_str: str) -> datetime:
 
 
 def _format_utc_timestamp(value: datetime, *, timespec: str = "auto") -> str:
-    """Return a stable UTC timestamp string ending in ``Z``."""
+    """Return a stable UTC timestamp string ending in `Z`."""
     return value.astimezone(UTC).isoformat(timespec=timespec).replace("+00:00", "Z")
 
 
 class _ExactTimestampGrouper(_TemporalGrouper):
-    """Group items by their unique normalized timestamp (``time_period=None``)."""
+    """Group items by their unique normalized timestamp (`time_period=None`)."""
 
     def group_key(self, datetime_str: str) -> str:
         """Return the normalized UTC timestamp for *datetime_str*."""
@@ -107,7 +107,7 @@ class _ExactTimestampGrouper(_TemporalGrouper):
         return group_key
 
     def to_datetime64(self, group_key: str) -> np.datetime64:
-        """Return the exact timestamp as ``datetime64[ns]``."""
+        """Return the exact timestamp as `datetime64[ns]`."""
         return np.datetime64(group_key.removesuffix("Z"), "ns")
 
 
@@ -134,7 +134,7 @@ class _HourGrouper(_TemporalGrouper):
         return _format_utc_timestamp(start, timespec="seconds")
 
     def datetime_filter(self, group_key: str) -> str:
-        """Return a closed second-precision ``start/end`` range."""
+        """Return a closed second-precision `start/end` range."""
         start = self._bucket_start(group_key)
         end = start + timedelta(hours=self._n, seconds=-1)
         return (
@@ -143,15 +143,15 @@ class _HourGrouper(_TemporalGrouper):
         )
 
     def to_datetime64(self, group_key: str) -> np.datetime64:
-        """Return the bucket start as ``datetime64[s]``."""
+        """Return the bucket start as `datetime64[s]`."""
         return np.datetime64(group_key.removesuffix("Z"), "s")
 
 
 class _DayGrouper(_TemporalGrouper):
-    """Group items by calendar day (``P1D``)."""
+    """Group items by calendar day (`P1D`)."""
 
     def group_key(self, datetime_str: str) -> str:
-        """Return the ``YYYY-MM-DD`` portion of *datetime_str*."""
+        """Return the `YYYY-MM-DD` portion of *datetime_str*."""
         return datetime_str[:10]
 
     def datetime_filter(self, group_key: str) -> str:
@@ -159,32 +159,32 @@ class _DayGrouper(_TemporalGrouper):
         return group_key
 
     def to_datetime64(self, group_key: str) -> np.datetime64:
-        """Return ``numpy.datetime64(group_key, "D")``."""
+        """Return `numpy.datetime64(group_key, "D")`."""
         return np.datetime64(group_key, "D")
 
 
 class _WeekGrouper(_TemporalGrouper):
-    """Group items by ISO 8601 calendar week (``P1W``), anchored on Monday."""
+    """Group items by ISO 8601 calendar week (`P1W`), anchored on Monday."""
 
     def group_key(self, datetime_str: str) -> str:
-        """Return an ``YYYY-Www`` ISO week label for *datetime_str*."""
+        """Return an `YYYY-Www` ISO week label for *datetime_str*."""
         d = date.fromisoformat(datetime_str[:10])
         iso = d.isocalendar()
         return f"{iso.year}-W{iso.week:02d}"
 
     def datetime_filter(self, group_key: str) -> str:
-        """Return a ``Monday/Sunday`` RFC 3339 range for *group_key*."""
+        """Return a `Monday/Sunday` RFC 3339 range for *group_key*."""
         monday = self._monday(group_key)
         sunday = monday + timedelta(days=6)
         return f"{monday.isoformat()}/{sunday.isoformat()}"
 
     def to_datetime64(self, group_key: str) -> np.datetime64:
-        """Return the Monday of the ISO week as ``datetime64[D]``."""
+        """Return the Monday of the ISO week as `datetime64[D]`."""
         return np.datetime64(self._monday(group_key).isoformat(), "D")
 
     @staticmethod
     def _monday(group_key: str) -> date:
-        """Return the Monday ``date`` for an ``YYYY-Www`` key."""
+        """Return the Monday `date` for an `YYYY-Www` key."""
         year = int(group_key[:4])
         week = int(group_key[6:])
         jan4 = date(year, 1, 4)
@@ -193,36 +193,36 @@ class _WeekGrouper(_TemporalGrouper):
 
 
 class _MonthGrouper(_TemporalGrouper):
-    """Group items by calendar month (``P1M``)."""
+    """Group items by calendar month (`P1M`)."""
 
     def group_key(self, datetime_str: str) -> str:
-        """Return the ``YYYY-MM`` portion of *datetime_str*."""
+        """Return the `YYYY-MM` portion of *datetime_str*."""
         return datetime_str[:7]
 
     def datetime_filter(self, group_key: str) -> str:
-        """Return a ``YYYY-MM-01/YYYY-MM-DD`` range covering the full month."""
+        """Return a `YYYY-MM-01/YYYY-MM-DD` range covering the full month."""
         year, month = int(group_key[:4]), int(group_key[5:7])
         last_day = calendar.monthrange(year, month)[1]
         return f"{group_key}-01/{group_key}-{last_day:02d}"
 
     def to_datetime64(self, group_key: str) -> np.datetime64:
-        """Return the first of the month as ``datetime64[D]``."""
+        """Return the first of the month as `datetime64[D]`."""
         return np.datetime64(f"{group_key}-01", "D")
 
 
 class _YearGrouper(_TemporalGrouper):
-    """Group items by calendar year (``P1Y``)."""
+    """Group items by calendar year (`P1Y`)."""
 
     def group_key(self, datetime_str: str) -> str:
-        """Return the ``YYYY`` portion of *datetime_str*."""
+        """Return the `YYYY` portion of *datetime_str*."""
         return datetime_str[:4]
 
     def datetime_filter(self, group_key: str) -> str:
-        """Return a ``YYYY-01-01/YYYY-12-31`` range covering the full year."""
+        """Return a `YYYY-01-01/YYYY-12-31` range covering the full year."""
         return f"{group_key}-01-01/{group_key}-12-31"
 
     def to_datetime64(self, group_key: str) -> np.datetime64:
-        """Return January 1st of the year as ``datetime64[D]``."""
+        """Return January 1st of the year as `datetime64[D]`."""
         return np.datetime64(f"{group_key}-01-01", "D")
 
 
@@ -243,14 +243,14 @@ class _FixedDayGrouper(_TemporalGrouper):
         return f"{self._bucket(datetime_str):06d}"
 
     def datetime_filter(self, group_key: str) -> str:
-        """Return a ``start/end`` RFC 3339 range for the bucket."""
+        """Return a `start/end` RFC 3339 range for the bucket."""
         bucket = int(group_key)
         start = _EPOCH + timedelta(days=bucket * self._n)
         end = start + timedelta(days=self._n - 1)
         return f"{start.isoformat()}/{end.isoformat()}"
 
     def to_datetime64(self, group_key: str) -> np.datetime64:
-        """Return the start date of the bucket as ``datetime64[D]``."""
+        """Return the start date of the bucket as `datetime64[D]`."""
         bucket = int(group_key)
         start = _EPOCH + timedelta(days=bucket * self._n)
         return np.datetime64(start.isoformat(), "D")
@@ -259,8 +259,8 @@ class _FixedDayGrouper(_TemporalGrouper):
 def grouper_from_period(time_period: str | None) -> _TemporalGrouper:
     """Return a temporal grouper for a supported grouping period.
 
-    Supported values are ``None`` for exact timestamps, date durations
-    ``P1D``, ``PnD``, ``P1W``, ``P1M``, ``P1Y``, and hour durations ``PTnH``.
+    Supported values are `None` for exact timestamps, date durations
+    `P1D`, `PnD`, `P1W`, `P1M`, `P1Y`, and hour durations `PTnH`.
     """
     if time_period is None:
         return _ExactTimestampGrouper()

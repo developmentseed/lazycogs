@@ -33,11 +33,11 @@ logger = logging.getLogger(__name__)
 
 
 class ChunkReadError(RuntimeError):
-    """Raised when ``errors="raise"`` and a STAC item's bands fail to read.
+    """Raised when `errors="raise"` and a STAC item's bands fail to read.
 
     Wraps the original exception (storage error, decode error, etc.) with
     the item and bands that were being read. The original exception is
-    available as ``original`` and is also chained via ``__cause__``.
+    available as `original` and is also chained via `__cause__`.
     """
 
     def __init__(
@@ -170,7 +170,7 @@ def _build_band_read_entry(
     ctx: _ChunkContext,
     effective_nodata: float | None,
 ) -> tuple[str, GeoTIFF, GeoTIFF | Overview, Window, float | None, CRS] | None:
-    """Build the read plan entry for one band, or ``None`` if no overlap."""
+    """Build the read plan entry for one band, or `None` if no overlap."""
     src_crs = geotiff.crs
     target_res_native, transformer = _target_res_and_transformer(
         ctx.chunk_affine,
@@ -200,9 +200,9 @@ def _target_res_and_transformer(
     dst_crs: CRS,
     src_crs: CRS,
 ) -> tuple[float, Transformer | None]:
-    """Return ``(target_res_native, transformer)`` for the dst→src reprojection.
+    """Return `(target_res_native, transformer)` for the dst→src reprojection.
 
-    *transformer* is ``None`` when source and destination share a CRS, in which
+    *transformer* is `None` when source and destination share a CRS, in which
     case *target_res_native* is just the destination pixel width. Otherwise the
     pixel width is estimated at the chunk center by projecting two adjacent
     pixel centers to the source CRS.
@@ -218,11 +218,11 @@ def _target_res_and_transformer(
 
 
 def _array_to_masked(arr: np.ndarray, effective_nodata: float | None) -> ma.MaskedArray:
-    """Wrap ``arr`` in a MaskedArray, masking pixels equal to ``effective_nodata``.
+    """Wrap `arr` in a MaskedArray, masking pixels equal to `effective_nodata`.
 
-    A pixel is masked only when *all* bands equal ``effective_nodata`` (so a
+    A pixel is masked only when *all* bands equal `effective_nodata` (so a
     valid pixel in any band keeps the position unmasked). When
-    ``effective_nodata`` is ``None``, nothing is masked.
+    `effective_nodata` is `None`, nothing is masked.
     """
     if effective_nodata is None:
         mask = np.zeros(arr.shape, dtype=bool)
@@ -233,7 +233,7 @@ def _array_to_masked(arr: np.ndarray, effective_nodata: float | None) -> ma.Mask
 
 
 def _select_overview(geotiff: GeoTIFF, target_res: float) -> Overview | None:
-    """Choose the coarsest overview whose resolution is <= ``target_res``.
+    """Choose the coarsest overview whose resolution is <= `target_res`.
 
     Picks the finest source data that avoids upsampling: the selected
     overview's pixel size is no larger than the output pixel size, so each
@@ -270,9 +270,9 @@ def _chunk_bbox_native(
     chunk_height: int,
     transformer: Transformer | None,
 ) -> tuple[float, float, float, float]:
-    """Return the chunk's ``(minx, miny, maxx, maxy)`` in the source CRS.
+    """Return the chunk's `(minx, miny, maxx, maxy)` in the source CRS.
 
-    When ``transformer`` is ``None`` the chunk is assumed to already be in the
+    When `transformer` is `None` the chunk is assumed to already be in the
     source CRS and the bbox is returned directly. Otherwise the four corners
     are projected and the axis-aligned envelope is returned.
     """
@@ -295,7 +295,7 @@ def _native_window(
     width: int,
     height: int,
 ) -> Window | None:
-    """Compute the pixel window in a source image that covers ``bbox_native``."""
+    """Compute the pixel window in a source image that covers `bbox_native`."""
     inv = ~geotiff.transform
     minx, miny, maxx, maxy = bbox_native
 
@@ -330,9 +330,9 @@ async def _open_and_window(
 ) -> tuple[GeoTIFF, GeoTIFF | Overview, Window | None, str] | None:
     """Open a COG asset and compute the pixel window covering the chunk.
 
-    Returns ``(geotiff, reader, window, path)`` where *reader* is an overview
-    when one matches the target resolution and *window* is ``None`` if the
-    chunk does not overlap the source image. Returns ``None`` when the item
+    Returns `(geotiff, reader, window, path)` where *reader* is an overview
+    when one matches the target resolution and *window* is `None` if the
+    chunk does not overlap the source image. Returns `None` when the item
     has no matching asset.
     """
     asset = item.get("assets", {}).get(band)
@@ -384,16 +384,16 @@ def _apply_bands_with_warp_cache(
 ) -> dict[str, tuple[np.ndarray, float | None]]:
     """Apply warp maps to multiple band rasters, reusing maps for identical geometries.
 
-    Checks ``warp_cache`` (keyed on ``(tuple(raster.transform), src_crs)``)
-    before computing a new warp map.  When ``warp_cache`` is shared across calls
+    Checks `warp_cache` (keyed on `(tuple(raster.transform), src_crs)`)
+    before computing a new warp map.  When `warp_cache` is shared across calls
     (e.g. across time steps in a single chunk read), warp maps for recurring tile
     geometries are computed only once.  Bands with different geometries each get
     their own correct warp map.
 
     This function is designed to run inside a thread executor — it is CPU-bound
-    and must not be called from the async event loop directly.  When ``warp_cache``
+    and must not be called from the async event loop directly.  When `warp_cache`
     is shared across concurrent executor calls, two threads may both compute the
-    same warp map before either stores it; this is safe because ``compute_warp_map``
+    same warp map before either stores it; this is safe because `compute_warp_map`
     is deterministic and the duplicate result is simply overwritten.
     """
     cache: dict[tuple[tuple[float, ...], CRS], WarpMap] = (
@@ -587,10 +587,10 @@ async def read_chunk_async(  # noqa: C901
 
     Processes all requested bands together per item so that bands sharing the
     same source geometry compute the reprojection warp map only once (via
-    :func:`_apply_bands_with_warp_cache`).
+    `_apply_bands_with_warp_cache`).
 
     All item reads are scheduled up front, but execution is bounded by
-    ``max_concurrent_reads`` via an ``asyncio.Semaphore``. When all per-band
+    `max_concurrent_reads` via an `asyncio.Semaphore`. When all per-band
     mosaic methods signal completion, remaining pending reads are skipped.
 
     Args:
@@ -601,31 +601,31 @@ async def read_chunk_async(  # noqa: C901
         chunk_width: Width of the destination chunk in pixels.
         chunk_height: Height of the destination chunk in pixels.
         nodata: No-data fill value.
-        out_dtype: Output array dtype inferred or supplied at ``open()`` time.
-        dtype_was_explicit: Whether the caller passed ``dtype=`` explicitly.
-        nodata_was_explicit: Whether the caller passed ``nodata=`` explicitly.
+        out_dtype: Output array dtype inferred or supplied at `open()` time.
+        dtype_was_explicit: Whether the caller passed `dtype=` explicitly.
+        nodata_was_explicit: Whether the caller passed `nodata=` explicitly.
         mosaic_method_cls: Mosaic method class instantiated once per band.
-            Defaults to :class:`~lazycogs._mosaic_methods.FirstMethod`.
-        store: Optional pre-configured :class:`async_geotiff.Store`
-            accepted by ``GeoTIFF.open``.
+            Defaults to `FirstMethod`.
+        store: Optional pre-configured `async_geotiff.Store`
+            accepted by `GeoTIFF.open`.
         max_concurrent_reads: Maximum number of item reads to run concurrently
-            when ``_read_semaphore`` is not supplied.
+            when `_read_semaphore` is not supplied.
         _read_semaphore: Optional caller-supplied semaphore used by backend
             orchestration to share item-read admission across multiple
-            ``read_chunk_async`` calls in one chunk materialisation.
+            `read_chunk_async` calls in one chunk materialisation.
         warp_cache: Optional cache shared across calls for reusing warp maps
             from earlier time steps.
         path_fn: Optional callable that takes an asset HREF and returns the
             object path to use with *store*.  Forwarded to
-            :func:`_read_item_band`.
-        errors: When ``"raise"`` (default), the first item whose bands fail to
-            read (e.g. a storage error) is raised as :class:`ChunkReadError`.
-            When ``"ignore"``, the failure is logged as a warning and
+            `_read_item_band`.
+        errors: When `"raise"` (default), the first item whose bands fail to
+            read (e.g. a storage error) is raised as `ChunkReadError`.
+            When `"ignore"`, the failure is logged as a warning and
             skipped instead, so its pixels keep the mosaic fill value.
 
     Returns:
-        ``dict`` mapping each band name to an array of shape
-        ``(cog_bands, chunk_height, chunk_width)`` with dtype matching the
+        `dict` mapping each band name to an array of shape
+        `(cog_bands, chunk_height, chunk_width)` with dtype matching the
         source COGs.
 
     """

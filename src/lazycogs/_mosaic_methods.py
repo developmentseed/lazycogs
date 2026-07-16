@@ -1,10 +1,10 @@
 """Mosaic methods for combining overlapping raster tiles.
 
-Ported from rio-tiler's ``mosaic/methods/`` (MIT licence). These are pure
+Ported from rio-tiler's `mosaic/methods/` (MIT licence). These are pure
 numpy operations with no GDAL dependency.
 
-All methods operate on ``numpy.ma.MaskedArray`` values with shape
-``(bands, height, width)``.  Masked pixels (``mask == True``) are treated as
+All methods operate on `numpy.ma.MaskedArray` values with shape
+`(bands, height, width)`.  Masked pixels (`mask == True`) are treated as
 no-data and filled in from subsequent tiles until the mosaic is complete.
 """
 
@@ -34,7 +34,7 @@ class MosaicMethodBase(ABC):
 
     @property
     def is_done(self) -> bool:
-        """Return ``True`` when every output pixel has a valid value."""
+        """Return `True` when every output pixel has a valid value."""
         if self._mosaic is None:
             return False
         return not bool(np.any(ma.getmaskarray(self._mosaic)))
@@ -54,7 +54,7 @@ class MosaicMethodBase(ABC):
         """Incorporate a new tile into the mosaic.
 
         Args:
-            arr: Masked array with shape ``(bands, height, width)``.  Masked
+            arr: Masked array with shape `(bands, height, width)`.  Masked
                 positions indicate no-data pixels in the new tile.
 
         """
@@ -65,10 +65,10 @@ class FirstMethod(MosaicMethodBase):
     """Use the first valid pixel encountered (first-on-top compositing)."""
 
     def feed(self, arr: ma.MaskedArray) -> None:
-        """Incorporate ``arr`` by filling any still-empty positions.
+        """Incorporate `arr` by filling any still-empty positions.
 
         Args:
-            arr: Masked array with shape ``(bands, height, width)``.
+            arr: Masked array with shape `(bands, height, width)`.
 
         """
         if self._mosaic is None:
@@ -91,10 +91,10 @@ class HighestMethod(MosaicMethodBase):
     """Use the pixel with the highest value across all tiles."""
 
     def feed(self, arr: ma.MaskedArray) -> None:
-        """Incorporate ``arr`` by keeping the maximum value at each position.
+        """Incorporate `arr` by keeping the maximum value at each position.
 
         Args:
-            arr: Masked array with shape ``(bands, height, width)``.
+            arr: Masked array with shape `(bands, height, width)`.
 
         """
         if self._mosaic is None:
@@ -109,10 +109,10 @@ class LowestMethod(MosaicMethodBase):
     """Use the pixel with the lowest value across all tiles."""
 
     def feed(self, arr: ma.MaskedArray) -> None:
-        """Incorporate ``arr`` by keeping the minimum value at each position.
+        """Incorporate `arr` by keeping the minimum value at each position.
 
         Args:
-            arr: Masked array with shape ``(bands, height, width)``.
+            arr: Masked array with shape `(bands, height, width)`.
 
         """
         if self._mosaic is None:
@@ -134,10 +134,10 @@ class MeanMethod(MosaicMethodBase):
         self._count: np.ndarray | None = None
 
     def feed(self, arr: ma.MaskedArray) -> None:
-        """Incorporate ``arr`` into the running mean.
+        """Incorporate `arr` into the running mean.
 
         Args:
-            arr: Masked array with shape ``(bands, height, width)``.
+            arr: Masked array with shape `(bands, height, width)`.
 
         """
         valid = ~ma.getmaskarray(arr)
@@ -161,7 +161,7 @@ class MeanMethod(MosaicMethodBase):
         """Return filled mean mosaic.
 
         Returns:
-            Numpy array with shape ``(bands, height, width)``.
+            Numpy array with shape `(bands, height, width)`.
 
         """
         if self._mosaic is None:
@@ -180,12 +180,12 @@ class MedianMethod(MosaicMethodBase):
         self._stack: list[ma.MaskedArray] = []
 
     def feed(self, arr: ma.MaskedArray) -> None:
-        """Add ``arr`` to the stack; maintain mask union for ``is_done``.
+        """Add `arr` to the stack; maintain mask union for `is_done`.
 
-        The median is computed lazily in ``data``.
+        The median is computed lazily in `data`.
 
         Args:
-            arr: Masked array with shape ``(bands, height, width)``.
+            arr: Masked array with shape `(bands, height, width)`.
 
         """
         self._stack.append(arr)
@@ -202,7 +202,7 @@ class MedianMethod(MosaicMethodBase):
         """Return the pixel-wise median of all fed tiles.
 
         Returns:
-            Numpy array with shape ``(bands, height, width)``.
+            Numpy array with shape `(bands, height, width)`.
 
         """
         if not self._stack:
@@ -222,12 +222,12 @@ class StdevMethod(MosaicMethodBase):
         self._stack: list[ma.MaskedArray] = []
 
     def feed(self, arr: ma.MaskedArray) -> None:
-        """Add ``arr`` to the stack; maintain mask union for ``is_done``.
+        """Add `arr` to the stack; maintain mask union for `is_done`.
 
-        The standard deviation is computed lazily in ``data``.
+        The standard deviation is computed lazily in `data`.
 
         Args:
-            arr: Masked array with shape ``(bands, height, width)``.
+            arr: Masked array with shape `(bands, height, width)`.
 
         """
         self._stack.append(arr)
@@ -244,7 +244,7 @@ class StdevMethod(MosaicMethodBase):
         """Return the pixel-wise standard deviation of all fed tiles.
 
         Returns:
-            Numpy array with shape ``(bands, height, width)``.
+            Numpy array with shape `(bands, height, width)`.
 
         """
         if not self._stack:
@@ -260,7 +260,7 @@ class CountMethod(MosaicMethodBase):
         """Accumulate the count of valid pixels.
 
         Args:
-            arr: Masked array with shape ``(bands, height, width)``.
+            arr: Masked array with shape `(bands, height, width)`.
 
         """
         valid = (~ma.getmaskarray(arr)).astype(np.uint16)
@@ -275,7 +275,7 @@ class CountMethod(MosaicMethodBase):
         """Return the per-pixel observation count.
 
         Returns:
-            Numpy array with shape ``(bands, height, width)``.
+            Numpy array with shape `(bands, height, width)`.
 
         """
         if self._mosaic is None:

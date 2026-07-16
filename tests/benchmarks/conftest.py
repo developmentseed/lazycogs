@@ -1,6 +1,6 @@
 """Fixtures for end-to-end benchmarks.
 
-Run ``uv run python scripts/prepare_benchmark_data.py`` before using these fixtures.
+Run `uv run python scripts/prepare_benchmark_data.py` before using these fixtures.
 """
 
 from pathlib import Path

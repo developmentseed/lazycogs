@@ -95,11 +95,11 @@ def _current_time_items(
 ) -> list[tuple[int, str, np.datetime64]]:
     """Return backend time indices and current coordinate values in array order.
 
-    Matches each of ``da``'s current ``time`` coordinate values against the
+    Matches each of `da`'s current `time` coordinate values against the
     backend's time-step coordinates by value rather than by recovering a
     position from the DataArray's lazy indexer. Position-based recovery is
     unreliable once a dask-backed array has been further indexed (e.g.
-    ``.chunk(...).sel(time=...)``), because the selection may be applied as a
+    `.chunk(...).sel(time=...)`), because the selection may be applied as a
     separate dask graph layer instead of being folded into the discovered
     indexer's key.
     """
@@ -143,18 +143,18 @@ class CogRead:
         item_id: STAC item ID.
         asset_key: Asset key (band name) that would be read.
         href: Asset HREF.
-        overview_level: Overview level that would be read.  ``None`` means
-            full resolution.  Only populated when ``fetch_headers=True``.
+        overview_level: Overview level that would be read.  `None` means
+            full resolution.  Only populated when `fetch_headers=True`.
         overview_resolution: Pixel size of the selected level in source CRS
-            units.  Only populated when ``fetch_headers=True``.
+            units.  Only populated when `fetch_headers=True`.
         window_col_off: Column offset of the read window in source pixels.
-            Only populated when ``fetch_headers=True``.
+            Only populated when `fetch_headers=True`.
         window_row_off: Row offset of the read window in source pixels.
-            Only populated when ``fetch_headers=True``.
+            Only populated when `fetch_headers=True`.
         window_width: Width of the read window in source pixels.
-            Only populated when ``fetch_headers=True``.
+            Only populated when `fetch_headers=True`.
         window_height: Height of the read window in source pixels.
-            Only populated when ``fetch_headers=True``.
+            Only populated when `fetch_headers=True`.
 
     """
 
@@ -176,7 +176,7 @@ class ChunkRead:
     Attributes:
         band: Asset key for this chunk.
         time_index: Index of this time step in the full time axis.
-        date_filter: ``rustac``-compatible datetime filter string for this
+        date_filter: `rustac`-compatible datetime filter string for this
             time step.
         time_coord: Coordinate value for this time step.
         chunk_row: Tile row index within the spatial grid (0-indexed).
@@ -185,7 +185,7 @@ class ChunkRead:
         chunk_width: Tile width in pixels.
         chunk_height: Tile height in pixels.
         cog_reads: Per-COG read details.
-        n_cog_reads: Number of COG files matched (derived from ``cog_reads``).
+        n_cog_reads: Number of COG files matched (derived from `cog_reads`).
 
     """
 
@@ -222,7 +222,7 @@ class ExplainPlan:
         chunk_height: Spatial chunk height in pixels.
         chunk_reads: One entry per (band, time step, spatial tile).
         fetch_headers: Whether COG headers were opened to populate overview
-            and window fields on each :class:`CogRead`.
+            and window fields on each `CogRead`.
 
     """
 
@@ -274,7 +274,7 @@ class ExplainPlan:
         )
 
     def _time_range(self) -> str:
-        """Return a human-readable time range or ``"none"``."""
+        """Return a human-readable time range or `"none"`."""
         if not self.time_coords:
             return "none"
         t0 = str(self.time_coords[0])[:10]
@@ -282,7 +282,7 @@ class ExplainPlan:
         return f"{t0} - {t1}" if t0 != t1 else t0
 
     def _header_lines(self) -> list[str]:
-        """Return the top section of :meth:`summary` (grid + chunking)."""
+        """Return the top section of `summary` (grid + chunking)."""
         n_x, n_y = self._n_tiles
         return [
             "=== ExplainPlan ===",
@@ -296,7 +296,7 @@ class ExplainPlan:
         ]
 
     def _distribution_lines(self) -> list[str]:
-        """Return the chunk-COG distribution section of :meth:`summary`."""
+        """Return the chunk-COG distribution section of `summary`."""
         n_x, n_y = self._n_tiles
         counts = Counter(c.n_cog_reads for c in self.chunk_reads)
         total = len(self.chunk_reads) or 1
@@ -320,7 +320,7 @@ class ExplainPlan:
         ]
 
     def _header_detail_lines(self) -> list[str]:
-        """Return overview/window stats when ``fetch_headers`` is true."""
+        """Return overview/window stats when `fetch_headers` is true."""
         if not self.fetch_headers:
             return [
                 "(Pass fetch_headers=True to see overview levels and pixel windows.)",
@@ -358,12 +358,12 @@ class ExplainPlan:
     def to_dataframe(self) -> DataFrame:
         """Return a DataFrame with one row per (chunk x item) combination.
 
-        Empty chunks contribute one row with item fields set to ``None``.
-        When ``fetch_headers=False``, the overview and window columns are
-        all ``None``.
+        Empty chunks contribute one row with item fields set to `None`.
+        When `fetch_headers=False`, the overview and window columns are
+        all `None`.
 
         Returns:
-            A ``pandas.DataFrame`` with columns for chunk metadata, item
+            A `pandas.DataFrame` with columns for chunk metadata, item
             metadata, and (when available) COG header details.
 
         """
@@ -468,7 +468,7 @@ def _iter_spatial_chunks(
 
 
 def _infer_chunk_sizes(da: xr.DataArray) -> tuple[int, int]:
-    """Return ``(chunk_height, chunk_width)`` from dask chunks or full extent."""
+    """Return `(chunk_height, chunk_width)` from dask chunks or full extent."""
     chunksizes = da.chunksizes
     chunk_h = int(chunksizes["y"][0]) if "y" in chunksizes else da.sizes["y"]
     chunk_w = int(chunksizes["x"][0]) if "x" in chunksizes else da.sizes["x"]
@@ -545,13 +545,13 @@ async def _explain_async(
 ) -> ExplainPlan:
     """Run DuckDB queries for all (time, spatial chunk) combinations.
 
-    Issues one DuckDB query per ``(time step, spatial tile)`` — not one per
-    ``(band, time step, spatial tile)`` — because the query result is
-    band-independent.  All ``(time x tile)`` queries are dispatched
-    concurrently via :func:`asyncio.gather` so the per-query JSON
+    Issues one DuckDB query per `(time step, spatial tile)` — not one per
+    `(band, time step, spatial tile)` — because the query result is
+    band-independent.  All `(time x tile)` queries are dispatched
+    concurrently via `asyncio.gather` so the per-query JSON
     construction and result processing overlap.  Each query result is then
-    fanned across all active bands to produce one :class:`ChunkRead` per
-    ``(band, time, tile)`` combination.
+    fanned across all active bands to produce one `ChunkRead` per
+    `(band, time, tile)` combination.
     """
     if "y" not in da.sizes or "x" not in da.sizes:
         raise ValueError(
@@ -713,9 +713,9 @@ async def _explain_async(
 class StacCogAccessor:
     """xarray accessor adding explain functionality to lazycogs DataArrays.
 
-    Registered as the ``lazycogs`` namespace on all ``xr.DataArray`` objects.
-    The :meth:`explain` method is only useful on DataArrays produced by
-    :func:`lazycogs.open`.
+    Registered as the `lazycogs` namespace on all `xr.DataArray` objects.
+    The `explain` method is only useful on DataArrays produced by
+    `lazycogs.open`.
 
     """
 
@@ -732,18 +732,18 @@ class StacCogAccessor:
         """Return a dry-run read plan without fetching any pixel data.
 
         Runs the same DuckDB spatial queries that would fire during
-        ``.compute()``, but stops before any COG pixel I/O.  With
-        ``fetch_headers=True`` the COG IFD headers are also fetched (one
+        `.compute()`, but stops before any COG pixel I/O.  With
+        `fetch_headers=True` the COG IFD headers are also fetched (one
         small HTTP range request per matched item) to determine which overview
         level and pixel window would be read.
 
         Args:
-            fetch_headers: When ``True``, open each matched COG header to
-                populate :attr:`CogRead.overview_level` and the window fields.
-                Requires network I/O.  Defaults to ``False``.
+            fetch_headers: When `True`, open each matched COG header to
+                populate `CogRead.overview_level` and the window fields.
+                Requires network I/O.  Defaults to `False`.
 
         Returns:
-            An :class:`ExplainPlan` describing all (band, time step, spatial
+            An `ExplainPlan` describing all (band, time step, spatial
             tile) reads for the current DataArray extent and chunking.
 
         Raises:
