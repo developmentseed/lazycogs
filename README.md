@@ -83,6 +83,35 @@ da = lazycogs.open(
 )
 ```
 
+### Single COG and single item reads
+
+Sometimes you don't want a reprojected mosaic — you want to read one asset (or
+a few bands of one item) exactly as stored. `lazycogs.open_cog` and
+`lazycogs.open_item` read COGs **at their native grid** (native CRS, resolution,
+and shape, no reprojection), returning eagerly-loaded `(band, y, x)` DataArrays
+with the same rioxarray-compatible metadata as `lazycogs.open`.
+
+```python
+import lazycogs
+
+# One COG → (band, y, x) at native resolution, band labelled 1..N.
+da = lazycogs.open_cog("s3://bucket/scene/B04.tif")
+
+# Several same-grid assets of one STAC item, stacked and labelled by asset key.
+# `item` is a STAC item dict (e.g. a rustac search result) or a pystac Item.
+da = lazycogs.open_item(item, bands=["B04", "B08"])
+# da.dims == ("band", "y", "x"); da["band"] == ["B04", "B08"]
+```
+
+`open_item` requires every selected asset to be a single-band COG sharing the
+same native grid (CRS, resolution, extent); it raises a `ValueError` otherwise.
+`nodata`/`scale`/`offset` are read from each asset file and surfaced as scalar
+CF attributes (`_FillValue`/`scale_factor`/`add_offset`) only when all selected
+bands agree. For assets at differing resolutions, or to mosaic across a whole
+collection, use `lazycogs.open` instead. Both functions accept the same
+`store=`/`path_from_href=` arguments as `lazycogs.open`, and each has an
+`await`-able `_async` variant (`open_cog_async`, `open_item_async`).
+
 ### Temporal grouping
 
 By default, `lazycogs.open()` groups items into one time step per calendar day (`time_period="P1D"`). You can also request coarser composites with `"PnD"`, `"P1W"`, `"P1M"`, or `"P1Y"`.
