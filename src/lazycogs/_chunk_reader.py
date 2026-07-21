@@ -104,11 +104,6 @@ def _log_read_failure(
     )
 
 
-def _dtype_is_compatible(source: np.dtype, resolved: np.dtype) -> bool:
-    """Return True when *source* can be represented safely by *resolved*."""
-    return bool(np.can_cast(source, resolved, casting="safe"))
-
-
 def _nodata_matches(
     source: float | None,
     resolved: float | None,
@@ -135,9 +130,10 @@ def _validate_source_contract(
 ) -> float | int | None:
     """Validate one source asset against the resolved output contract."""
     source_dtype = np.dtype(geotiff.dtype)
-    if not ctx.dtype_was_explicit and not _dtype_is_compatible(
+    if not ctx.dtype_was_explicit and not np.can_cast(
         source_dtype,
         ctx.out_dtype,
+        casting="safe",
     ):
         raise ValueError(
             "Auto-inferred output dtype "
@@ -164,23 +160,20 @@ def _validate_source_contract(
     return ctx.nodata if ctx.nodata is not None else source_nodata
 
 
-def _build_band_read_entry(
-    band: str,
+def _plan_reader_window(
     geotiff: GeoTIFF,
-    ctx: _ChunkContext,
-    effective_nodata: float | None,
-) -> tuple[str, GeoTIFF, GeoTIFF | Overview, Window, float | None, CRS] | None:
-    """Build the read plan entry for one band, or ``None`` if no overlap."""
-    src_crs = geotiff.crs
+    ctx: _WindowContext,
+) -> tuple[GeoTIFF | Overview, Window | None, float, Overview | None]:
+    """Pick a reader and source window for an opened GeoTIFF."""
     target_res_native, transformer = _target_res_and_transformer(
         ctx.chunk_affine,
         ctx.chunk_width,
         ctx.chunk_height,
         ctx.dst_crs,
-        src_crs,
+        geotiff.crs,
     )
     overview = _select_overview(geotiff, target_res_native)
-    reader = overview if overview is not None else geotiff
+    reader: GeoTIFF | Overview = overview if overview is not None else geotiff
     bbox_native = _chunk_bbox_native(
         ctx.chunk_affine,
         ctx.chunk_width,
@@ -188,9 +181,7 @@ def _build_band_read_entry(
         transformer,
     )
     window = _native_window(reader, bbox_native, reader.width, reader.height)
-    if window is None:
-        return None
-    return (band, geotiff, reader, window, effective_nodata, src_crs)
+    return reader, window, target_res_native, overview
 
 
 def _target_res_and_transformer(
@@ -347,14 +338,7 @@ async def _open_and_window(
     geotiff = await GeoTIFF.open(path, store=store)
     logger.debug("GeoTIFF.open %s took %.3fs", path, time.perf_counter() - t0)
 
-    target_res_native, t = _target_res_and_transformer(
-        ctx.chunk_affine,
-        ctx.chunk_width,
-        ctx.chunk_height,
-        ctx.dst_crs,
-        geotiff.crs,
-    )
-    overview = _select_overview(geotiff, target_res_native)
+    reader, window, target_res_native, overview = _plan_reader_window(geotiff, ctx)
     if overview is not None:
         logger.debug(
             "Selected overview level %d (res=%.2f) for target_res=%.2f on %s",
@@ -363,14 +347,6 @@ async def _open_and_window(
             target_res_native,
             path,
         )
-    reader: GeoTIFF | Overview = overview if overview is not None else geotiff
-    bbox_native = _chunk_bbox_native(
-        ctx.chunk_affine,
-        ctx.chunk_width,
-        ctx.chunk_height,
-        t,
-    )
-    window = _native_window(reader, bbox_native, reader.width, reader.height)
     return geotiff, reader, window, path
 
 
@@ -443,40 +419,25 @@ async def _read_item_band(
     that applies warp maps with caching: bands sharing the same source CRS and
     window transform reuse the same warp map.
     """
-    # Collect hrefs for all requested bands.
-    band_hrefs: dict[str, str] = {}
-    for band in bands:
-        asset = item.get("assets", {}).get(band)
-        if asset is not None:
-            band_hrefs[band] = asset["href"]
-
-    if not band_hrefs:
-        return None
-
-    # Open all COGs concurrently for metadata.
-    async def _open_band(
-        band: str,
-        href: str,
-    ) -> tuple[str, GeoTIFF, Store]:
-        band_store, path = _resolve_store(href, ctx.store, ctx.path_fn)
-        geotiff = await GeoTIFF.open(path, store=band_store)
-        return band, geotiff, band_store
-
-    open_results = await asyncio.gather(
-        *[_open_band(b, h) for b, h in band_hrefs.items()],
+    opened_results = await asyncio.gather(
+        *[_open_and_window(item, band, ctx) for band in bands],
     )
 
-    # Per-band: select overview, compute window.
-    # Each band is handled independently so differing native resolutions or
-    # extents are handled correctly.
     band_read_plan: list[
-        tuple[str, GeoTIFF, GeoTIFF | Overview, Window, float | int | None, CRS]
+        tuple[str, GeoTIFF | Overview, Window, float | int | None, CRS]
     ] = []
-    for band, geotiff, _ in open_results:
+    for band, opened in zip(bands, opened_results, strict=True):
+        if opened is None:
+            continue
+        geotiff, reader, window, _ = opened
         effective_nodata = _validate_source_contract(item, band, geotiff, ctx)
-        plan_entry = _build_band_read_entry(band, geotiff, ctx, effective_nodata)
-        if plan_entry is not None:
-            band_read_plan.append(plan_entry)
+        if window is not None:
+            band_read_plan.append(
+                (band, reader, window, effective_nodata, geotiff.crs),
+            )
+
+    if not opened_results:
+        return None
 
     if not band_read_plan:
         return None
@@ -490,11 +451,11 @@ async def _read_item_band(
         return band, await reader.read(window=window)
 
     read_results = await asyncio.gather(
-        *[_read_band(b, r, w) for b, _, r, w, _, _ in band_read_plan],
+        *[_read_band(b, r, w) for b, r, w, _, _ in band_read_plan],
     )
 
-    effective_nodatas = {b: n for b, _, _, _, n, _ in band_read_plan}
-    crss = {b: c for b, _, _, _, _, c in band_read_plan}
+    effective_nodatas = {b: n for b, _, _, n, _ in band_read_plan}
+    crss = {b: c for b, _, _, _, c in band_read_plan}
 
     band_rasters = [
         (band, raster, crss[band], effective_nodatas[band])

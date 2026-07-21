@@ -15,7 +15,6 @@ import lazycogs
 from lazycogs._backend import MultiBandStacBackendArray
 from lazycogs._core import (
     _build_time_steps,
-    _dtype_is_compatible,
     _inspect_first_item,
     _promote_dtypes,
     _resolve_output_dtype,
@@ -32,7 +31,7 @@ from lazycogs._temporal import (
 )
 
 
-def _items_to_arrow(items: list[dict]) -> rustac.DuckdbClient:
+def _items_to_arrow(items: list[dict]) -> object | None:
     """Convert simplified fake items to an Arrow table via rustac.to_arrow.
 
     Accepts the same simplified item dicts used in existing tests
@@ -785,16 +784,6 @@ def test_resolve_output_nodata_rejects_conflicts():
 
     with pytest.raises(ValueError, match="Conflicting sampled nodata values"):
         _resolve_output_nodata([0, np.nan])
-
-
-def test_dtype_is_compatible_accepts_equal_dtype():
-    """A dtype is always compatible with itself."""
-    assert _dtype_is_compatible(np.dtype("uint16"), np.dtype("uint16")) is True
-
-
-def test_dtype_is_compatible_rejects_unsafe_cast():
-    """Unsafe inferred output dtypes are rejected."""
-    assert _dtype_is_compatible(np.dtype("float32"), np.dtype("uint16")) is False
 
 
 def test_first_method_fills_masked_pixels_with_configured_fill_value():

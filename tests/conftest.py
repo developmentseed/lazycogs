@@ -42,7 +42,7 @@ def _fake_open_item() -> dict:
     }
 
 
-def _items_to_arrow(items: list[dict]) -> rustac.DuckdbClient:
+def _items_to_arrow(items: list[dict]) -> object | None:
     if not items:
         return None
     full_items = []

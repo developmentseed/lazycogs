@@ -120,10 +120,6 @@ class _HourGrouper(_TemporalGrouper):
             raise ValueError("Hour temporal grouping requires a positive hour count.")
         self._n = n_hours
 
-    def _bucket_start(self, group_key: str) -> datetime:
-        """Return the UTC bucket start represented by *group_key*."""
-        return _parse_timestamp(group_key)
-
     def group_key(self, datetime_str: str) -> str:
         """Return the bucket start timestamp label for *datetime_str*."""
         value = _parse_timestamp(datetime_str)
@@ -135,7 +131,7 @@ class _HourGrouper(_TemporalGrouper):
 
     def datetime_filter(self, group_key: str) -> str:
         """Return a closed second-precision ``start/end`` range."""
-        start = self._bucket_start(group_key)
+        start = _parse_timestamp(group_key)
         end = start + timedelta(hours=self._n, seconds=-1)
         return (
             f"{_format_utc_timestamp(start, timespec='seconds')}/"

@@ -10,13 +10,13 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 from affine import Affine
-from pyproj import CRS, Transformer
 from xarray.backends.common import BackendArray
 from xarray.core import indexing
 
 from lazycogs._chunk_reader import read_chunk_async
 from lazycogs._cql2 import _extract_filter_fields, _sortby_fields
 from lazycogs._executor import run_duckdb, run_on_loop
+from lazycogs._spatial import affine_window_bbox_4326
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from async_geotiff import Store
+    from pyproj import CRS
     from rustac import DuckdbClient
 
     from lazycogs._mosaic_methods import MosaicMethodBase
@@ -35,43 +36,8 @@ if TYPE_CHECKING:
 class _ChunkReadPlan:
     """Everything needed to materialise one chunk across all its time steps.
 
-    Built once in ``_async_getitem`` and passed through to
-    ``_read_chunk_all_dates`` and ``_run_one_date``. Frozen to make the
-    read-only intent explicit.
-
-    Note: ``warp_cache`` is a mutable dict despite the frozen dataclass. This
-    is intentional — concurrent writes from ``asyncio.gather`` coroutines are
-    safe because ``compute_warp_map`` is deterministic (a duplicate write
-    simply overwrites an identical value).
-
-    Attributes:
-        duckdb_client: ``DuckdbClient`` instance used for STAC queries.
-        parquet_path: Path to the geoparquet file or hive-partitioned directory.
-        sortby: Optional sort keys forwarded to ``client.search``.
-        filter_expr: Optional CQL2 filter forwarded to ``client.search``.
-        ids: Optional STAC item IDs forwarded to ``client.search``.
-        filter_fields: Field names extracted from ``filter_expr``.
-        time_steps: Full list of temporal steps with runtime datetime filters.
-        chunk_bbox_4326: ``[minx, miny, maxx, maxy]`` in EPSG:4326.
-        selected_bands: STAC asset keys to read.
-        chunk_affine: Affine transform of the chunk.
-        dst_crs: CRS of the output grid.
-        chunk_width: Chunk width in pixels.
-        chunk_height: Chunk height in pixels.
-        nodata: No-data fill value, or ``None``.
-        out_dtype: Output array dtype for the chunk.
-        dtype_was_explicit: Whether the caller passed ``dtype=`` explicitly.
-        nodata_was_explicit: Whether the caller passed ``nodata=`` explicitly.
-        mosaic_method_cls: Mosaic method class, or ``None`` for the default.
-        store: Pre-configured :class:`async_geotiff.Store` accepted by
-            ``GeoTIFF.open``, or ``None``.
-        max_concurrent_reads: Maximum concurrent item reads per chunk,
-            shared across selected time steps.
-        warp_cache: Shared warp map cache across time steps.
-        path_fn: Optional callable extracting an object path from an asset HREF.
-        errors: ``"raise"`` (default) to raise the first failed item read as
-            ``ChunkReadError``, or ``"ignore"`` to log and fill it instead.
-
+    ``warp_cache`` remains mutable; duplicate concurrent writes are harmless
+    because warp-map computation is deterministic.
     """
 
     duckdb_client: DuckdbClient
@@ -101,18 +67,7 @@ class _ChunkReadPlan:
 
 @dataclass
 class _SpatialWindow:
-    """Resolved spatial indexing window.
-
-    Attributes:
-        chunk_affine: Affine transform of the chunk (top-left origin).
-        chunk_bbox_4326: ``[minx, miny, maxx, maxy]`` in EPSG:4326.
-        chunk_height: Chunk height in pixels.
-        chunk_width: Chunk width in pixels.
-        x_start: First x pixel in the destination grid.
-        squeeze_y: Whether the y dimension should be squeezed on return.
-        squeeze_x: Whether the x dimension should be squeezed on return.
-
-    """
+    """Resolved spatial indexing window."""
 
     chunk_affine: Affine
     chunk_bbox_4326: list[float]
@@ -123,29 +78,16 @@ class _SpatialWindow:
     squeeze_x: bool
 
 
-def _resolve_time_indices(
-    time_key: int | np.integer | slice,
-    n_time_steps: int,
+def _resolve_dim_indices(
+    key: int | np.integer | slice,
+    size: int,
 ) -> tuple[list[int], bool]:
-    """Resolve a time indexer to a list of integer indices."""
-    if isinstance(time_key, (int, np.integer)):
-        return [int(time_key)], True
-    start = time_key.start if time_key.start is not None else 0
-    stop = time_key.stop if time_key.stop is not None else n_time_steps
-    step = time_key.step if time_key.step is not None else 1
-    return list(range(start, stop, step)), False
-
-
-def _resolve_band_indices(
-    band_key: int | np.integer | slice,
-    n_bands: int,
-) -> tuple[list[int], bool]:
-    """Resolve a band indexer to a list of integer indices."""
-    if isinstance(band_key, (int, np.integer)):
-        return [int(band_key)], True
-    start = band_key.start if band_key.start is not None else 0
-    stop = band_key.stop if band_key.stop is not None else n_bands
-    step = band_key.step if band_key.step is not None else 1
+    """Resolve a positional indexer to integer indices and squeeze flag."""
+    if isinstance(key, (int, np.integer)):
+        return [int(key)], True
+    start = key.start if key.start is not None else 0
+    stop = key.stop if key.stop is not None else size
+    step = key.step if key.step is not None else 1
     return list(range(start, stop, step)), False
 
 
@@ -348,25 +290,15 @@ class MultiBandStacBackendArray(BackendArray):
     path_from_href: Callable[[str], str] | None = field(default=None)
     errors: Literal["ignore", "raise"] = field(default="raise")
     shape: tuple[int, ...] = field(init=False)
-    _dst_to_4326: Transformer | None = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
-        """Derive shape and cache the dst→EPSG:4326 transformer."""
+        """Derive shape."""
         self.shape = (
             len(self.bands),
             len(self.time_steps),
             self.dst_height,
             self.dst_width,
         )
-        epsg_4326 = CRS.from_epsg(4326)
-        if self.dst_crs.equals(epsg_4326):
-            self._dst_to_4326: Transformer | None = None
-        else:
-            self._dst_to_4326 = Transformer.from_crs(
-                self.dst_crs,
-                epsg_4326,
-                always_xy=True,
-            )
 
     def __repr__(self) -> str:
         """Return a compact string representation."""
@@ -415,24 +347,12 @@ class MultiBandStacBackendArray(BackendArray):
 
         chunk_affine = self.dst_affine * Affine.translation(x_start, y_start)
 
-        minx = chunk_affine.c
-        maxy = chunk_affine.f
-        maxx = minx + chunk_width * chunk_affine.a
-        miny = maxy + chunk_height * chunk_affine.e  # e < 0
-
-        if self._dst_to_4326 is None:
-            chunk_bbox_4326 = [minx, miny, maxx, maxy]
-        else:
-            xs, ys = self._dst_to_4326.transform(
-                [minx, maxx, minx, maxx],
-                [maxy, maxy, miny, miny],
-            )
-            chunk_bbox_4326 = [
-                float(min(xs)),
-                float(min(ys)),
-                float(max(xs)),
-                float(max(ys)),
-            ]
+        chunk_bbox_4326 = affine_window_bbox_4326(
+            chunk_affine,
+            chunk_width,
+            chunk_height,
+            self.dst_crs,
+        )
 
         return _SpatialWindow(
             chunk_affine=chunk_affine,
@@ -498,10 +418,10 @@ class MultiBandStacBackendArray(BackendArray):
         """
         band_key, time_key, y_key, x_key = key
 
-        band_indices, squeeze_band = _resolve_band_indices(band_key, len(self.bands))
+        band_indices, squeeze_band = _resolve_dim_indices(band_key, len(self.bands))
         selected_bands = [self.bands[b] for b in band_indices]
 
-        time_indices, squeeze_time = _resolve_time_indices(
+        time_indices, squeeze_time = _resolve_dim_indices(
             time_key,
             len(self.time_steps),
         )

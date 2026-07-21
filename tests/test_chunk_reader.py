@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import numpy as np
 import pytest
@@ -18,6 +19,7 @@ from lazycogs._chunk_reader import (
     _drain_in_order,
     _native_window,
     _open_and_window,
+    _read_item_band,
     _select_overview,
     _WindowContext,
     read_chunk_async,
@@ -41,26 +43,29 @@ def reset_executor_state(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def _mock_geotiff(native_res: float, overview_resolutions: list[float]) -> MagicMock:
-    """Build a minimal GeoTIFF mock with the given resolutions."""
-    geotiff = MagicMock()
-    geotiff.transform = Affine(native_res, 0.0, 0.0, 0.0, -native_res, 0.0)
+@dataclass
+class _FakeReader:
+    """Minimal reader fake for window and overview tests."""
 
-    overviews = []
-    for res in overview_resolutions:
-        ov = MagicMock()
-        ov.transform = Affine(res, 0.0, 0.0, 0.0, -res, 0.0)
-        overviews.append(ov)
-
-    geotiff.overviews = overviews
-    return geotiff
+    transform: Affine
 
 
-def _mock_reader(transform: Affine) -> MagicMock:
-    """Build a minimal GeoTIFF/Overview mock with the given transform."""
-    reader = MagicMock()
-    reader.transform = transform
-    return reader
+@dataclass
+class _FakeGeoTiff(_FakeReader):
+    """Minimal GeoTIFF fake for overview selection tests."""
+
+    overviews: list[_FakeReader]
+
+
+def _fake_geotiff(native_res: float, overview_resolutions: list[float]) -> _FakeGeoTiff:
+    """Build a minimal GeoTIFF fake with the given resolutions."""
+    return _FakeGeoTiff(
+        transform=Affine(native_res, 0.0, 0.0, 0.0, -native_res, 0.0),
+        overviews=[
+            _FakeReader(Affine(res, 0.0, 0.0, 0.0, -res, 0.0))
+            for res in overview_resolutions
+        ],
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -70,25 +75,25 @@ def _mock_reader(transform: Affine) -> MagicMock:
 
 def test_select_overview_no_overviews_returns_none():
     """Returns None when the file has no overviews."""
-    geotiff = _mock_geotiff(10.0, [])
+    geotiff = _fake_geotiff(10.0, [])
     assert _select_overview(geotiff, 100.0) is None
 
 
 def test_select_overview_target_finer_than_native_returns_none():
     """Returns None when the requested resolution is finer than native."""
-    geotiff = _mock_geotiff(10.0, [20.0, 40.0])
+    geotiff = _fake_geotiff(10.0, [20.0, 40.0])
     assert _select_overview(geotiff, 5.0) is None
 
 
 def test_select_overview_target_equal_to_native_returns_none():
     """Returns None when the requested resolution equals native."""
-    geotiff = _mock_geotiff(10.0, [20.0, 40.0])
+    geotiff = _fake_geotiff(10.0, [20.0, 40.0])
     assert _select_overview(geotiff, 10.0) is None
 
 
 def test_select_overview_returns_coarsest_non_upsampling_overview():
     """Returns the coarsest overview whose resolution <= target."""
-    geotiff = _mock_geotiff(10.0, [20.0, 40.0, 80.0])
+    geotiff = _fake_geotiff(10.0, [20.0, 40.0, 80.0])
     ov = _select_overview(geotiff, 30.0)
     # Target is 30 m → coarsest overview <= 30 m is the 20 m one (index 0)
     assert ov is geotiff.overviews[0]
@@ -96,21 +101,21 @@ def test_select_overview_returns_coarsest_non_upsampling_overview():
 
 def test_select_overview_target_between_native_and_finest_returns_none():
     """Returns None when target falls between native res and the finest overview."""
-    geotiff = _mock_geotiff(10.0, [20.0, 40.0, 80.0])
+    geotiff = _fake_geotiff(10.0, [20.0, 40.0, 80.0])
     # 15 m > 10 m native, but 20 m finest overview > 15 m → upsampling; use full res
     assert _select_overview(geotiff, 15.0) is None
 
 
 def test_select_overview_exact_match():
     """Returns the overview whose resolution exactly matches the target."""
-    geotiff = _mock_geotiff(10.0, [20.0, 40.0])
+    geotiff = _fake_geotiff(10.0, [20.0, 40.0])
     ov = _select_overview(geotiff, 20.0)
     assert ov is geotiff.overviews[0]
 
 
 def test_select_overview_target_coarser_than_all_overviews():
     """When target is coarser than all overviews, returns the coarsest."""
-    geotiff = _mock_geotiff(10.0, [20.0, 40.0, 80.0])
+    geotiff = _fake_geotiff(10.0, [20.0, 40.0, 80.0])
     ov = _select_overview(geotiff, 200.0)
     assert ov is geotiff.overviews[-1]
 
@@ -123,7 +128,7 @@ def test_select_overview_target_coarser_than_all_overviews():
 def test_native_window_full_coverage():
     """A bbox that covers the full image returns a window matching the image."""
     transform = Affine(1.0, 0.0, 0.0, 0.0, -1.0, 4.0)  # 4-px tall, any width
-    reader = _mock_reader(transform)
+    reader = _FakeReader(transform)
     win = _native_window(reader, (0.0, 0.0, 4.0, 4.0), width=4, height=4)
     assert win is not None
     assert win.col_off == 0
@@ -136,7 +141,7 @@ def test_native_window_sub_region():
     """A bbox covering the bottom-right quadrant returns the correct window."""
     # 8x8 image, 1 m resolution, origin top-left at (0, 8)
     transform = Affine(1.0, 0.0, 0.0, 0.0, -1.0, 8.0)
-    reader = _mock_reader(transform)
+    reader = _FakeReader(transform)
     # Bottom-right quadrant: x=[4,8], y=[0,4]
     win = _native_window(reader, (4.0, 0.0, 8.0, 4.0), width=8, height=8)
     assert win is not None
@@ -149,7 +154,7 @@ def test_native_window_sub_region():
 def test_native_window_bbox_outside_returns_none():
     """A bbox entirely outside the image returns None."""
     transform = Affine(1.0, 0.0, 0.0, 0.0, -1.0, 4.0)
-    reader = _mock_reader(transform)
+    reader = _FakeReader(transform)
     # Image covers x=[0,4], bbox is at x=[10,14]
     win = _native_window(reader, (10.0, 0.0, 14.0, 4.0), width=4, height=4)
     assert win is None
@@ -159,7 +164,7 @@ def test_native_window_clamped_to_image_bounds():
     """A bbox that extends beyond image edges is clamped to valid pixels."""
     # 4x4 image
     transform = Affine(1.0, 0.0, 0.0, 0.0, -1.0, 4.0)
-    reader = _mock_reader(transform)
+    reader = _FakeReader(transform)
     # Bbox extends 2 pixels beyond the right and bottom edges
     win = _native_window(reader, (2.0, -2.0, 6.0, 2.0), width=4, height=4)
     assert win is not None
@@ -239,6 +244,63 @@ def test_open_and_window_accepts_chunk_context():
     assert window.width == 4
     assert window.height == 4
     assert path == "/tmp/red.tif"
+
+
+def test_read_path_uses_open_and_window_window():
+    """Read and explain header paths pick the same window for one asset."""
+    ctx = _ChunkContext(
+        chunk_affine=Affine(1.0, 0.0, 2.0, 0.0, -1.0, 6.0),
+        dst_crs=CRS.from_epsg(4326),
+        chunk_width=4,
+        chunk_height=4,
+        store=None,
+        path_fn=None,
+        nodata=None,
+        out_dtype=np.dtype("float32"),
+        dtype_was_explicit=False,
+        nodata_was_explicit=False,
+        warp_cache=None,
+    )
+    item = {"id": "item-0", "assets": {"red": {"href": "file:///tmp/red.tif"}}}
+    geotiff = SimpleNamespace(
+        crs=ctx.dst_crs,
+        dtype="float32",
+        nodata=None,
+        overviews=[],
+        transform=Affine(1.0, 0.0, 0.0, 0.0, -1.0, 8.0),
+        width=8,
+        height=8,
+        read=AsyncMock(
+            return_value=SimpleNamespace(
+                transform=ctx.chunk_affine,
+                data=np.ones((1, ctx.chunk_height, ctx.chunk_width), dtype=np.float32),
+            ),
+        ),
+    )
+
+    async def _run():
+        with (
+            patch(
+                "lazycogs._chunk_reader._resolve_store",
+                return_value=(None, "/tmp/red.tif"),
+            ),
+            patch(
+                "lazycogs._chunk_reader.GeoTIFF.open",
+                new_callable=AsyncMock,
+                return_value=geotiff,
+            ),
+        ):
+            opened = await _open_and_window(item, "red", ctx)
+            assert opened is not None
+            expected_window = opened[2]
+            result = await _read_item_band(item, ["red"], ctx)
+
+        geotiff.read.assert_awaited_once()
+        assert geotiff.read.await_args.kwargs["window"] == expected_window
+        assert result is not None
+        np.testing.assert_array_equal(result["red"][0], 1.0)
+
+    asyncio.run(_run())
 
 
 # ---------------------------------------------------------------------------
@@ -402,11 +464,25 @@ def test_drain_in_order_early_exit_on_is_done():
 # ---------------------------------------------------------------------------
 
 
-def _make_raster(transform: Affine, value: float, h: int = 4, w: int = 4) -> MagicMock:
-    raster = MagicMock()
-    raster.transform = transform
-    raster.data = np.full((1, h, w), value, dtype=np.float32)
-    return raster
+@dataclass
+class _FakeRaster:
+    """Minimal raster fake for warp-cache tests."""
+
+    transform: Affine
+    data: np.ndarray
+
+
+def _make_raster(
+    transform: Affine,
+    value: float,
+    h: int = 4,
+    w: int = 4,
+) -> _FakeRaster:
+    """Build a minimal raster fake with transform and data."""
+    return _FakeRaster(
+        transform=transform,
+        data=np.full((1, h, w), value, dtype=np.float32),
+    )
 
 
 def test_apply_bands_with_warp_cache_shared_geometry():

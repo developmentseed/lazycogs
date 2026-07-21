@@ -10,17 +10,19 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 from async_geotiff import GeoTIFF
-from pyproj import CRS, Transformer
+from pyproj import CRS
 from rasterix import RasterIndex
 from rustac import DuckdbClient
 from xarray import Coordinates, DataArray, Variable
 from xarray.core import indexing
 
+from lazycogs._assets import _preferred_data_assets
 from lazycogs._backend import MultiBandStacBackendArray
 from lazycogs._cql2 import _extract_filter_fields, _sortby_fields
 from lazycogs._executor import run_on_loop
 from lazycogs._grid import compute_output_grid
 from lazycogs._mosaic_methods import FirstMethod, MosaicMethodBase
+from lazycogs._spatial import bbox_to_4326
 from lazycogs._store import resolve
 from lazycogs._temporal import _TemporalGrouper, _TimeStep, grouper_from_period
 
@@ -32,6 +34,22 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 _INT_WIDTHS = (8, 16, 32, 64)
+_ZARR_CONVENTIONS = (
+    {
+        "schema_url": "https://raw.githubusercontent.com/zarr-experimental/geo-proj/refs/tags/v1/schema.json",
+        "spec_url": "https://github.com/zarr-experimental/geo-proj/blob/v1/README.md",
+        "uuid": "f17cb550-5864-4468-aeb7-f3180cfb622f",
+        "name": "proj:",
+        "description": "Coordinate reference system information for geospatial data",
+    },
+    {
+        "schema_url": "https://raw.githubusercontent.com/zarr-conventions/spatial/refs/tags/v1/schema.json",
+        "spec_url": "https://github.com/zarr-conventions/spatial/blob/v1/README.md",
+        "uuid": "689b58e2-cf7b-45e0-9fff-9cfc0883d6b4",
+        "name": "spatial:",
+        "description": "Spatial coordinate information",
+    },
+)
 
 
 @dataclass(frozen=True)
@@ -68,17 +86,7 @@ def _ordered_bands(
             )
         return bands
 
-    data_bands: list[str] = []
-    other_bands: list[str] = []
-    for key, asset in assets.items():
-        roles = asset.get("roles", [])
-        media_type = asset.get("type", "")
-        if "data" in roles or "image/tiff" in media_type:
-            data_bands.append(key)
-        else:
-            other_bands.append(key)
-
-    return data_bands or other_bands or list(assets)
+    return _preferred_data_assets(assets)
 
 
 async def _inspect_first_item_async(
@@ -258,11 +266,6 @@ def _resolve_output_dtype(
     if method_cls.requires_float and not np.issubdtype(resolved, np.floating):
         return np.dtype("float32"), False
     return resolved, False
-
-
-def _dtype_is_compatible(source: np.dtype, resolved: np.dtype) -> bool:
-    """Return True when *source* can be represented safely by *resolved*."""
-    return bool(np.can_cast(source, resolved, casting="safe"))
 
 
 def _resolve_output_nodata(
@@ -468,24 +471,7 @@ def _build_dataarray(
 
     attributes = {
         "grid_mapping": "spatial_ref",
-        "zarr_conventions": [
-            {
-                "schema_url": "https://raw.githubusercontent.com/zarr-experimental/geo-proj/refs/tags/v1/schema.json",
-                "spec_url": "https://github.com/zarr-experimental/geo-proj/blob/v1/README.md",
-                "uuid": "f17cb550-5864-4468-aeb7-f3180cfb622f",
-                "name": "proj:",
-                "description": (
-                    "Coordinate reference system information for geospatial data"
-                ),
-            },
-            {
-                "schema_url": "https://raw.githubusercontent.com/zarr-conventions/spatial/refs/tags/v1/schema.json",
-                "spec_url": "https://github.com/zarr-conventions/spatial/blob/v1/README.md",
-                "uuid": "689b58e2-cf7b-45e0-9fff-9cfc0883d6b4",
-                "name": "spatial:",
-                "description": "Spatial coordinate information",
-            },
-        ],
+        "zarr_conventions": [dict(convention) for convention in _ZARR_CONVENTIONS],
         "spatial:dimensions": ["y", "x"],
         "spatial:bbox": bbox,
         "spatial:transform_type": "affine",
@@ -675,16 +661,7 @@ def open(  # noqa: A001
 
     dst_crs = CRS.from_user_input(crs)
 
-    epsg_4326 = CRS.from_epsg(4326)
-    if dst_crs.equals(epsg_4326):
-        bbox_4326 = list(bbox)
-    else:
-        t = Transformer.from_crs(dst_crs, epsg_4326, always_xy=True)
-        xs, ys = t.transform(
-            [bbox[0], bbox[2], bbox[0], bbox[2]],
-            [bbox[1], bbox[1], bbox[3], bbox[3]],
-        )
-        bbox_4326 = [float(min(xs)), float(min(ys)), float(max(xs)), float(max(ys))]
+    bbox_4326 = bbox_to_4326(bbox, dst_crs)
 
     t0 = time.perf_counter()
     inspection = _inspect_first_item(
