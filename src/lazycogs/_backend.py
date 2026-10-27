@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import numpy as np
 from affine import Affine
 from pyproj import CRS, Transformer
+from rustac import DuckdbClient
 from xarray.backends.common import BackendArray
 from xarray.core import indexing
 
@@ -25,7 +26,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from async_geotiff import Store
-    from rustac import DuckdbClient
 
     from lazycogs._mosaic_methods import MosaicMethodBase
     from lazycogs._temporal import _TimeStep
@@ -283,6 +283,10 @@ class MultiBandStacBackendArray(BackendArray):
         duckdb_client: ``DuckdbClient`` instance used for all STAC queries.
             Constructed with default settings in :func:`open` when not supplied
             by the caller.
+        owns_duckdb_client: Whether :func:`open` constructed ``duckdb_client``.
+            If so, pickling drops it and unpickling builds a fresh default
+            client, since rustac's client can't be pickled. A caller-supplied
+            client is pickled as is.
         bands: Ordered list of STAC asset keys, one per band.
         time_steps: Sorted temporal steps, one entry per time step.
         dst_affine: Affine transform of the full output grid.
@@ -347,6 +351,7 @@ class MultiBandStacBackendArray(BackendArray):
     max_concurrent_reads: int = field(default=32)
     path_from_href: Callable[[str], str] | None = field(default=None)
     errors: Literal["ignore", "raise"] = field(default="raise")
+    owns_duckdb_client: bool = field(default=False)
     shape: tuple[int, ...] = field(init=False)
     _dst_to_4326: Transformer | None = field(init=False, repr=False, compare=False)
 
@@ -380,6 +385,19 @@ class MultiBandStacBackendArray(BackendArray):
         """Return ``self`` so xarray copies do not try to pickle DuckDB state."""
         memo[id(self)] = self
         return self
+
+    def __getstate__(self) -> dict[str, Any]:
+        """Return the state to pickle, minus a DuckDB client lazycogs made."""
+        state = self.__dict__.copy()
+        if self.owns_duckdb_client:
+            state["duckdb_client"] = None
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        """Restore pickled state, rebuilding a DuckDB client lazycogs made."""
+        if state["owns_duckdb_client"]:
+            state["duckdb_client"] = DuckdbClient()
+        self.__dict__.update(state)
 
     def _resolve_spatial_window(
         self,

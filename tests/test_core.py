@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import pickle
 from unittest.mock import AsyncMock, patch
 
 import numpy as np
 import pytest
 import rustac
 from obstore.store import MemoryStore
+from pyproj import Transformer
 from rustac import DuckdbClient
 
 import lazycogs
@@ -1028,3 +1030,72 @@ def test_open_rejects_explicit_integer_dtype_for_float_method(tmp_path):
             store=MemoryStore(),
             path_from_href=lambda href: href.split("/", 3)[-1],
         )
+
+
+def _synthetic_cog_parquet(synthetic_cog, tmp_path) -> str:
+    """Write a one-item parquet pointing at the synthetic COG."""
+    west, south, east, north = Transformer.from_crs(
+        "EPSG:32632",
+        "EPSG:4326",
+        always_xy=True,
+    ).transform_bounds(500_000, 5_579_520, 520_480, 5_600_000)
+    item = {
+        "type": "Feature",
+        "stac_version": "1.0.0",
+        "id": "synthetic",
+        "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+                [
+                    [west, south],
+                    [east, south],
+                    [east, north],
+                    [west, north],
+                    [west, south],
+                ],
+            ],
+        },
+        "bbox": [west, south, east, north],
+        "properties": {"datetime": "2023-01-15T10:00:00Z"},
+        "links": [],
+        "assets": {
+            "B04": {
+                "href": synthetic_cog.as_uri(),
+                "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+                "roles": ["data"],
+            },
+        },
+    }
+    parquet = str(tmp_path / "items.parquet")
+    rustac.write_sync(parquet, [item])
+    return parquet
+
+
+def test_open_result_survives_pickling(synthetic_cog, tmp_path):
+    """A chunked array computes the same after a pickle round trip."""
+    da = lazycogs.open(
+        _synthetic_cog_parquet(synthetic_cog, tmp_path),
+        bbox=(500_000, 5_599_360, 500_640, 5_600_000),
+        crs="EPSG:32632",
+        resolution=10.0,
+        chunks={"x": 32, "y": 32},
+    )
+
+    restored = pickle.loads(pickle.dumps(da)).values  # noqa: S301
+
+    assert (restored != 0).all()
+    np.testing.assert_array_equal(restored, da.values)
+
+
+def test_open_pickles_caller_duckdb_client_as_is(synthetic_cog, tmp_path):
+    """A caller's client is pickled as is, not swapped for a default one."""
+    da = lazycogs.open(
+        _synthetic_cog_parquet(synthetic_cog, tmp_path),
+        bbox=(500_000, 5_599_360, 500_640, 5_600_000),
+        crs="EPSG:32632",
+        resolution=10.0,
+        duckdb_client=DuckdbClient(),
+    )
+
+    with pytest.raises(TypeError, match="DuckdbClient"):
+        pickle.dumps(da)

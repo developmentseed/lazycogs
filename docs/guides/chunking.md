@@ -32,6 +32,10 @@ da = lazycogs.open(
 da.max(dim="time").compute()  # each time step runs in its own dask task
 ```
 
+### dask.distributed
+
+Chunked arrays can be computed on a `dask.distributed` cluster. Each worker opens its own DuckDB client and queries `href` itself, so `href` must be readable from every worker, e.g. a path on a shared filesystem or an `s3://` URL with DuckDB credentials set up. A client passed as `duckdb_client=` must be picklable.
+
 ## Spatial chunks
 
 Avoid spatial chunks unless you are under memory pressure. lazycogs handles spatial I/O concurrency internally through its async event loop — adding spatial dask tasks layers extra DuckDB query overhead on top of I/O that was already happening concurrently.
