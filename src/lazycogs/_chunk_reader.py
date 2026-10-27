@@ -221,13 +221,17 @@ def _array_to_masked(arr: np.ndarray, effective_nodata: float | None) -> ma.Mask
     """Wrap ``arr`` in a MaskedArray, masking pixels equal to ``effective_nodata``.
 
     A pixel is masked only when *all* bands equal ``effective_nodata`` (so a
-    valid pixel in any band keeps the position unmasked). When
-    ``effective_nodata`` is ``None``, nothing is masked.
+    valid pixel in any band keeps the position unmasked). A NaN
+    ``effective_nodata`` masks NaN pixels. When ``effective_nodata`` is
+    ``None``, nothing is masked.
     """
     if effective_nodata is None:
         mask = np.zeros(arr.shape, dtype=bool)
     else:
-        per_pixel = np.all(arr == effective_nodata, axis=0, keepdims=True)
+        is_nodata = (
+            np.isnan(arr) if np.isnan(effective_nodata) else arr == effective_nodata
+        )
+        per_pixel = np.all(is_nodata, axis=0, keepdims=True)
         mask = np.broadcast_to(per_pixel, arr.shape).copy()
     return ma.MaskedArray(arr, mask=mask)
 
