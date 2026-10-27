@@ -371,6 +371,7 @@ def _build_dataarray(
     *,
     parquet_path: str,
     duckdb_client: DuckdbClient,
+    owns_duckdb_client: bool,
     resolved_bands: list[str],
     time_steps: list[_TimeStep],
     bbox: tuple[float, float, float, float],
@@ -403,6 +404,7 @@ def _build_dataarray(
     multi = MultiBandStacBackendArray(
         parquet_path=parquet_path,
         duckdb_client=duckdb_client,
+        owns_duckdb_client=owns_duckdb_client,
         bands=resolved_bands,
         time_steps=time_steps,
         dst_affine=dst_affine,
@@ -640,6 +642,10 @@ def open(  # noqa: A001
                     resolution=...,
                 )
 
+            rustac's ``DuckdbClient`` can't be pickled, so to compute on
+            ``dask.distributed`` workers, leave this as ``None`` or pass a
+            picklable client.
+
         errors: How to handle a failed item-band read during chunk
             materialization (e.g. a storage error or rate-limit response).
             ``"raise"`` (default) raises the first such failure as
@@ -660,6 +666,7 @@ def open(  # noqa: A001
             duration.
 
     """
+    owns_duckdb_client = duckdb_client is None
     if duckdb_client is None:
         duckdb_client = DuckdbClient()
         if not href.endswith((".parquet", ".geoparquet")):
@@ -760,6 +767,7 @@ def open(  # noqa: A001
     return _build_dataarray(
         parquet_path=href,
         duckdb_client=duckdb_client,
+        owns_duckdb_client=owns_duckdb_client,
         resolved_bands=resolved_bands,
         time_steps=time_steps,
         bbox=bbox,
