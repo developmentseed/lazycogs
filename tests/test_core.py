@@ -134,7 +134,9 @@ def test_build_time_steps_day_deduplicates_same_day():
             duckdb_client=DuckdbClient(),
             temporal_grouper=_DayGrouper(),
         )
-    assert [step.datetime_filter for step in time_steps] == ["2023-01-15"]
+    assert [step.datetime_filter for step in time_steps] == [
+        "2023-01-15T00:00:00Z/2023-01-15T23:59:59.999999Z",
+    ]
     assert len(time_steps) == 1
     assert time_steps[0].coord == np.datetime64("2023-01-15", "D")
 
@@ -148,7 +150,10 @@ def test_build_time_steps_day_two_days():
             duckdb_client=DuckdbClient(),
             temporal_grouper=_DayGrouper(),
         )
-    assert [step.datetime_filter for step in time_steps] == ["2023-01-15", "2023-01-16"]
+    assert [step.datetime_filter for step in time_steps] == [
+        "2023-01-15T00:00:00Z/2023-01-15T23:59:59.999999Z",
+        "2023-01-16T00:00:00Z/2023-01-16T23:59:59.999999Z",
+    ]
     assert len(time_steps) == 2
 
 
@@ -161,7 +166,9 @@ def test_build_time_steps_month_deduplicates_same_month():
             duckdb_client=DuckdbClient(),
             temporal_grouper=_MonthGrouper(),
         )
-    assert [step.datetime_filter for step in time_steps] == ["2023-01-01/2023-01-31"]
+    assert [step.datetime_filter for step in time_steps] == [
+        "2023-01-01T00:00:00Z/2023-01-31T23:59:59.999999Z",
+    ]
     assert len(time_steps) == 1
     assert time_steps[0].coord == np.datetime64("2023-01-01", "D")
 
@@ -176,8 +183,14 @@ def test_build_time_steps_month_two_months():
             temporal_grouper=_MonthGrouper(),
         )
     assert len(time_steps) == 2
-    assert time_steps[0].datetime_filter == "2023-01-01/2023-01-31"
-    assert time_steps[1].datetime_filter == "2023-02-01/2023-02-28"
+    assert (
+        time_steps[0].datetime_filter
+        == "2023-01-01T00:00:00Z/2023-01-31T23:59:59.999999Z"
+    )
+    assert (
+        time_steps[1].datetime_filter
+        == "2023-02-01T00:00:00Z/2023-02-28T23:59:59.999999Z"
+    )
 
 
 def test_build_time_steps_p16d_same_bucket():
@@ -264,8 +277,8 @@ def test_build_time_steps_hourly_groups_hour_buckets():
         )
 
     assert [step.datetime_filter for step in time_steps] == [
-        "2023-01-15T10:00:00Z/2023-01-15T10:59:59Z",
-        "2023-01-15T11:00:00Z/2023-01-15T11:59:59Z",
+        "2023-01-15T10:00:00Z/2023-01-15T10:59:59.999999Z",
+        "2023-01-15T11:00:00Z/2023-01-15T11:59:59.999999Z",
     ]
     assert [step.coord for step in time_steps] == [
         np.datetime64("2023-01-15T10:00:00", "s"),
@@ -358,7 +371,9 @@ def test_build_time_steps_uses_start_datetime_fallback():
             duckdb_client=DuckdbClient(),
             temporal_grouper=_DayGrouper(),
         )
-    assert [step.datetime_filter for step in time_steps] == ["2023-03-10"]
+    assert [step.datetime_filter for step in time_steps] == [
+        "2023-03-10T00:00:00Z/2023-03-10T23:59:59.999999Z",
+    ]
 
 
 def test_open_time_period_kwarg_wires_through():
