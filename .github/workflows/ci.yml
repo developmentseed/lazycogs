@@ -23,7 +23,9 @@ jobs:
         run: uv run --group docs mkdocs build --strict
 
       # Use ruff-action so we get annotations in the Github UI
-      - uses: astral-sh/ruff-action@v3
+      - uses: astral-sh/ruff-action@v4.1.0
+        with:
+          version-file: uv.lock
 
   test:
     runs-on: ubuntu-latest
