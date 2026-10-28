@@ -118,7 +118,7 @@ Band chunking does not help because all selected bands are read together per ite
 | `P1Y` | calendar year |
 | `PnD` / `PnW` where n > 1 | fixed day windows aligned to 2000-01-01 |
 
-Exact and hourly grouping reject bare dates because `YYYY-MM-DD` is a day-wide `rustac` predicate, not an exact instant.
+Exact and hourly grouping reject bare dates because `YYYY-MM-DD` is a day-wide `rustac` predicate, not an exact instant. Every bucketed `datetime_filter` is a closed range ending a microsecond before the next bucket, so items in a bucket's last second, such as `23:59:59.5`, are still read.
 
 ## Mosaic and temporal compositing
 
