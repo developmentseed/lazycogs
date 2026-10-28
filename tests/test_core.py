@@ -152,6 +152,37 @@ def test_build_time_steps_day_two_days():
     assert len(time_steps) == 2
 
 
+def test_build_time_steps_day_uses_utc_date_in_any_session_time_zone(tmp_path):
+    """DuckDB returns local times in a non-UTC session; days are still UTC days."""
+    parquet = str(tmp_path / "items.parquet")
+    rustac.write_sync(
+        parquet,
+        [
+            {
+                "type": "Feature",
+                "stac_version": "1.0.0",
+                "id": f"fake-{i}",
+                "geometry": {"type": "Point", "coordinates": [0.0, 0.0]},
+                "bbox": [-0.1, -0.1, 0.1, 0.1],
+                "properties": {"datetime": dt},
+                "links": [],
+                "assets": {},
+            }
+            for i, dt in enumerate(["2023-01-15T23:59:50Z", "2023-01-16T00:00:10Z"])
+        ],
+    )
+    client = DuckdbClient()
+    client.execute("SET TimeZone = 'Australia/Sydney'")
+
+    time_steps = _build_time_steps(
+        parquet,
+        duckdb_client=client,
+        temporal_grouper=_DayGrouper(),
+    )
+
+    assert [step.datetime_filter for step in time_steps] == ["2023-01-15", "2023-01-16"]
+
+
 def test_build_time_steps_month_deduplicates_same_month():
     """Items in the same month collapse to one time step with MonthGrouper."""
     table = _items_to_arrow(_FAKE_ITEMS_SAME_MONTH)

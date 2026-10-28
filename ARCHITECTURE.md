@@ -118,7 +118,7 @@ Band chunking does not help because all selected bands are read together per ite
 | `P1Y` | calendar year |
 | `PnD` / `PnW` where n > 1 | fixed day windows aligned to 2000-01-01 |
 
-Exact and hourly grouping reject bare dates because `YYYY-MM-DD` is a day-wide `rustac` predicate, not an exact instant.
+Calendar and fixed-day windows use each item's UTC date. Exact and hourly grouping reject bare dates because `YYYY-MM-DD` is a day-wide `rustac` predicate, not an exact instant.
 
 ## Mosaic and temporal compositing
 
