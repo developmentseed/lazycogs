@@ -278,6 +278,21 @@ class TestGrouperFromPeriod:
             grouper_from_period(period)
 
 
+@pytest.mark.parametrize(
+    ("grouper", "datetime_str", "expected"),
+    [
+        (_DayGrouper(), "2023-01-16T09:00:00+10:00", "2023-01-15"),
+        (_WeekGrouper(), "2023-01-16T09:00:00+10:00", "2023-W02"),
+        (_MonthGrouper(), "2023-02-01T09:00:00+10:00", "2023-01"),
+        (_YearGrouper(), "2023-01-01T09:00:00+10:00", "2022"),
+        (_FixedDayGrouper(16), "2023-01-16T09:00:00+10:00", "000525"),
+    ],
+)
+def test_calendar_groupers_use_utc_date(grouper, datetime_str, expected):
+    """Calendar groupers bucket a timestamp by its UTC date, not its local one."""
+    assert grouper.group_key(datetime_str) == expected
+
+
 # ---------------------------------------------------------------------------
 # _TimeStep contract, exact timestamps, and hour grouping
 # ---------------------------------------------------------------------------
