@@ -4,21 +4,23 @@ This is the Slidev project for lazycogs talks. It uses the DevelopmentSeed theme
 
 ## Edit and preview
 
-Install the pinned dependencies and start the local Slidev server:
+Install the pinned dependencies and start the FOSS4G North America 2026 presentation locally from this directory:
 
 ```sh
 pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Edit `slides.md` to change the deck. The starter content is intentionally short; replace the future-talk placeholder when preparing a specific talk.
+Edit `foss4gna-2026/slides.md` to change the deck. The starter content is intentionally short; replace the future-talk placeholder when preparing the presentation.
 
 ## Build for the website
 
 The production site is hosted under `/lazycogs/`. Build the deck with its full presentation base path and output directly into the MkDocs site directory:
 
 ```sh
-pnpm exec slidev build --base /lazycogs/presentations/lazycogs/ --out ../site/presentations/lazycogs
+pnpm build
 ```
 
-The GitHub Actions docs workflow builds MkDocs first, builds Slidev into that output, then publishes the combined site once with `mkdocs gh-deploy --dirty --force`. MkDocs 1.6.1 does not provide a `gh-deploy --no-build` option; `--dirty` is used so its deployment build does not clean the Slidev output before publication. Do not use Slidev's standalone deployment configuration for the shared Pages site.
+The build script writes to `../site/presentations/foss4gna-2026` with the base `/lazycogs/presentations/foss4gna-2026/`. The GitHub Actions docs workflow builds MkDocs first, builds Slidev into that output, then publishes the combined site once with `mkdocs gh-deploy --dirty --force`. MkDocs 1.6.1 does not provide a `gh-deploy --no-build` option; `--dirty` is used so its deployment build does not clean the Slidev output before publication. Do not use Slidev's standalone deployment configuration for the shared Pages site.
+
+The deck uses Slidev's native `publicDir` Vite setting to share assets from `slides/public/` while keeping the presentation source in its own directory. The theme and package dependencies remain shared under `slides/`.

@@ -44,7 +44,7 @@ jobs:
 
       - name: Build presentation
         working-directory: slides
-        run: pnpm exec slidev build --base /lazycogs/presentations/lazycogs/ --out ../site/presentations/lazycogs
+        run: pnpm build
 
       - name: Deploy combined site
         run: uv run mkdocs gh-deploy --dirty --force

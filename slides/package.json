@@ -4,8 +4,8 @@
   "type": "module",
   "packageManager": "pnpm@9.15.0",
   "scripts": {
-    "build": "slidev build",
-    "dev": "slidev --open"
+    "build": "slidev build foss4gna-2026/slides.md --base /lazycogs/presentations/foss4gna-2026/ --out ../../site/presentations/foss4gna-2026",
+    "dev": "slidev foss4gna-2026/slides.md --open"
   },
   "dependencies": {
     "@slidev/cli": "52.6.0",

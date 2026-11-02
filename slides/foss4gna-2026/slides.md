@@ -1,16 +1,16 @@
 ---
-title: lazycogs
+title: FOSS4G North America 2026 — lazycogs
 info: A lazy xarray view of cloud-optimized GeoTIFF collections
 class: text-center
 highlighter: shiki
 drawings:
   persist: false
-theme: ./theme
+theme: ../theme
 layout: cover
 background: '#F5F2ED'
 ---
 
-# lazycogs
+# FOSS4G North America 2026
 
 ::subtitle::
 Lazy, cloud-native raster mosaics
