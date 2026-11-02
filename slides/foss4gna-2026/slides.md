@@ -1,21 +1,37 @@
 ---
-title: FOSS4G North America 2026 — lazycogs
+title: lazycogs
 info: A lazy xarray view of cloud-optimized GeoTIFF collections
-class: text-center
 highlighter: shiki
 drawings:
   persist: false
 theme: ../theme
-layout: cover
-background: '#F5F2ED'
+layout: title
+image: /images/theme/lena-delta.jpg
 ---
 
-# FOSS4G North America 2026
+# lazycogs
 
 ::subtitle::
 Lazy, cloud-native raster mosaics
 
-<LogoHorPos position="bottom-right" height="28px" />
+<DecorativeRectangle
+  width="50%"
+  height="40%"
+  zIndex=20
+  :position="{
+    bottom: '2%',
+    right: '2%',
+  }"
+  :customStyle="{ mixBlendMode: 'multiply' }"
+>
+  <div w-full h-full relative flex flex-col items-end justify-end p-4 text-white text-right>
+    <p text-3xl font-300>
+      FOSS4G North America 2026
+    </p>
+  </div>
+</DecorativeRectangle>
+
+<LogoHorPos position="top-left" height="24px" />
 
 ---
 
