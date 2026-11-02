@@ -1,0 +1,320 @@
+/* Import Google Fonts */
+@import url("https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Roboto+Mono:wght@400;500&display=swap");
+@font-face {
+  font-family: "Antarctica VAR";
+  src: url("/fonts/antarctica-vf.ttf") format("truetype-variations");
+  font-weight: 1 950;
+  font-stretch: 1% 200%;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* DevelopmentSeed Brand Colors */
+  --slidev-theme-primary: #cf3f02;
+  --slidev-theme-secondary: #e2c044; /* Not sure about this one... */
+  --slidev-theme-danger: #a71d31;
+  --slidev-theme-warning: #e2c044;
+  --slidev-theme-success: #4da167;
+  --slidev-theme-info: #2e86ab;
+  --slidev-theme-muted: #565b65;
+
+  /* Typography */
+  --slidev-font-family: "Antarctica VAR", sans-serif;
+  --slidev-font-family-heading: "Antarctica VAR", sans-serif;
+  --slidev-font-family-mono: "Roboto Mono", monospace;
+}
+
+body {
+  color: #443f3f;
+  font-variation-settings:
+    "wdth" 64,
+    "wght" 356;
+}
+
+p {
+  margin-top: 1em;
+}
+
+a {
+  color: var(--slidev-theme-primary);
+  text-decoration: underline;
+}
+
+code {
+  color: var(--slidev-theme-primary);
+  background: transparent;
+}
+
+strong {
+  font-variation-settings: "wght" 600;
+}
+
+/* Ensure rough notation SVG overlays appear above content */
+svg.rough-notation {
+  z-index: 10 !important;
+}
+
+/* Remove any backgrounds from code in marked spans */
+span[v-mark] code {
+  background: none !important;
+  background-color: transparent !important;
+}
+
+/* Apply DevelopmentSeed typography */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--slidev-font-family-heading);
+  font-weight: normal;
+  font-variation-settings:
+    "wdth" 24,
+    "wght" 640;
+}
+
+h1 {
+  font-size: 3rem;
+  line-height: 1.2;
+}
+
+h2 {
+  font-size: 1rem;
+  line-height: 1.5rem;
+  text-transform: uppercase;
+  color: var(--slidev-theme-primary);
+  font-variation-settings:
+    "wdth" 32,
+    "wght" 608;
+}
+
+
+h3 {
+  font-size: 1rem;
+  line-height: 1.5rem;
+  text-transform: uppercase;
+  font-variation-settings:
+    "wdth" 32,
+    "wght" 608;
+}
+
+/* List styling */
+ul,
+ol {
+  line-height: 1.75;
+  margin-left: 1.5rem;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+/* Unordered lists - use custom bullet color */
+ul {
+  list-style-type: disc;
+}
+
+ul li::marker {
+  color: var(--slidev-theme-primary); /* Orange bullets */
+}
+
+/* Nested unordered lists */
+ul ul {
+  list-style-type: circle;
+  margin-top: 0.25rem;
+}
+
+ul ul ul {
+  list-style-type: square;
+}
+
+/* Ordered lists */
+ol {
+  list-style-type: decimal;
+}
+
+ol li::marker {
+  color: var(--slidev-theme-primary); /* Orange numbers */
+  font-weight: 600;
+}
+
+/* Nested ordered lists */
+ol ol {
+  list-style-type: lower-alpha;
+  margin-top: 0.25rem;
+}
+
+ol ol ol {
+  list-style-type: lower-roman;
+}
+
+/* List items */
+li:last-child {
+  margin-bottom: 0;
+}
+
+/* Nested lists should have less margin */
+li > ul,
+li > ol {
+  margin-top: 0rem;
+  margin-bottom: 0rem;
+}
+
+/* Blockquotes */
+blockquote {
+  font-family: var(--slidev-font-family-heading);
+  font-weight: 300;
+  font-size: 1.25rem;
+  /* font-style: italic; */
+  color: var(--slidev-theme-muted);
+  border-left: 4px solid var(--slidev-theme-primary);
+  padding-left: 1.5rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  margin-left: 0;
+  margin-bottom: 1rem;
+  position: relative;
+}
+
+blockquote p {
+  margin: 0;
+}
+
+/* DevelopmentSeed brand color utility classes */
+.text-muted {
+  color: var(--slidev-theme-muted);
+}
+
+.bg-primary {
+  background-color: var(--slidev-theme-primary);
+  color: white;
+}
+.bg-secondary {
+  background-color: var(--slidev-theme-secondary);
+  color: black;
+}
+.bg-danger {
+  background-color: var(--slidev-theme-danger);
+  color: white;
+}
+.bg-warning {
+  background-color: var(--slidev-theme-warning);
+  color: black;
+}
+.bg-success {
+  background-color: var(--slidev-theme-success);
+  color: white;
+}
+.bg-info {
+  background-color: var(--slidev-theme-info);
+  color: white;
+}
+
+/* Ensure content appears above decorative rectangles */
+.slidev-layout h1,
+.slidev-layout h2,
+.slidev-layout h3,
+.slidev-layout h4,
+.slidev-layout h5,
+.slidev-layout h6,
+.slidev-layout p,
+.slidev-layout ul,
+.slidev-layout ol,
+.slidev-layout pre,
+.slidev-layout blockquote {
+  position: relative;
+  z-index: 10;
+}
+
+/* Add padding to default layout */
+.slidev-layout.default {
+  padding: 4rem;
+}
+
+/* Layout ratio utilities for image-left and image-right layouts */
+/* Makes content area 2/3 width, image 1/3 width */
+
+/* Target the parent grid when image-narrow class is on a child - only for image layouts */
+.slidev-page .grid.grid-cols-2:has(.image-narrow) {
+  grid-template-columns: 1fr 2fr !important;
+}
+
+/* For image-right layout, the content comes first, so reverse the ratio */
+.slidev-page
+  .grid.grid-cols-2:has(.image-narrow):has(
+    > :last-child[style*="background-image"]
+  ) {
+  grid-template-columns: 2fr 1fr !important;
+}
+
+/* Add padding to content area in image-left and image-right layouts */
+.slidev-page .grid.grid-cols-2 > .slidev-layout {
+  padding: 3rem;
+}
+
+/* Remove visible line between image and black background */
+.slidev-page:has(.bg-black) .grid.grid-cols-2 {
+  background: #000;
+}
+
+/* Same for white backgrounds */
+.slidev-page:has(.bg-white) .grid.grid-cols-2 {
+  background: #fff;
+}
+
+.slidev-code-wrapper,
+.slidev-code-block-title,
+.slidev-monaco-container {
+  z-index: 1;
+}
+
+/* Table styling */
+table {
+  border-collapse: collapse;
+  padding: 0;
+  margin: 1rem 0;
+  width: auto;
+  position: relative;
+  z-index: 10;
+}
+
+table td,
+table th {
+  border-right: 2px solid #aaa;
+  padding: 0.5rem;
+  line-height: 1.2;
+  text-align: left;
+}
+
+table th {
+  border-bottom: 2px solid #aaa;
+  font-weight: 700;
+  color: var(--slidev-theme-primary);
+}
+
+table tr:first-child th {
+  border-top: 0;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+table tr:last-child td {
+  padding-bottom: 0;
+  border-bottom: 0;
+  margin-bottom: 0;
+}
+
+table tr td:first-child,
+table tr th:first-child {
+  border-left: 0;
+}
+
+table tr td:last-child,
+table tr th:last-child {
+  border-right: 0;
+}
+
+/* Alternate row colors for better readability (optional) */
+table tbody tr:nth-child(even) {
+  background-color: rgba(0, 0, 0, 0.02);
+}

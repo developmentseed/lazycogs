@@ -25,5 +25,26 @@ jobs:
       - name: Install docs dependencies
         run: uv sync --group docs
 
-      - name: Deploy docs
-        run: uv run mkdocs gh-deploy --force
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: slides/pnpm-lock.yaml
+
+      - name: Install Slidev dependencies
+        working-directory: slides
+        run: pnpm install --frozen-lockfile
+
+      - name: Build MkDocs site
+        run: uv run mkdocs build --strict
+
+      - name: Build presentation
+        working-directory: slides
+        run: pnpm exec slidev build --base /lazycogs/presentations/lazycogs/ --out ../site/presentations/lazycogs
+
+      - name: Deploy combined site
+        run: uv run mkdocs gh-deploy --dirty --force

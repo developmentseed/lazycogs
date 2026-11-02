@@ -199,4 +199,5 @@ rather than a transient read failure.
 - [Example: Southwest US monthly low-cloud Sentinel-2 array](https://developmentseed.org/lazycogs/notebooks/demo_southwest_monthly/)
 - [Guide: dtype and nodata handling](https://developmentseed.org/lazycogs/guides/dtype-nodata/)
 - [Architecture](https://developmentseed.org/lazycogs/architecture/)
+- [Presentations](https://developmentseed.org/lazycogs/presentations/)
 - [Contributing](CONTRIBUTING.md)

@@ -40,6 +40,7 @@ nav:
       - rioxarray interoperability: notebooks/rioxarray.ipynb
       - lazycogs vs odc-stac: notebooks/lazycogs-odc-stac.ipynb
   - Performance: performance.md
+  - Presentations: presentations.md
   - API Reference:
       - open / open_async: api/open.md
       - Mosaic methods: api/mosaic.md

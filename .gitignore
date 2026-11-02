@@ -12,7 +12,8 @@ wheels/
 .ipynb_checkpoints
 .cache
 
-# mkdocs build output
+# JavaScript dependencies and MkDocs build output
+node_modules/
 site/
 
 # Quarto / Reveal.js build output
