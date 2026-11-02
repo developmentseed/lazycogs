@@ -1,0 +1,4 @@
+/* Slidev's hidden Goto dialog leaves its empty-query title suggestions visible. */
+#slidev-goto-dialog.-top-20 .autocomplete-list {
+  display: none;
+}
