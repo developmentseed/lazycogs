@@ -1,0 +1,32 @@
+{
+  "status": "BLOCKED",
+  "reference_notebook": "docs/notebooks/demo_southwest_monthly.ipynb",
+  "catalog": {
+    "endpoint": "https://earth-search.aws.element84.com/v1",
+    "collection": "sentinel-2-c1-l2a",
+    "query_dates": "2025-03-01/2025-06-30",
+    "returned_items": 9578,
+    "source_epsg_counts": {"32609": 134, "32610": 3327, "32611": 4185, "32612": 1932},
+    "pass_identity_field": "s2:datatake_id",
+    "pass_grouping": "Verified field exists on returned items; no individual-pass imagery exported."
+  },
+  "target_grid": {
+    "notebook_crs": "EPSG:3310",
+    "notebook_resolution_m": 300,
+    "bounds_m": [-444000, -609000, 681000, 500000],
+    "rgb_assets": ["red", "green", "blue"],
+    "filter": "eo:cloud_cover < 50",
+    "sort": "eo:cloud_cover ascending",
+    "mosaic": "monthly first-valid in sorted source order; not pixel-cloud-masked"
+  },
+  "proposed_preview": {
+    "months": ["2025-03", "2025-05", "2025-06"],
+    "month_rationale": "Seasonally separated dates; not validated against rendered coverage/cloudiness because image reads failed.",
+    "resolution_m": 1200,
+    "reason": "One-sixteenth of the notebook grid pixel count for a bounded review read.",
+    "display_stretch": "fixed linear 0..2500 source values to 0..255 RGB"
+  },
+  "outputs": [],
+  "failed_command": "AWS_EC2_METADATA_DISABLED=true uv run python slides/foss4gna-2026/spikes/southwest-images/reproduce.py",
+  "failure": "COG metadata access attempted PUT to http://169.254.169.254/latest/api/token and timed out. No image was exported."
+}
