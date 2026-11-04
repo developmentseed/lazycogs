@@ -50,7 +50,9 @@
 .plan-layout { display: grid; grid-template-columns: .9fr 1.1fr; gap: 1rem; height: 77%; }
 .plan-layout pre { margin-top: 0; font-size: .8rem; }
 .map-small { height: 14rem; }
-.results-layout { display: grid; grid-template-columns: 30% 70%; gap: 1rem; height: 78%; }
+.results-layout { display: grid; grid-template-columns: 34% 66%; gap: .7rem; height: 78%; min-height: 0; }
+.result-left { display: grid; grid-template-rows: 1.1fr .9fr; gap: .35rem; min-width: 0; min-height: 0; }
+.result-left pre { min-height: 0; margin: 0; overflow: hidden; font-size: .53rem; line-height: 1.18; }
 .result-map { position: relative; min-height: 0; }
 .nearby-result { display: flex; flex-direction: column; min-height: 0; margin: 0; }
 .nearby-result :deep(img), .nearby-result :deep(.asset-unavailable) { flex: 1; min-height: 0; }
@@ -63,14 +65,16 @@
 .southwest-map-full { position: relative; height: 76%; padding: .5rem 1rem; }
 .southwest-map-full > :deep(img) { width: 100%; height: 100%; object-fit: contain; }
 .southwest-map-full > span { position: absolute; bottom: .7rem; left: 1.2rem; padding: .3rem .5rem; background: #fffe; font-size: .8rem; }
-.southwest-layout { display: grid; grid-template-columns: 70% 30%; gap: .5rem; height: 75%; }
-.southwest-crs { position: relative; min-height: 0; }
-.southwest-example { display: grid; grid-template-rows: auto 1fr auto; gap: .4rem; min-height: 0; }
-.southwest-example pre { margin: 0; font-size: .62rem; line-height: 1.15; }
-.southwest-example > :nth-child(2) { min-height: 0; }
-.overview-label { padding: .3rem; background: #f1eee8; text-align: center; font-size: .67rem; }
-.southwest-mosaics { display: grid; grid-template-rows: repeat(3, 1fr); gap: .3rem; min-height: 0; }
-.southwest-mosaics > :deep(img) { min-height: 0; }
+.southwest-layout { display: flex; flex-direction: column; gap: .25rem; height: 77%; min-height: 0; }
+.southwest-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); flex: 1; gap: .5rem; min-height: 0; }
+.southwest-layout.stage-2 .southwest-main { flex: 0 0 62%; }
+.southwest-layout.stage-3 .southwest-main { flex: 0 0 44%; }
+.southwest-example { display: flex; flex-direction: column; gap: .35rem; min-width: 0; min-height: 0; }
+.southwest-example pre { flex: 1; min-height: 0; margin: 0; overflow: hidden; font-size: .52rem; line-height: 1.13; }
+.southwest-main > .asset-frame, .southwest-main > .asset-unavailable { width: 100%; height: 100%; min-width: 0; min-height: 0; }
+.southwest-grid-note { padding: .25rem; background: #f1eee8; text-align: center; font-size: .56rem; }
+.southwest-layout > .overview-evidence { flex: 1; }
+.southwest-layout.stage-3 > .overview-evidence { flex: 0 0 27%; }
 .scope-diagram { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 75%; gap: 2.5rem; }
 .scope-flow { display: flex; align-items: center; gap: 1rem; }
 .scope-flow span { padding: .9rem 1.1rem; border: 1px solid #aaa; background: #fafafa; }
@@ -79,7 +83,8 @@
 .scope-boundaries strong { padding: .7rem 1rem; border: 1px solid #a71d31; color: #a71d31; font-size: .9rem; }
 .scope-diagram p { text-align: center; font-size: 1.25rem; }
 .closing-layout { display: grid; grid-template-columns: 1.4fr .8fr; gap: 2rem; height: 72%; align-items: center; }
-.closing-layout > :first-child { height: 100%; min-height: 0; background: #111; }
+.closing-image { display: grid; grid-template-rows: minmax(0, 1fr) auto; height: 100%; min-width: 0; min-height: 0; margin: 0; background: #111; }
+.closing-image figcaption { padding: .3rem; color: #fff; text-align: center; font-size: .68rem; }
 .closing-card { display: flex; flex-direction: column; align-items: flex-start; gap: 1rem; }
 .closing-card > code { padding: .7rem; background: #282828 !important; color: #fff !important; font-size: 1.2rem; }
 .closing-card :deep(svg), .closing-card :deep(canvas) { width: 8rem; height: 8rem; }

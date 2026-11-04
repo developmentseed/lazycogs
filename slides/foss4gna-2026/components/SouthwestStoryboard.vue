@@ -1,59 +1,73 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
+type PassGroup = {
+  month: string
+  datatake_id: string
+  acquisition_datetimes: string[]
+  output: string
+}
+
+type SouthwestManifest = {
+  months: string[]
+  pass_groups: PassGroup[]
+}
+
 const props = defineProps<{ step: number }>()
 const assets = import.meta.glob('../assets/southwest/*.{png,webp}', {
   eager: true,
   import: 'default',
   query: '?url',
 }) as Record<string, string>
-const months = [
-  { key: 'mosaic-2025-03.png', label: 'March 2025' },
-  { key: 'mosaic-2025-07.png', label: 'July 2025' },
-  { key: 'mosaic-2025-11.png', label: 'November 2025' },
-]
-const mosaics = computed(() => months.map(month => ({
-  ...month,
-  src: assets[`../assets/southwest/${month.key}`],
+const manifestModules = import.meta.glob('../assets/southwest/manifest.json', {
+  eager: true,
+  import: 'default',
+}) as Record<string, SouthwestManifest>
+const manifest = Object.values(manifestModules)[0]
+const months = computed(() => (manifest?.months ?? []).map(month => ({
+  month,
+  key: `mosaic-${month}.png`,
+  label: new Date(`${month}-01T00:00:00Z`).toLocaleString('en-US', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }),
+  src: assets[`../assets/southwest/mosaic-${month}.png`],
 })))
-const passes = computed(() => Object.entries(assets)
-  .filter(([path]) => /southwest\/datatake-2025-(03|07|11)-1\.png$/.test(path))
-  .map(([path, src]) => {
-    const filename = path.split('/').pop() ?? ''
-    const dates: Record<string, string> = {
-      'datatake-2025-03-1.png': 'Acquisition date in manifest',
-      'datatake-2025-07-1.png': 'Acquisition date in manifest',
-      'datatake-2025-11-1.png': 'Acquisition date in manifest',
-    }
-    return { src, label: `${dates[filename] ?? 'Acquisition date in manifest'} · representative datatake` }
-  }))
+const passes = computed(() => (manifest?.months ?? []).flatMap(month => {
+  const group = manifest.pass_groups.find(candidate => candidate.month === month)
+  if (!group) return []
+  const src = assets[`../assets/southwest/${group.output}`]
+  const date = group.acquisition_datetimes[0]?.split('T')[0] ?? 'Date unavailable'
+  return [{ src, label: `${date} · representative datatake` }]
+}))
 </script>
 
 <template>
-  <section class="storyboard" :class="`step-${step}`" aria-label="Southwest imagery mosaic and representative source passes">
-    <figure v-if="step === 0" class="hero-mosaic">
-      <img v-if="mosaics[1]?.src" :src="mosaics[1].src" alt="July 2025 Southwest Sentinel-2 mosaic">
-      <figcaption>Southwest · monthly Sentinel-2 mosaic</figcaption>
+  <section class="storyboard" :class="`step-${props.step}`" aria-label="Southwest monthly mosaics and representative source datatakes">
+    <figure v-if="props.step === 0" class="hero-mosaic">
+      <img v-if="months[1]?.src" :src="months[1].src" :alt="`${months[1].label} Southwest Sentinel-2 mosaic`">
+      <figcaption>{{ months[1]?.label }} · 1,200 m display preview</figcaption>
     </figure>
-    <div v-else class="mosaic-row" :class="{ stacked: step === 1 || step === 2 }">
-      <figure v-for="mosaic in mosaics" :key="mosaic.key" class="mosaic-plane">
-        <img v-if="mosaic.src" :src="mosaic.src" :alt="`${mosaic.label} Southwest Sentinel-2 mosaic`">
-        <figcaption>{{ mosaic.label }}</figcaption>
+    <div v-else class="mosaic-row" :class="{ stacked: props.step === 1 }">
+      <figure v-for="mosaic in months" :key="mosaic.key" class="mosaic-plane">
+        <img v-if="mosaic.src" :src="mosaic.src" :alt="`${mosaic.label} Southwest Sentinel-2 mosaic preview`">
+        <figcaption>{{ mosaic.label }} · 1,200 m preview</figcaption>
       </figure>
     </div>
-    <div v-if="step === 2" class="pass-row">
+    <div v-if="props.step === 2" class="pass-row">
       <figure v-for="pass in passes" :key="pass.src">
-        <img :src="pass.src" :alt="`Representative orbit pass ${pass.label}`">
-        <figcaption>{{ pass.label }} · representative pass selection</figcaption>
+        <img v-if="pass.src" :src="pass.src" :alt="`Representative source datatake, ${pass.label}`">
+        <figcaption>{{ pass.label }} · 1,200 m preview</figcaption>
       </figure>
     </div>
     <div class="print-mosaics">
-      <figure v-for="mosaic in mosaics" :key="mosaic.key">
-        <img v-if="mosaic.src" :src="mosaic.src" :alt="`${mosaic.label} Southwest Sentinel-2 mosaic`">
-        <figcaption>{{ mosaic.label }}</figcaption>
+      <figure v-for="mosaic in months" :key="mosaic.key">
+        <img v-if="mosaic.src" :src="mosaic.src" :alt="`${mosaic.label} Southwest Sentinel-2 mosaic preview`">
+        <figcaption>{{ mosaic.label }} · 1,200 m preview</figcaption>
       </figure>
     </div>
-    <p class="story-label">{{ step < 1 ? 'One mosaic, many dates' : step < 2 ? 'Monthly views reveal time' : step < 3 ? 'Representative source passes' : 'Mosaics reassembled by month' }}</p>
+    <p class="story-label">{{ props.step < 1 ? 'One mosaic, many dates' : props.step < 2 ? 'Parallel monthly views' : props.step < 3 ? 'Representative datatakes' : 'Mosaics reassembled by month' }}</p>
   </section>
 </template>
 
@@ -62,82 +76,125 @@ const passes = computed(() => Object.entries(assets)
   position: absolute;
   inset: 0;
   display: grid;
-  grid-template-rows: 1fr auto;
+  grid-template-rows: minmax(0, 1fr) auto;
   width: 100%;
   height: 100%;
-  padding: 2.3rem 3rem 1rem;
+  padding: 3% 4% 2%;
   overflow: hidden;
   background: #111;
   color: #fff;
+  perspective: 70rem;
 }
-.mosaic-row {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  perspective: 1000px;
-}
-.mosaic-plane {
-  width: min(76vw, 1000px);
-  height: 68vh;
+.hero-mosaic {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
   margin: 0;
-  transition: transform 700ms ease, width 700ms ease, opacity 500ms ease;
 }
-.mosaic-plane img {
-  display: block;
+.hero-mosaic img {
   width: 100%;
-  height: calc(100% - 2rem);
+  height: 100%;
+  min-height: 0;
   object-fit: contain;
 }
-.mosaic-plane figcaption {
+.hero-mosaic figcaption, .mosaic-plane figcaption, .pass-row figcaption {
+  padding: .35rem;
   text-align: center;
-  font-size: 1rem;
-  opacity: 0;
+  font-size: .78rem;
 }
-.hero-mosaic { display: grid; grid-template-rows: 1fr auto; min-height: 0; width: 100%; margin: 0; }
-.hero-mosaic img { width: 100%; height: 100%; min-height: 0; object-fit: contain; }
-.hero-mosaic figcaption { text-align: center; font-size: 1rem; }
-.stacked .mosaic-plane {
-  width: 30%;
-  height: 55vh;
-  transform: rotateY(-24deg) translateZ(calc(var(--i, 0) * 10px));
+.mosaic-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: center;
+  min-width: 0;
+  min-height: 0;
+  transform-style: preserve-3d;
 }
-.stacked .mosaic-plane:nth-child(2) { transform: rotateY(0deg) translateZ(40px); }
-.stacked .mosaic-plane:nth-child(3) { transform: rotateY(24deg) translateZ(0); }
-.stacked .mosaic-plane figcaption { opacity: 1; }
+.mosaic-plane {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  width: 100%;
+  height: 88%;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+}
+.mosaic-plane img {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: contain;
+}
+.stacked .mosaic-plane img {
+  transform: rotateY(-16deg) translateZ(var(--depth));
+  transition: transform 650ms ease;
+}
+.stacked .mosaic-plane:nth-child(1) { --depth: -2.5rem; }
+.stacked .mosaic-plane:nth-child(2) { --depth: 0; }
+.stacked .mosaic-plane:nth-child(3) { --depth: 2.5rem; }
 .pass-row {
   position: absolute;
-  inset: 8rem 4rem 5rem;
-  display: flex;
-  justify-content: center;
+  inset: 12% 5% 12%;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: center;
-  gap: 1rem;
-  pointer-events: none;
+  gap: 1%;
+  padding: 1%;
+  background: #111b;
 }
 .pass-row figure {
-  width: 22%;
-  height: 45vh;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
   margin: 0;
-  padding: 0.35rem;
-  background: #111c;
   outline: 1px solid #fff8;
+  background: #111c;
 }
-.pass-row img { width: 100%; height: calc(100% - 2rem); object-fit: contain; }
-.pass-row figcaption { font-size: 0.72rem; text-align: center; }
+.pass-row img {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: contain;
+}
 .print-mosaics { display: none; }
-.story-label { margin: 0; color: #fff; text-align: center; font-size: 1.15rem; }
-.step-2 .mosaic-row, .step-2 .pass-row { opacity: 0.78; }
-.step-3 .mosaic-plane { transform: none !important; }
-.step-3 .pass-row { display: none; }
+.story-label {
+  margin: 0;
+  padding: .3rem;
+  color: #fff;
+  text-align: center;
+  font-size: .9rem;
+}
 @media print {
   .storyboard { color: #111; background: #fff; }
-  .hero-mosaic, .mosaic-row, .story-label { display: none; }
-  .print-mosaics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; height: 100%; align-items: center; }
-  .print-mosaics figure { min-width: 0; margin: 0; }
-  .print-mosaics img { width: 100%; height: 45vh; object-fit: contain; }
-  .print-mosaics figcaption { color: #111; text-align: center; }
-  .pass-row { display: none; }
+  .hero-mosaic, .mosaic-row, .pass-row, .story-label { display: none; }
+  .print-mosaics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1%;
+    min-height: 0;
+    align-items: center;
+  }
+  .print-mosaics figure {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    margin: 0;
+  }
+  .print-mosaics img {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    object-fit: contain;
+  }
+  .print-mosaics figcaption { color: #111; text-align: center; font-size: .7rem; }
 }
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { transition-duration: 0.01ms !important; }
+  *, *::before, *::after { transition-duration: .01ms !important; }
 }
 </style>

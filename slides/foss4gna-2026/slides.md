@@ -52,7 +52,7 @@ title: From observations to a mosaic
 <SouthwestStoryboard :step="$clicks" />
 
 <!--
-0:30–1:30. Start with the grand monthly mosaic. Rotate about the vertical axis and separate three verified seasonally spaced mosaics. Reveal one representative source datatake from each month as transparent pass layers with acquisition dates and footprint outlines, then reassemble the mosaics. The animation explains sources becoming a mosaic, not the provenance of every output pixel. The archive contains observations from different times with overlapping footprints; each monthly mosaic summarizes observations within that month, and scenes do not contribute equally. A Sentinel-2 granule is a tile, not a full orbit swath. The displayed pass selection is illustrative, not exhaustive. Scene-level cloud ranking does not guarantee cloud-free pixels. Reuse these exact images on slide 10.
+0:30–1:30. Start with the July monthly mosaic preview. Rotate three seasonally spaced monthly mosaics together around the vertical axis, reveal one representative source datatake from each month with its acquisition date and footprint outline, then reassemble the labeled mosaics. These are 1,200 m display previews from separate preview opens, not rendered pixels from the 300 m array definition shown later. The animation explains the relationship between source scenes and a monthly mosaic, not the provenance of every output pixel. Overlapping scenes contribute unevenly; a Sentinel-2 granule is a tile, not a full orbit swath. The pass selection is illustrative, not exhaustive. Scene-level cloud ranking does not guarantee cloud-free pixels. Reuse the same preview files on slide 10.
 -->
 
 ---
@@ -133,6 +133,7 @@ title: A year of HLS, an entire UTM zone
 
 ---
 layout: default
+clicks: 2
 title: Open the big array
 ---
 
@@ -140,24 +141,39 @@ title: Open the big array
 
 <div class="array-layout">
   <div class="code-pane">
-    <pre><code>imagery = lazycogs.open(
-    archive,
-    datetime="2025-01-01T00:00:00Z/2025-12-31T23:59:59Z",
-    filter=zone15,
+    <pre v-if="$clicks !== 1"><code>imagery = lazycogs.open(
+    href=index_href,
+    bbox=zone15_bounds_aligned,
     crs="EPSG:32615",
     resolution=30,
-    time_period="P1D",
     bands=["B04", "B03", "B02"],
-)
-// Alternate filters or grouping require another open</code></pre>
-    <div class="tiny-links"><a href="https://developmentseed.org/lazycogs/notebooks/hls-s3/" target="_blank">S3 notebook</a> · <a href="https://developmentseed.org/lazycogs/notebooks/hls-https/" target="_blank">HTTPS notebook</a></div>
+    time_period="P1D",
+    datetime="2025-01-01T00:00:00Z/2025-12-31T23:59:59Z",
+    filter=zone15_filter,
+    duckdb_client=index_client,
+    store=hls_store,
+)</code></pre>
+    <pre v-else><code>monthly = lazycogs.open(
+    href=index_href,
+    bbox=zone15_bounds_aligned,
+    crs="EPSG:32615",
+    resolution=30,
+    bands=["B04", "B03", "B02"],
+    time_period="P1M",
+    datetime="2025-01-01T00:00:00Z/2025-12-31T23:59:59Z",
+    filter="proj:epsg = '32615' AND eo:cloud_cover &lt; 50",
+    sortby="eo:cloud_cover",
+    duckdb_client=index_client,
+    store=hls_store,
+)</code></pre>
+    <div class="tiny-links"><span>{{ $clicks === 1 ? "alternate monthly filtered open" : "baseline daily open" }}</span><br><a href="https://developmentseed.org/lazycogs/notebooks/hls-s3/" target="_blank">S3 notebook</a> · <a href="https://developmentseed.org/lazycogs/notebooks/hls-https/" target="_blank">HTTPS notebook</a></div>
   </div>
   <div class="repr-pane"><AssetFrame asset="hls/array.html" title="Actual Xarray DataArray HTML representation" /></div>
 </div>
 <p class="footnote">Direct HLS S3 access requires compute in AWS us-west-2. Use HTTPS elsewhere.</p>
 
 <!--
-5:45–8:00. Use named preconfigured archive, extent, client, and store. Keep the baseline explicit 2025, EPSG:32615, 30 m, daily, RGB. The actual array HTML is a saved historical notebook result, not a fresh run. The current MAAP parquet request returned 403, so the HLS `eo:cloud_cover` predicate and alternate monthly open are not verified; do not present the candidate as runnable or supported. The repr's dimensions, dtype, coordinates, and logical size are real. Logical size describes materialized array size, not downloaded bytes or resident memory. Opening queries a representative item, inspects COG metadata per selected band, queries timestamps, and builds coordinates. No pixel windows are read yet. Avoid “instant” and “no files touched.” Dask chunks matter for lazy downstream arithmetic. The HTTPS notebook may lack year scoping; use only a verified 2025 result. Direct HLS S3 requires AWS us-west-2; HTTPS is the alternative.
+5:45–8:00. The setup provides the named archive href, aligned UTM 15N bbox, projection filter, DuckDB client, and store. Start with the executed 2025 daily RGB open, reveal the separately executed monthly open with `eo:cloud_cover < 50`, then return to daily for the rest of the demo. The same current 2025 archive accepted both opens; monthly grouping produced 12 time coordinates. This is scene-level filtering, not a pixel cloud mask. The actual repr reports 365 daily steps, 3 bands, int16, and about 15.2 TB logical array size. Logical size is not downloaded bytes or resident memory. Opening queries a representative item, inspects COG metadata per selected band, queries timestamps, and builds coordinates; no pixel windows are read yet. Avoid “instant” and “no files touched.” Dask chunks matter for lazy downstream arithmetic. Direct HLS S3 requires compute in AWS us-west-2; HTTPS is the alternative.
 -->
 
 ---
@@ -221,7 +237,18 @@ title: Compute the subset
 # Compute the subset
 
 <div class="results-layout">
-  <div class="result-map"><AssetImage asset="hls/selection.svg" alt="HLS 2025 footprints marking the point and nearby window" /><span>point · nearby window</span></div>
+  <div class="result-left">
+    <div class="result-map"><AssetImage asset="hls/selection.svg" alt="Observed HLS 2025 item footprints marking the point and nearby window" /><span>point · nearby window</span></div>
+    <pre><code>point_x, point_y = 576465, 5196159
+point = imagery.sel(
+    x=point_x, y=point_y, method="nearest",
+).compute()
+window = imagery.sel(
+    x=slice(point_x - 2500, point_x + 2500),
+    y=slice(point_y + 2500, point_y - 2500),
+    time=["2025-01-03", "2025-06-29", "2025-12-31"],
+).compute()</code></pre>
+  </div>
   <div class="result-figures">
     <div><h3>Point RGB · 2025</h3><AssetImage asset="hls/point-rgb.svg" alt="Actual HLS RGB-band digital number series through 2025 with missing dates as gaps" /></div>
     <div v-click><h3>Nearby RGB · 3 selected dates</h3><AssetImage asset="hls/nearby-rgb.png" alt="Actual HLS RGB window on three selected dates" /></div>
@@ -229,39 +256,46 @@ title: Compute the subset
 </div>
 
 <!--
-12:15–15:00. The available real result is a saved RGB plot for a 15 km by 10 km HLS window on ten September 2025 dates. Its values are raw digital numbers with a display stretch of 0–2000, not reflectance. Keep the requested grid and selected window visible. The requested full-year point time series is unavailable because the current archive metadata query returned 403; do not narrate this plot as a year-long point series. Preserve gaps and do not imply scene filtering is pixel cloud masking. No timing claim.
+12:15–15:00. First trace the nearest-grid-cell selection across the 2025 daily array. The RGB lines are raw int16 digital numbers with 123 valid observations; missing dates remain gaps, and the values are not reflectance. Then reveal the 5 km by 5 km nearby window on three valid dates (2025-01-03, 2025-06-29, 2025-12-31). Its RGB montage clips stored values at 2000. Both point and window are actual computed results. Scene filtering is not pixel cloud masking. No timing claim.
 -->
 
 ---
 layout: default
-clicks: 2
+clicks: 3
 title: Many projections. One Southwest array.
 ---
 
 # Many projections. One Southwest array.
 
 <div v-if="$clicks === 0" class="southwest-map-full">
-  <AssetImage asset="southwest/footprints.svg" alt="Representative Southwest pass granule footprints colored by source CRS" />
-  <span>selected pass footprints · CRS</span>
+  <AssetImage asset="southwest/footprints.svg" alt="Selected Southwest pass footprints colored by source CRS" />
+  <span>selected source footprints · CRS by color</span>
 </div>
-<div v-else class="southwest-layout">
-  <div class="southwest-example">
-    <pre><code>monthly = lazycogs.open(
-    parquet,
+<div v-else class="southwest-layout" :class="`stage-${$clicks}`">
+  <div class="southwest-main">
+    <div class="southwest-example">
+      <pre><code>monthly = lazycogs.open(
+    index_href,
+    bbox=bounds_3310,
     crs="EPSG:3310",
     resolution=300,
     time_period="P1M",
+    bands=["red", "green", "blue"],
+    dtype="uint16",
     filter="eo:cloud_cover &lt; 50",
     sortby="eo:cloud_cover",
+    store=store,
 )</code></pre>
+      <div class="southwest-grid-note">300 m target grid · nearest-neighbor sampling</div>
+    </div>
     <AssetFrame asset="southwest/array.html" title="Actual Xarray DataArray representation for the Southwest monthly array" />
-    <div v-click class="overview-label">300 m target grid · choose an available source overview</div>
   </div>
-  <div class="southwest-mosaics"><AssetImage asset="southwest/mosaic-2025-03.png" alt="March 2025 RGB mosaic" /><AssetImage asset="southwest/mosaic-2025-07.png" alt="July 2025 RGB mosaic" /><AssetImage asset="southwest/mosaic-2025-11.png" alt="November 2025 RGB mosaic" /></div>
+  <SouthwestOverviewPyramid v-if="$clicks >= 2" />
+  <SouthwestMosaicStrip v-if="$clicks >= 3" />
 </div>
 
 <!--
-15:00–17:45. Start with the CRS map, then show the open call, actual HTML repr, and the same seasonal mosaics introduced on slide 2. The example is monthly first-valid mosaics ordered by scene cloud cover, not means or medians. Different source projections are aligned onto the requested EPSG:3310, 300 m grid. Scene ranking is not a pixel cloud mask. First-valid pixels follow source order. For the overview reveal, use the recorded source-band resolutions/overview levels: choose the coarsest available overview no coarser than target resolution in source CRS, falling back to full resolution; then sample onto the target grid. Existing overview pixels may use another resampler. lazycogs sampling is nearest-neighbor. This is a new coarser-grid array definition, not automatic optimization of arbitrary xarray coarsen operations.
+15:00–17:45. Begin with selected source footprints colored by CRS. Reveal the monthly open on the left and actual Xarray repr on the right. The definition requests a 300 m EPSG:3310 target grid. Sampled red-band COG headers report 10 m native pixels and 20, 40, about 80, and about 160 m overviews; the transformed target is about 300 m in each sample CRS, so the 159.8 m level is selected. This is evidence from sampled COGs, not a guarantee for every item. The seasonal mosaic images are separate 1,200 m display-preview opens, not materialized 300 m array pixels. lazycogs samples nearest-neighbor; existing overview pixels may themselves use another resampler. First-valid mosaics follow scene cloud-cover order, not means or medians. Scene ranking is not a pixel cloud mask. This is a new target-grid array definition, not automatic optimization of arbitrary xarray coarsen operations.
 -->
 
 ---
@@ -289,7 +323,10 @@ title: Try it on your archive
 # Try it on your archive
 
 <div class="closing-layout">
-  <AssetImage asset="southwest/mosaic-2025-07.png" alt="July 2025 Southwest monthly Sentinel-2 imagery" />
+  <figure class="closing-image">
+    <AssetImage asset="southwest/mosaic-2025-07.png" alt="July 2025 Southwest monthly Sentinel-2 display preview" />
+    <figcaption>July 2025 · 1,200 m display preview</figcaption>
+  </figure>
   <div class="closing-card">
     <code>pip install lazycogs</code>
     <a href="https://github.com/developmentseed/lazycogs" target="_blank">github.com/developmentseed/lazycogs</a>
