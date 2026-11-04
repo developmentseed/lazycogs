@@ -35,7 +35,10 @@ const months = computed(() => (manifest?.months ?? []).map(month => ({
   src: assets[`../assets/southwest/mosaic-${month}.png`],
 })))
 const passPairs = computed(() => (manifest?.months ?? []).flatMap(month => {
-  const monthGroups = manifest.pass_groups.filter(group => group.month === month).slice(0, 2)
+  const monthGroups = manifest.pass_groups
+    .filter(group => group.month === month)
+    .sort((first, second) => (first.acquisition_datetimes[0] ?? '').localeCompare(second.acquisition_datetimes[0] ?? ''))
+    .slice(0, 2)
   if (monthGroups.length < 2) return []
   const mosaic = months.value.find(item => item.month === month)
   return [{

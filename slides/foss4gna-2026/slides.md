@@ -262,7 +262,7 @@ nearby = filtered_daily.sel(
 </div>
 
 <!--
-12:15–15:00. The point series is computed from `imagery`, the original unfiltered-by-cloud 2025 daily baseline: 123 dates have valid RGB values and the other 242 remain gaps. Values are stored int16 DNs, not reflectance. The nearby montage is different: it comes from `filtered_daily`, a second daily open with scene `eo:cloud_cover < 30`, then a 5 km `.sel().compute()`. Its dates are April 7 (4% scene cloud), July 14 (6%), and October 10 (0%), selected near spring/summer/fall. The display clips DN to 0–2000. Scene cloud filtering is not pixel cloud masking, and the seasonal views are illustrative, not a quantitative phenology result.
+12:15–15:00. The point series is computed from `imagery`, the original unfiltered-by-cloud 2025 daily baseline: 123 dates have valid RGB values and the other 242 remain gaps. Values are stored int16 DNs, not reflectance. The nearby montage is different: it comes from `filtered_daily`, a second daily open with scene `eo:cloud_cover < 30`, then a 5 km `.sel().compute()`. Its dates are April 7 (4% scene cloud), July 14 (6%), and October 10 (0%), selected near spring/summer/fall. The display clips DN to 0–2000. The saved point SVG has markers at 45 retained simplified-path vertices (15 per band); these do not reconstruct all 123 valid observations. Scene cloud filtering is not pixel cloud masking, and the seasonal views are illustrative, not a quantitative phenology result.
 -->
 
 ---

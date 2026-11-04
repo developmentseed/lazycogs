@@ -19,6 +19,7 @@ const src = computed(() => assets[`../assets/${props.asset}`])
     :title="title"
     loading="eager"
     sandbox="allow-same-origin"
+    scrolling="no"
   />
   <div v-else class="asset-unavailable">Verified asset unavailable: {{ asset }}</div>
 </template>
