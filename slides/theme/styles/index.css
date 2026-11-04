@@ -1,5 +1,3 @@
-/* Import Google Fonts */
-@import url("https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Roboto+Mono:wght@400;500&display=swap");
 @font-face {
   font-family: "Antarctica VAR";
   src: url("/fonts/antarctica-vf.ttf") format("truetype-variations");
@@ -22,7 +20,7 @@
   /* Typography */
   --slidev-font-family: "Antarctica VAR", sans-serif;
   --slidev-font-family-heading: "Antarctica VAR", sans-serif;
-  --slidev-font-family-mono: "Roboto Mono", monospace;
+  --slidev-font-family-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
 body {
