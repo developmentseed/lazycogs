@@ -1,0 +1,82 @@
+{
+  "status": "READY_FOR_SLIDE_REVIEW",
+  "reproduction_command": "uv run python slides/foss4gna-2026/spikes/southwest-images/reproduce.py",
+  "runtime_versions": {
+    "lazycogs": "0.7.0",
+    "rustac": "0.9.13",
+    "obstore": "0.11.0",
+    "async-geotiff": "0.5.1",
+    "Pillow": "12.2.0",
+    "numpy": "2.5.0"
+  },
+  "total_png_bytes": 12092207,
+  "reference_notebook": "docs/notebooks/demo_southwest_monthly.ipynb",
+  "source": {
+    "stac_api": "https://earth-search.aws.element84.com/v1",
+    "collection": "sentinel-2-c1-l2a",
+    "queried_datetime": "2025-03-01/2025-06-30",
+    "queried_items": 9578,
+    "queried_crs_epsg_counts": {
+      "32609": 134,
+      "32610": 3327,
+      "32611": 4185,
+      "32612": 1932
+    },
+    "index_scratch": ".cache/southwest-images/southwest-2025.parquet"
+  },
+  "transport": {
+    "mechanism": "obstore HTTPStore; anonymous public HTTPS",
+    "root": "https://e84-earth-search-sentinel-data.s3.us-west-2.amazonaws.com",
+    "mapping": "Each source HREF is already https://<same-host>/<key>; HTTPStore uses <same-host> as root and the unchanged original object path as key.",
+    "verified": "Unauthenticated GeoTIFF header and 256x256 bounded window read succeeded. No AWS credential or metadata lookup."
+  },
+  "notebook_reference": {
+    "bounds_epsg3310": [-444000, -609000, 681000, 500000],
+    "resolution_m": 300,
+    "bands": ["red", "green", "blue"],
+    "filter": "eo:cloud_cover < 50",
+    "sort": "eo:cloud_cover ascending",
+    "mosaic": "first valid pixel in source order",
+    "cloud_caveat": "Scene-level ranking/filter only; not pixel cloud masking."
+  },
+  "review_grid": {
+    "crs": "EPSG:3310",
+    "bounds": [-444000, -609000, 681000, 500000],
+    "resolution_m": 1200,
+    "dimensions": {"x": 938, "y": 924},
+    "deviation": "Coarsened from notebook 300 m grid to bound output/read volume; all outputs use the same grid and dimensions."
+  },
+  "display": {
+    "rgb_stretch": "fixed linear source DN 0..5000 to 0..255, same for every date and pass",
+    "nodata": "RGBA alpha=0 where all RGB values are zero; otherwise alpha=255",
+    "months": ["2025-03", "2025-05", "2025-06"],
+    "month_rationale": "Visual inspection shows markedly greater Sierra Nevada snow cover in March and a warmer, snow-reduced landscape in May/June. All show substantial image coverage; gaps/clouds are still visible."
+  },
+  "pass_grouping": {
+    "field": "s2:datatake_id",
+    "method": "Within each month, choose the two datatake groups with the most catalog items passing eo:cloud_cover < 50. Read all qualifying granules in each selected group, first-valid in cloud-sorted source order.",
+    "subset": "Six acquisitions total (two per month), out of all monthly datatakes; each includes 58–68 granule items. Separate transparently masked RGB PNGs with WGS84 STAC geometry outlines projected to EPSG:3310.",
+    "selected": [
+      {"month": "2025-03", "datatake_id": "GS2B_20250308T183119_041809_N05.11", "items": 68, "output": "datatake-2025-03-1.png"},
+      {"month": "2025-03", "datatake_id": "GS2C_20250310T182211_002671_N05.11", "items": 61, "output": "datatake-2025-03-2.png"},
+      {"month": "2025-05", "datatake_id": "GS2C_20250509T181941_003529_N05.11", "items": 60, "output": "datatake-2025-05-1.png"},
+      {"month": "2025-05", "datatake_id": "GS2B_20250520T183919_042853_N05.11", "items": 58, "output": "datatake-2025-05-2.png"},
+      {"month": "2025-06", "datatake_id": "GS2C_20250618T181931_004101_N05.11", "items": 65, "output": "datatake-2025-06-1.png"},
+      {"month": "2025-06", "datatake_id": "GS2A_20250620T182811_052205_N05.11", "items": 64, "output": "datatake-2025-06-2.png"}
+    ],
+    "overlap_note": "Separate acquisitions can be layered transparently. Each datatake itself is composited to one image, so per-pixel tile overlap is not a duplicated stack."
+  },
+  "outputs": [
+    "mosaic-2025-03.png",
+    "mosaic-2025-05.png",
+    "mosaic-2025-06.png",
+    "datatake-2025-03-1.png",
+    "datatake-2025-03-2.png",
+    "datatake-2025-05-1.png",
+    "datatake-2025-05-2.png",
+    "datatake-2025-06-1.png",
+    "datatake-2025-06-2.png",
+    "contact-sheet.png"
+  ],
+  "animation_scope": "Flat images only per user instruction; rotation/time stacking deferred to Slidev."
+}
