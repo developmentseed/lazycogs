@@ -372,19 +372,13 @@ class: closing-slide
 title: lazycogs — discussion
 ---
 
-<script setup>
-import closingLogo from '../../logo-text.svg?url'
-</script>
+<ClosingLogo class="closing-wordmark" />
 
-<img :src="closingLogo" alt="lazycogs" class="closing-wordmark" />
-
-<p class="closing-message">The index does not decide which scenes you want.<br><strong>You do.</strong></p>
+<p class="closing-message"><strong>stay lazy</strong></p>
 
 <div class="closing-links">
 <div>
 <a class="docs-link" href="https://developmentseed.org/lazycogs/">developmentseed.org/lazycogs/</a>
-<p><code>pip install lazycogs</code></p>
-<a href="https://github.com/developmentseed/lazycogs">github.com/developmentseed/lazycogs</a>
 </div>
 <AssetQRCode value="https://developmentseed.org/lazycogs/" />
 </div>
@@ -392,5 +386,5 @@ import closingLogo from '../../logo-text.svg?url'
 <!--
 18:45–20:00, then leave this slide visible for 5 minutes of discussion. The deliberate scope is compatible STAC-indexed COGs, not a general raster engine. A GDAL-free implementation is a narrow integration choice, not GDAL feature parity. We reuse rustac/DuckDB for discovery, async-geotiff/obstore for COG reads, pyproj/NumPy for alignment, and Xarray with optional Dask scheduling. We still own the integration and metadata contracts; chunk sizes and index layout matter. Distributed chunkwise analysis motivated this work, not a guarantee that every worker deployment works unchanged.
 
-The docs URL is verified against mkdocs.yml site_url and the docs workflow: https://developmentseed.org/lazycogs/. The static local QR encodes that same URL. All talk images and HTML outputs are bundled locally; links are optional follow-up resources. Invite questions about which archive and array view the audience wants to work with.
+The docs URL is verified against mkdocs.yml site_url and the docs workflow: https://developmentseed.org/lazycogs/. The static local QR encodes that same URL. All talk images and HTML outputs are bundled locally; links are optional follow-up resources. Encourage people to try lazycogs on their own archives and file feature requests and bug reports at https://github.com/developmentseed/lazycogs/issues. Reports about unsupported workflows, unexpected results, and rough edges help decide what to work on next. Invite questions about which archive and array view the audience wants to work with.
 -->

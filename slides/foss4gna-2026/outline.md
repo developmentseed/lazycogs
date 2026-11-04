@@ -2,7 +2,7 @@
 
 ## Format
 
-25 minutes: about 20 minutes presenting, then 5 minutes discussing. Twelve slides, with one native click on slide 11 to replace the array definition with its May result. No custom animations, live queries, or live notebook execution. Keep the closing slide up during discussion.
+25 minutes: about 20 minutes presenting, then 5 minutes discussing. Twelve slides, with one native click on slide 11 to replace the array definition with its May result. No live queries or live notebook execution. The only custom animation is a brief one-shot logo wink on closing-slide entry; the logo then stays still during discussion. Reduced-motion and print views keep the resting expression.
 
 Use the Development Seed theme retained in `../theme/`, following `~/workspace/devseed/ds-slidev-template/`. Its implementation uses Antarctica for headings/body, Shiki's GitHub light/dark code themes, and standard Slidev layouts. Local font assets and monospace fallbacks avoid runtime font downloads. Talk-local CSS only handles layout. Fenced Python blocks use Shiki rather than hand-styled `<pre>` elements.
 
@@ -21,7 +21,7 @@ Use the Development Seed theme retained in `../theme/`, following `~/workspace/d
 | 9. A new scene filter, then a small window | 10:30–12:45 | Explicit reopened filtered view, 5 km selection, matching seasonal RGB montage |
 | 10. This time, prepare our own index | 12:45–14:15 | rustac.search_to from Earth Search to local Southwest GeoParquet |
 | 11. Your scene selection. Your target grid. | 14:15–18:45 | Exact monthly Southwest open + notebook HTML; one click shows May selection/load and opening image |
-| 12. Discussion | 18:45–20:00 | Logo, key message, installation, prominent docs link and local QR |
+| 12. Discussion | 18:45–20:00 | Logo, bold “stay lazy”, prominent docs link and local QR; notes invite trials, feature requests and bug reports |
 
 Speaker notes contain prerequisites, explanations, limitations, and transitions. Rehearse to 20 minutes; background runs to about six minutes. Do not add timing or scaling claims without new evidence.
 
