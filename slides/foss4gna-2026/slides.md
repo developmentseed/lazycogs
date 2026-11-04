@@ -1,6 +1,8 @@
 ---
 title: lazycogs
-info: A lazy xarray view of cloud-optimized GeoTIFF collections
+info: |
+  FOSS4GNA 2026 · Sacramento, CA · November 4, 2026
+  Henry Rodman · Development Seed
 highlighter: shiki
 drawings:
   persist: false
@@ -9,10 +11,14 @@ layout: title
 image: /images/theme/lena-delta.jpg
 ---
 
-# lazycogs
+<script setup>
+import lazycogsLogo from '../../logo-text.svg?url'
+</script>
+
+<img :src="lazycogsLogo" alt="lazycogs relaxed squares logo with wordmark" style="width: 240px; height: 240px;" />
 
 ::subtitle::
-Lazy, cloud-native raster mosaics
+super lazy analysis of massive COG archives
 
 <DecorativeRectangle
   width="50%"
@@ -26,8 +32,15 @@ Lazy, cloud-native raster mosaics
 >
   <div w-full h-full relative flex flex-col items-end justify-end p-4 text-white text-right>
     <p text-3xl font-300>
-      FOSS4G North America 2026
+      FOSS4GNA 2026 <br>
+      Sacramento, CA
     </p>
+    <h4 text-md font-mono>
+      2026-11-03
+    </h4>
+    <h5 text-sm>
+      <code text-primary>Henry Rodman</code>
+    </h5>
   </div>
 </DecorativeRectangle>
 

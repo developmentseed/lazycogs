@@ -11,7 +11,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Edit `foss4gna-2026/slides.md` to change the deck. The starter content is intentionally short; replace the future-talk placeholder when preparing the presentation.
+Edit `foss4gna-2026/slides.md` to change the deck. The deck still contains starter slides. The working talk structure is in [`foss4gna-2026/outline.md`](foss4gna-2026/outline.md); the submitted proposal and talk-specific guidance are in [`foss4gna-2026/AGENTS.md`](foss4gna-2026/AGENTS.md).
 
 ## Build for the website
 
