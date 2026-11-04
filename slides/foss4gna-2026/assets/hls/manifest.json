@@ -79,7 +79,7 @@
   "coverage": {
     "source_items_queried": 23490,
     "unique_mgrs_tile_footprints": 302,
-    "interpretation": "Year-unioned STAC item geometries represented by one footprint per MGRS tile; not cloud-free pixel coverage."
+    "interpretation": "Year-unioned STAC item geometries represented by one footprint per MGRS tile. coverage.svg uses an equal-degree equirectangular Americas overview; selection.svg uses an equal-metre EPSG:32615 inset. Footprints are not cloud-free pixel coverage."
   },
   "source_grid_sample": {
     "item_id": "HLS.S30.T15TWN.2025023T171519.v2.0",
@@ -111,12 +111,13 @@
   "authentication": "Existing local Earthdata HTTPS flow succeeded for bounded authenticated HLS COG reads. No credentials or authorization headers were printed or persisted. Public metadata objects were fetched by unsigned HTTPS; no AWS credential discovery or S3 pixel access was used.",
   "checks": [
     "Latest Iceberg metadata pointer and Avro manifests returned HTTP 200; exact current unpadded January 2025 object returned HTTP 200.",
-    "Incorrect zero-padded January object returned HTTP 403; public bucket listing returned HTTP 403.",
+    "Initial guessed zero-padded January probe returned HTTP 403 (the notebook generates unpadded months); public bucket listing returned HTTP 403.",
     "All 12 manifest-listed 2025 HLSS30_2.0 parquet partitions downloaded and validated: 2,715,469 records, 665,392,268 compressed bytes.",
     "Current authenticated HTTPS HLS COG HEAD returned HTTP 200; baseline and selected 5 km pixel captures completed.",
     "Baseline daily array and separate monthly eo:cloud_cover-filtered array opened; monthly time coordinate count is 12.",
     "Current scene metadata query found 77 candidates under eo:cloud_cover < 30; montage plan is 9 chunk reads / 15 COG reads.",
-    "Footprint query excludes assets, links, and other bulky fields; 23,490 item records reduce to 302 unique MGRS tile footprints."
+    "Footprint query excludes assets, links, and other bulky fields; 23,490 item records reduce to 302 unique MGRS tile footprints. Maps show an equirectangular Americas overview and an equal-metre EPSG:32615 inset.",
+    "Current point SVG markers were added at the 45 retained saved-path vertices (15 per band); no pixel data was reread and no new coordinates were inferred. The original plot line paths are simplified, so these markers do not reconstruct all 123 valid raw observations."
   ],
   "outputs": [
     "array.html",

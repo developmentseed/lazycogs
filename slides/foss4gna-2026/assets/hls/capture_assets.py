@@ -9,16 +9,22 @@ import json
 import logging
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import requests
 import xarray as xr
 from matplotlib import pyplot as plt
+from matplotlib.collections import PatchCollection
+from matplotlib.patches import Polygon, Rectangle
 from obstore.store import HTTPStore
 from pyproj import Transformer
 from rustac import DuckdbClient
 
 import lazycogs
+
+if TYPE_CHECKING:
+    from matplotlib.figure import Figure
 
 LOGGER = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parents[4]
@@ -59,25 +65,11 @@ def obtain_store() -> HTTPStore:
     )
 
 
-def _transform_ring(
-    ring: list[list[float]],
-    transformer: Transformer,
-) -> list[tuple[float, float]]:
-    """Transform one GeoJSON polygon ring into target-grid coordinates."""
-    x_values, y_values = transformer.transform(
-        [coordinate[0] for coordinate in ring],
-        [coordinate[1] for coordinate in ring],
-    )
-    return list(zip(x_values, y_values, strict=True))
-
-
-def _write_maps(
+def _collect_mgrs_rings(
     items: list[dict],
-    transformer: Transformer,
-    bounds: tuple[float, ...],
-) -> int:
-    """Write current item-footprint coverage plus the demonstrated selection."""
-    polygons = {}
+) -> tuple[list[list[tuple[float, float]]], int]:
+    """Collect one year-unioned geometry per MGRS tile from STAC items."""
+    rings = []
     seen_tiles = set()
     for item in items:
         item_id = item.get("id", "")
@@ -89,90 +81,189 @@ def _write_maps(
         geometry = item.get("geometry") or {}
         coordinates = geometry.get("coordinates", [])
         members = [coordinates] if geometry.get("type") == "Polygon" else coordinates
-        for polygon in members:
-            if not polygon:
-                continue
-            ring = _transform_ring(polygon[0], transformer)
-            key = tuple((round(x, 1), round(y, 1)) for x, y in ring)
-            polygons[key] = ring
-
-    left, top, width, height = 58, 54, 334, 232
-    xmin, ymin, xmax, ymax = bounds
-    sx = width / (xmax - xmin)
-    sy = height / (ymax - ymin)
-    points = []
-    for ring in polygons.values():
-        xy = " ".join(
-            f"{left + (x - xmin) * sx:.1f},{top + (ymax - y) * sy:.1f}" for x, y in ring
+        rings.extend(
+            [(float(point[0]), float(point[1])) for point in polygon[0]]
+            for polygon in members
+            if polygon
         )
-        points.append(f'<polygon points="{xy}"/>')
+    return rings, len(seen_tiles)
 
-    px, py = POINT_XY
-    wx0, wx1 = px - WINDOW_HALF_SIZE_M, px + WINDOW_HALF_SIZE_M
-    wy0, wy1 = py - WINDOW_HALF_SIZE_M, py + WINDOW_HALF_SIZE_M
-    point_svg = (left + (px - xmin) * sx, top + (ymax - py) * sy)
-    window_svg = (
-        left + (wx0 - xmin) * sx,
-        top + (ymax - wy1) * sy,
-        (wx1 - wx0) * sx,
-        (wy1 - wy0) * sy,
+
+def _save_svg(figure: Figure, path: Path) -> None:
+    """Save an SVG with trailing whitespace removed for clean diffs."""
+    figure.savefig(path)
+    svg = path.read_text()
+    path.write_text("\n".join(line.rstrip() for line in svg.splitlines()) + "\n")
+
+
+def _write_coverage_map(
+    geographic_rings: list[list[tuple[float, float]]],
+    point_lonlat: tuple[float, float],
+) -> None:
+    """Render footprints in a correctly proportioned lon/lat overview."""
+    fig, axis = plt.subplots(figsize=(4.5, 4.2), layout="constrained")
+    patches = [Polygon(ring, closed=True) for ring in geographic_rings]
+    axis.add_collection(
+        PatchCollection(
+            patches,
+            facecolor="#6b9d75",
+            edgecolor="#376b43",
+            alpha=0.34,
+            linewidth=0.45,
+        ),
     )
-    body = "\n".join(points)
-    svg = "\n".join(
-        [
-            '<svg xmlns="http://www.w3.org/2000/svg" width="450" height="350"',
-            'viewBox="0 0 450 350">',
-            '<rect width="450" height="350" fill="#fff"/>',
-            '<text x="225" y="24" text-anchor="middle" '
-            'font-family="sans-serif" font-size="15">'
-            "2025 HLS MGRS tile coverage - UTM 15N</text>",
-            f'<g fill="#6b9d75" fill-opacity=".38" '
-            f'stroke="#376b43" stroke-width=".45">{body}</g>',
-            f'<rect x="{left}" y="{top}" width="{width}" height="{height}" '
-            'fill="none" stroke="#334155" stroke-width="1.2"/>',
-            f'<rect x="{window_svg[0]:.1f}" y="{window_svg[1]:.1f}" '
-            f'width="{window_svg[2]:.1f}" height="{window_svg[3]:.1f}" '
-            'fill="#f4b942" fill-opacity=".42" stroke="#a45c00" '
-            'stroke-width="1.5"/>',
-            f'<circle cx="{point_svg[0]:.1f}" cy="{point_svg[1]:.1f}" '
-            'r="4.5" fill="#c62828" stroke="white" stroke-width="1.5"/>',
-            f'<text x="{left}" y="304" font-family="sans-serif" '
-            'font-size="12">Year-unioned MGRS footprints · point · 5 km window</text>',
-            f'<text x="{left}" y="323" font-family="sans-serif" '
-            'font-size="11" fill="#475569">Tile coverage, not cloud-free '
-            "pixel coverage</text>",
-            "</svg>",
-        ],
+    axis.add_patch(
+        Rectangle(
+            (-96, 0),
+            6,
+            84,
+            fill=False,
+            edgecolor="#35658a",
+            linestyle="--",
+            linewidth=1.2,
+        ),
     )
-    (ASSET_DIR / "coverage.svg").write_text(svg)
-    (ASSET_DIR / "selection.svg").write_text(svg)
-    return len(polygons)
+    axis.scatter(*point_lonlat, color="#c62828", edgecolor="white", s=22, zorder=4)
+    axis.text(-95.7, 80, "UTM 15N", color="#35658a", fontsize=8)
+    axis.set(
+        xlim=(-130, -60),
+        ylim=(-5, 85),
+        xlabel="Longitude",
+        ylabel="Latitude",
+        title=(
+            "2025 HLS source footprints · Americas\n"
+            "302 year-unioned MGRS tiles; not cloud-free pixels"
+        ),
+    )
+    axis.set_aspect("equal", adjustable="box")
+    axis.set_xticks(range(-120, -59, 10))
+    axis.set_yticks(range(0, 81, 10))
+    axis.grid(color="#d9e0e5", linewidth=0.6)
+    _save_svg(fig, ASSET_DIR / "coverage.svg")
+    plt.close(fig)
+
+
+def _write_selection_map(
+    geographic_rings: list[list[tuple[float, float]]],
+    projected_rings: list[list[tuple[float, float]]],
+    point_xy: tuple[float, float],
+    point_lonlat: tuple[float, float],
+) -> None:
+    """Render a locator and equal-metre-scale source-footprint inset."""
+    fig, (locator, detail) = plt.subplots(
+        1,
+        2,
+        figsize=(9, 5.6),
+        gridspec_kw={"width_ratios": (0.7, 1.35)},
+        layout="constrained",
+    )
+    locator.add_collection(
+        PatchCollection(
+            [Polygon(ring, closed=True) for ring in geographic_rings],
+            facecolor="#6b9d75",
+            edgecolor="#376b43",
+            alpha=0.34,
+            linewidth=0.45,
+        ),
+    )
+    locator.add_patch(
+        Rectangle(
+            (-96, 0),
+            6,
+            84,
+            fill=False,
+            edgecolor="#35658a",
+            linestyle="--",
+            linewidth=1.2,
+        ),
+    )
+    locator.scatter(*point_lonlat, color="#c62828", edgecolor="white", s=22, zorder=4)
+    locator.set(
+        xlim=(-130, -60),
+        ylim=(-5, 85),
+        title="Americas locator · UTM zone 15N",
+    )
+    locator.set_aspect("equal", adjustable="box")
+    locator.set_xticks(range(-120, -59, 20))
+    locator.set_yticks(range(0, 81, 20))
+    locator.grid(color="#d9e0e5", linewidth=0.6)
+
+    x0, y0 = point_xy
+    detail.add_collection(
+        PatchCollection(
+            [Polygon(ring, closed=True) for ring in projected_rings],
+            facecolor="#6b9d75",
+            edgecolor="#376b43",
+            alpha=0.28,
+            linewidth=0.7,
+        ),
+    )
+    detail.add_patch(
+        Rectangle(
+            (x0 - WINDOW_HALF_SIZE_M, y0 - WINDOW_HALF_SIZE_M),
+            WINDOW_HALF_SIZE_M * 2,
+            WINDOW_HALF_SIZE_M * 2,
+            facecolor="#f4b942",
+            edgecolor="#a45c00",
+            alpha=0.35,
+            linewidth=1.5,
+            zorder=3,
+        ),
+    )
+    detail.scatter(x0, y0, color="#c62828", edgecolor="white", s=28, zorder=4)
+    detail.set(
+        xlim=(x0 - 15_000, x0 + 15_000),
+        ylim=(y0 - 15_000, y0 + 15_000),
+        xlabel="Easting (m), EPSG:32615",
+        ylabel="Northing (m)",
+        title=(
+            "30 km context · equal-metre scale\n"
+            "Green footprints · yellow 5 km window · red point\n"
+            "Source geometry, not cloud-free pixels"
+        ),
+    )
+    detail.set_aspect("equal", adjustable="box")
+    detail.set_xticks(np.arange(x0 - 15_000, x0 + 15_001, 10_000))
+    detail.set_yticks(np.arange(y0 - 15_000, y0 + 15_001, 10_000))
+    detail.grid(color="#d9e0e5", linewidth=0.6)
+    scale_x, scale_y = x0 - 13_000, y0 - 13_500
+    detail.plot([scale_x, scale_x + 5_000], [scale_y, scale_y], color="#111827")
+    detail.text(scale_x, scale_y + 500, "5 km", fontsize=8)
+    fig.suptitle("2025 HLS footprints and selected target window")
+    _save_svg(fig, ASSET_DIR / "selection.svg")
+    plt.close(fig)
+
+
+def _write_maps(items: list[dict]) -> int:
+    """Write a geographic footprint overview and a metric-scale selection inset."""
+    geographic_rings, tile_count = _collect_mgrs_rings(items)
+    to_projected = Transformer.from_crs("EPSG:4326", "EPSG:32615", always_xy=True)
+    projected_rings = []
+    for ring in geographic_rings:
+        eastings, northings = to_projected.transform(
+            [point[0] for point in ring],
+            [point[1] for point in ring],
+        )
+        projected_rings.append(list(zip(eastings, northings, strict=True)))
+    to_geographic = Transformer.from_crs("EPSG:32615", "EPSG:4326", always_xy=True)
+    point_lonlat = to_geographic.transform(*POINT_XY)
+    _write_coverage_map(geographic_rings, point_lonlat)
+    _write_selection_map(geographic_rings, projected_rings, POINT_XY, point_lonlat)
+    return tile_count
 
 
 def capture_current_coverage_map() -> int:
-    """Query current 2025 geometry/id fields only and refresh both footprint maps."""
+    """Query cached current-year geometry/id fields and refresh both footprint maps."""
     client = DuckdbClient(use_hive_partitioning=True)
-    bbox = ZONE_BBOX
-    transformer = Transformer.from_crs("EPSG:4326", "EPSG:32615", always_xy=True)
-    dst_bbox = transformer.transform_bounds(*bbox)
     projection_filter = {"op": "=", "args": [{"property": "proj:epsg"}, "32615"]}
-    sample = client.search(
-        str(INDEX),
-        bbox=bbox,
-        datetime=DATETIME,
-        filter=projection_filter,
-        max_items=1,
-        exclude=["assets", "links", "stac_extensions", "bbox", "collection"],
-    )[0]
-    bounds = lazycogs.align_bbox(sample["properties"]["proj:transform"], dst_bbox)
     features = client.search(
         str(INDEX),
-        bbox=bbox,
+        bbox=ZONE_BBOX,
         datetime=DATETIME,
         filter=projection_filter,
         exclude=["assets", "links", "stac_extensions", "bbox", "collection"],
     )
-    return _write_maps(features, transformer, bounds)
+    return _write_maps(features)
 
 
 def capture_point_series(imagery: xr.DataArray) -> int:
@@ -192,7 +283,15 @@ def capture_point_series(imagery: xr.DataArray) -> int:
     ):
         series = values[band_index].astype(float)
         series[series == nodata] = np.nan
-        axis.plot(times, series, color=color, linewidth=1.0, label=band)
+        axis.plot(
+            times,
+            series,
+            color=color,
+            linewidth=1.0,
+            marker="o",
+            markersize=2,
+            label=band,
+        )
     axis.set(title="HLS point RGB through 2025", ylabel="Stored band value (int16 DN)")
     axis.set_xlabel("2025 date; missing observations remain gaps")
     axis.legend(ncol=3, frameon=False)
@@ -375,6 +474,6 @@ if __name__ == "__main__":
     parser.add_argument("--maps-only", action="store_true")
     if parser.parse_args().maps_only:
         count = capture_current_coverage_map()
-        LOGGER.info("Mapped %d current item geometries", count)
+        LOGGER.info("Mapped %d unique MGRS footprints", count)
     else:
         main()
