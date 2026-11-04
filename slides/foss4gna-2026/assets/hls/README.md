@@ -1,22 +1,30 @@
-# HLS slide assets: partial; remaining assets BLOCKED
+# HLS slide assets
 
-This directory contains only provenance-supported outputs and clearly labeled limits. Layout interface is available now:
+Current, verified outputs are ready for layout:
 
-- `array.html`: saved Xarray HTML repr with Xarray stylesheet embedded for offline viewing.
-- `coverage.svg` and `selection.svg`: same map of the requested UTM grid bounds and the saved notebook point/window. It explicitly says this is not observed scene coverage.
-- `nearby-rgb.png`: actual saved RGB output from the HLS notebook, showing ten September 2025 subset dates. It is not a synthetic image.
-- `snippets.md`: executed baseline configuration plus a candidate alternate marked unverified/BLOCKED.
-- `extract_saved_outputs.py`: extracts the saved HTML/image outputs and makes the target-grid selection map. It does not query data or read pixels.
-- `manifest.json`: provenance and blocked-item status.
+- `array.html` — actual HTML `_repr_html_()` from the current 2025 baseline open, with Xarray's stylesheet embedded for offline display.
+- `coverage.svg` and `selection.svg` — 2025 source MGRS tile footprints, overlaid with the selected point and a 5 km square window. Footprints are time-unioned across the year; this is spatial item coverage, not cloud-free pixel coverage.
+- `plan.txt` and `plan.svg` — actual `subset.lazycogs.explain()` result for the same 5 km window and seasonal montage dates.
+- `point-rgb.svg` / `point-rgb.png` — current 2025 point RGB daily time series. Nodata dates are retained as gaps.
+- `nearby-rgb.png` — actual 5 km RGB windows at three low-scene-cloud dates, selected near spring, summer, and fall.
+- `nearby-dates.json` — item IDs, scene cloud cover, selected dates, clip range, and bounded plan count for the montage.
+- `snippets.md` — executed baseline and alternate monthly scene-cloud-filter open examples.
+- `reproduce.py`, `capture_assets.py`, `capture_nearby_rgb.py` — bounded reproduction scripts. `manifest.json` records source, commands, checks, output scope, and limitations.
 
-## Source and verification limits
+## Source and current-index reconciliation
 
-The baseline array HTML came from the real saved result in `docs/notebooks/hls-s3.ipynb`, cell 15. Its executed code selects collection `HLSS30_2.0`, explicit dates 2025-01-01 through 2025-12-31, `EPSG:32615`, 30 m, daily steps, and B04/B03/B02. The saved repr reports shape `(3, 365, 310967, 22266)`, `int16`, 7,581,770,388,090 values (15,163,540,776,180 logical bytes). This is historical notebook output, not a fresh rerun.
+NASA MAAP's current public GeoParquet archive is Iceberg-backed. The public pointer is [`latest.metadata.json`](https://s3.us-west-2.amazonaws.com/nasa-maap-data-store/file-staging/nasa-map/hls-stac-geoparquet-archive/v2/HLSS30_2.0/iceberg/metadata/latest.metadata.json), snapshot `69769654033930513`. Its manifest lists monthly parquet files with **unpadded** months. For example, the current January object is `.../year=2025/month=1/HLSS30_2.0-2025-1.parquet`; the old notebook's padded `month=01/HLSS30_2.0-2025-01.parquet` gets 403. Bucket listing remains denied, but the documented pointer, Avro manifests, and exact public data objects are readable by HTTPS. `reproduce.py` follows the snapshot manifests and fetches exactly the 12 2025 `HLSS30_2.0` partitions, not the other collection or year. The files total 665,392,268 compressed bytes / 2,715,469 records.
 
-The saved September RGB figure is from that notebook's `subset.plot.imshow(...)` output (cell 21), where a 15 km by 10 km window was plotted for ten non-nodata days in September 2025. The notebook uses `vmin=0`, `vmax=2000`; the RGB values are raw `int16` HLS band digital numbers, not physical reflectance. The saved S3 notebook's point selection only covers September 2025, not the full year, so the requested year-long point time series is unavailable.
+The array is `HLSS30_2.0`, `EPSG:32615`, 30 m, daily, B04/B03/B02, with explicit 2025 start/end. The actual repr reports `(band,time,y,x)=(3,365,310967,22266)`, `int16`, 7,581,770,388,090 logical values and 15,163,540,776,180 logical bytes. That's dense-array size, not downloaded or resident bytes. A current sample item's B04 asset reports wavelength/common-name metadata but no `raster:bands` scale or unit. The arrays/plots therefore show stored integer digital numbers (DN), **not reflectance-scaled values**. The RGB montage clips DN to 0–2000; no physical reflectance scale is asserted.
 
-Existing local Earthdata auth succeeded using the HTTPS notebook's existing token path, without logging or exposing the token. A bounded authenticated HEAD to a documented HTTPS HLS COG succeeded (HTTP 200). However the unsigned public MAAP parquet object needed to query current spatial metadata returned HTTP 403 (`PermissionDeniedError`). No protected S3/AWS credential discovery was used. Thus no current index query, current `eo:cloud_cover` support check, alternate-open run, or `subset.lazycogs.explain()` was possible.
+The current sample COG header agrees with the baseline output dtype `int16` and nodata `-9999`; the 2025 STAC feature has `proj:epsg=32615` and `eo:cloud_cover`. Both daily baseline and monthly `eo:cloud_cover < 50` opens ran successfully against the current index. The monthly view defines a separate array and sorts by scene cloud cover; it does not cloud-mask pixels.
 
-`coverage.svg`/`selection.svg` show the requested array grid rectangle and saved point/window only. They do not claim source-scene coverage. Plan assets and point-series assets remain BLOCKED rather than replaced with fake output.
+## Point and seasonal image story
 
-Direct HLS S3 access requires compute in AWS `us-west-2`; use HTTPS elsewhere. Keep auth, grid inspection, and storage configuration behind named variables in slide code.
+At point `(576465, 5196159)`, 123 of 365 daily slots have all three RGB bands non-nodata; the other 242 remain gaps in the plot. The nearby image strip uses a 5 km square centered on the same point. To make the seasonal comparison interpretable, candidates are restricted to scene cloud cover below 30%, then selected nearest April 15, July 15, and October 10. The actual dates are 2025-04-07 (4% scene cloud), 2025-07-14 (6%), and 2025-10-10 (0%). In this neighborhood, the RGBs show mostly brown/low-green early-season fields, green summer vegetation, and browner autumn fields. This is an illustrative scene sequence, not a quantitative crop-phenology result; low scene cloud cover does not guarantee clear pixels. The plan for this 5 km / three-date subset has 9 chunk reads and 15 planned COG reads; no full array was computed.
+
+Current STAC item/asset metadata does not declare a physical DN scale or unit. We label plotted values as stored DN and avoid claiming surface reflectance values. See `manifest.json` for metadata evidence and source commands.
+
+## HTTPS and S3 locations
+
+The existing local Earthdata authentication flow succeeded for bounded HTTPS HLS COG reads; secrets and authorization headers were not logged or persisted. Direct HLS S3 pixel access requires compute in AWS `us-west-2`; use HTTPS elsewhere. Metadata reproduction uses unsigned public HTTPS objects and does not use AWS credential discovery.
