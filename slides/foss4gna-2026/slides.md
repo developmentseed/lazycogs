@@ -280,7 +280,8 @@ title: Many projections. One Southwest array.
 <div v-else class="southwest-layout" :class="`stage-${$clicks}`">
   <div class="southwest-main">
     <div class="southwest-example">
-      <pre><code>monthly = lazycogs.open(
+      <pre><code>selected_months = ["2025-03-01", "2025-07-01", "2025-11-01"]
+monthly = lazycogs.open(
     index_href,
     bbox=bounds_3310,
     crs="EPSG:3310",
@@ -291,7 +292,7 @@ title: Many projections. One Southwest array.
     filter="eo:cloud_cover &lt; 50",
     sortby="eo:cloud_cover",
     store=store,
-)</code></pre>
+).sel(time=selected_months)</code></pre>
       <div class="southwest-grid-note">300 m target grid · nearest-neighbor sampling</div>
     </div>
     <AssetFrame asset="southwest/array.html" title="Actual Xarray DataArray representation for the Southwest monthly array" />
@@ -301,7 +302,7 @@ title: Many projections. One Southwest array.
 </div>
 
 <!--
-15:00–17:45. Begin with selected source footprints colored by CRS. Reveal the monthly open on the left and actual Xarray repr on the right. The definition requests a 300 m EPSG:3310 target grid. Next show the seasonal mosaic images, which are separate 1,200 m display-preview opens, not materialized 300 m array pixels. Finish with measured source-COG overview evidence: sampled red-band COG headers report 10 m native pixels and 20, 40, about 79.97, and about 159.825 m overviews. The transformed 300 m target is about 300 m in each sample CRS, so the 159.825 m level is selected. This evidence covers sampled COGs, not every item. lazycogs samples nearest-neighbor; existing overview pixels may themselves use another resampler. First-valid mosaics follow scene cloud-cover order, not means or medians. Scene ranking is not a pixel cloud mask. This is a new target-grid array definition, not automatic optimization of arbitrary xarray coarsen operations.
+15:00–17:45. Begin with selected source footprints colored by CRS. Reveal the monthly open on the left and actual Xarray repr on the right. The visible dates select the March, July, and November coordinates shown in the three-step repr. The definition requests a 300 m EPSG:3310 target grid. Next show the seasonal mosaic images, which are separate 1,200 m display-preview opens, not materialized 300 m array pixels. Finish with measured source-COG overview evidence: sampled red-band COG headers report 10 m native pixels and 20, 40, about 79.97, and about 159.825 m overviews. The transformed 300 m target is about 300 m in each sample CRS, so the 159.825 m level is selected. This evidence covers sampled COGs, not every item. lazycogs samples nearest-neighbor; existing overview pixels may themselves use another resampler. First-valid mosaics follow scene cloud-cover order, not means or medians. Scene ranking is not a pixel cloud mask. This is a new target-grid array definition, not automatic optimization of arbitrary xarray coarsen operations.
 -->
 
 ---
