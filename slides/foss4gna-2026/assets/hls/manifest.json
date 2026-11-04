@@ -1,0 +1,36 @@
+{
+  "status": "BLOCKED",
+  "reason": "HLS HTTPS COG assets require an Earthdata Login bearer token; no task-specific authenticated HTTPStore was provided. No credentials were discovered or fetched and no HLS pixel reads were attempted.",
+  "source": {
+    "metadata_archive": "NASA MAAP HLS STAC GeoParquet archive; notebook collection HLSS30_2.0",
+    "pixel_assets": "https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/",
+    "access_evidence": "docs/notebooks/hls-https.ipynb, cells 12-15: explicitly documents EDL-token requirement and configures HTTPStore Authorization bearer header"
+  },
+  "existing_output_review": {
+    "https_notebook": "Saved output inspected; its array spans 2025-01-01 through 2026-05-09 (494 dates), not the requested 2025-only scope.",
+    "s3_notebook": "Saved output inspected; 2025 extent is present, but notebook setup uses NASA credential discovery and lp-prod-protected S3, so it was not used as an authorized reproduction or pixel source."
+  },
+  "notebook_reconciliation": {
+    "file": "docs/notebooks/hls-https.ipynb",
+    "change": "Configured stac_search_args now include explicit 2025 datetime and the already-configured hive-aware duckdb_client.",
+    "reexecution": "Not run; authentication is unavailable. Existing saved output is stale for the changed call."
+  },
+  "checks": {
+    "archive_field_support": "BLOCKED: no current source query executed; no eo:cloud_cover predicate is claimed or provided as verified.",
+    "baseline_and_alternate_open": "BLOCKED: neither was run against authorized current source data.",
+    "dimensions_and_logical_bytes": "BLOCKED: no valid 2025 result reproduced.",
+    "pixel_units_scaling_and_dates": "BLOCKED: no pixels read.",
+    "array_html_coverage_plan_and_plots": "BLOCKED: no new outputs created."
+  },
+  "location_caveat": "Direct HLS S3 access requires compute in AWS us-west-2; use HTTPS elsewhere.",
+  "assets": {
+    "array.html": "BLOCKED",
+    "coverage.svg": "BLOCKED",
+    "selection.svg": "BLOCKED",
+    "plan.txt": "BLOCKED",
+    "plan.svg_or_png": "BLOCKED",
+    "point-rgb.svg_or_png": "BLOCKED",
+    "nearby-rgb.png": "BLOCKED",
+    "snippets.md": "BLOCKED"
+  }
+}
