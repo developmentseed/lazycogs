@@ -34,12 +34,19 @@ const months = computed(() => (manifest?.months ?? []).map(month => ({
   }),
   src: assets[`../assets/southwest/mosaic-${month}.png`],
 })))
-const passes = computed(() => (manifest?.months ?? []).flatMap(month => {
-  const group = manifest.pass_groups.find(candidate => candidate.month === month)
-  if (!group) return []
-  const src = assets[`../assets/southwest/${group.output}`]
-  const date = group.acquisition_datetimes[0]?.split('T')[0] ?? 'Date unavailable'
-  return [{ src, label: `${date} · representative datatake` }]
+const passPairs = computed(() => (manifest?.months ?? []).flatMap(month => {
+  const monthGroups = manifest.pass_groups.filter(group => group.month === month).slice(0, 2)
+  if (monthGroups.length < 2) return []
+  const mosaic = months.value.find(item => item.month === month)
+  return [{
+    month: mosaic?.label ?? month,
+    dates: monthGroups.map(group => group.acquisition_datetimes[0]?.split('T')[0] ?? 'Date unavailable').join(' + '),
+    passes: monthGroups.map(group => ({
+      src: assets[`../assets/southwest/${group.output}`],
+      output: group.output,
+      date: group.acquisition_datetimes[0]?.split('T')[0] ?? 'Date unavailable',
+    })),
+  }]
 }))
 </script>
 
@@ -56,9 +63,11 @@ const passes = computed(() => (manifest?.months ?? []).flatMap(month => {
       </figure>
     </div>
     <div v-if="props.step === 2" class="pass-row">
-      <figure v-for="pass in passes" :key="pass.src">
-        <img v-if="pass.src" :src="pass.src" :alt="`Representative source datatake, ${pass.label}`">
-        <figcaption>{{ pass.label }} · 1,200 m preview</figcaption>
+      <figure v-for="pair in passPairs" :key="pair.month">
+        <div class="pass-stack">
+          <img v-for="pass in pair.passes" :key="pass.output" :src="pass.src" :alt="`Representative ${pair.month} source datatake from ${pass.date}`">
+        </div>
+        <figcaption><span>{{ pair.month }} · {{ pair.dates }}</span><span>two overlapping datatakes · 1,200 m previews</span></figcaption>
       </figure>
     </div>
     <div class="print-mosaics">
@@ -103,6 +112,7 @@ const passes = computed(() => (manifest?.months ?? []).flatMap(month => {
   text-align: center;
   font-size: .78rem;
 }
+.pass-row figcaption { display: grid; gap: .1rem; font-size: .68rem; line-height: 1.1; }
 .mosaic-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -141,8 +151,9 @@ const passes = computed(() => (manifest?.months ?? []).flatMap(month => {
   align-items: center;
   gap: 1%;
   padding: 1%;
-  background: #111b;
+  background: #111;
 }
+.step-2 .mosaic-row { opacity: .18; }
 .pass-row figure {
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
@@ -152,13 +163,17 @@ const passes = computed(() => (manifest?.months ?? []).flatMap(month => {
   min-height: 0;
   margin: 0;
   outline: 1px solid #fff8;
-  background: #111c;
+  background: #111;
 }
-.pass-row img {
+.pass-stack { position: relative; min-width: 0; min-height: 0; }
+.pass-stack img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   min-height: 0;
   object-fit: contain;
+  opacity: .72;
 }
 .print-mosaics { display: none; }
 .story-label {

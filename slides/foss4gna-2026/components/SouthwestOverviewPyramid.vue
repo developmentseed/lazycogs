@@ -39,10 +39,10 @@ const evidence = computed(() => (manifest?.months ?? []).flatMap(month => {
           :key="resolution"
           class="overview-level"
           :class="{ selected: resolution === item.selected_overview_resolution_m }"
-          :style="{ width: `${Math.max(24, 100 * Math.sqrt(item.source_pixel_size_m / resolution))}%` }"
-        >{{ resolution }} m{{ resolution === item.selected_overview_resolution_m ? ' · selected' : '' }}</span>
+          :style="{ width: resolution === item.selected_overview_resolution_m ? '75%' : `${Math.max(24, 100 * Math.sqrt(item.source_pixel_size_m / resolution))}%` }"
+        >{{ Number.isInteger(resolution) ? resolution : resolution.toFixed(2) }} m{{ resolution === item.selected_overview_resolution_m ? ' · selected' : '' }}</span>
       </div>
-      <div class="overview-target">300 m output → {{ item.target_resolution_in_source_crs_m.toFixed(1) }} m in source CRS<br>{{ item.decision }}</div>
+      <div class="overview-target">{{ item.target_resolution_in_source_crs_m.toFixed(1) }} m source-CRS target<br>coarsest available level ≤ target</div>
     </div>
     <p v-if="!evidence.length" class="overview-pending">Source overview evidence awaits the reviewed manifest.</p>
   </section>

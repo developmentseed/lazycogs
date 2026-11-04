@@ -2,6 +2,8 @@
 #slidev-goto-dialog.-top-20 .autocomplete-list { display: none; }
 
 /* FOSS4GNA 2026 talk-specific layout. */
+.slidev-layout > h1 { margin-bottom: .65rem; font-size: 2.25rem; line-height: 1.1; }
+.slidev-layout:has(.southwest-layout), .slidev-layout:has(.southwest-map-full), .slidev-layout:has(.closing-layout) { display: flex; flex-direction: column; box-sizing: border-box; height: 100%; min-height: 0; overflow: hidden; }
 .title-wordmark {
   display: block;
   width: min(31rem, 42vw);
@@ -37,7 +39,8 @@
 .array-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem; height: 69%; }
 .code-pane { display: flex; flex-direction: column; min-width: 0; }
 .code-pane pre { margin: 0; font-size: .7rem; line-height: 1.3; }
-.repr-pane { min-width: 0; min-height: 0; padding: .3rem; border: 1px solid #ddd; background: white; }
+.repr-pane { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: .3rem; min-width: 0; min-height: 0; padding: .3rem; border: 1px solid #ddd; background: white; }
+.repr-label { color: #565b65; font-size: .62rem; }
 .tiny-links { margin-top: .6rem; font-size: .72rem; }
 .footnote { margin: .45rem 0 0; text-align: right; font-size: .66rem; }
 .chunk-layout { display: grid; grid-template-columns: 1.1fr .9fr; gap: 2rem; align-items: center; }
@@ -48,8 +51,8 @@
 .map-inset, .map-small { position: relative; height: 22rem; min-height: 0; background: #f5f5f5; }
 .map-overlay { position: absolute; right: .5rem; bottom: .5rem; padding: .3rem .5rem; background: #fffe; font-size: .7rem; }
 .plan-layout { display: grid; grid-template-columns: .9fr 1.1fr; gap: 1rem; height: 77%; }
-.plan-layout pre { margin-top: 0; font-size: .8rem; }
-.map-small { height: 14rem; }
+.plan-layout pre { margin-top: 0; font-size: .55rem; line-height: 1.15; white-space: pre-wrap; overflow-wrap: anywhere; }
+.map-small { height: 8.5rem; }
 .results-layout { display: grid; grid-template-columns: 34% 66%; gap: .7rem; height: 78%; min-height: 0; }
 .result-left { display: grid; grid-template-rows: 1.1fr .9fr; gap: .35rem; min-width: 0; min-height: 0; }
 .result-left pre { min-height: 0; margin: 0; overflow: hidden; font-size: .53rem; line-height: 1.18; }
@@ -62,19 +65,17 @@
 .result-figures > div { display: flex; flex-direction: column; min-height: 0; }
 .result-figures h3 { flex: none; margin: 0; font-size: .82rem; }
 .result-figures :deep(img), .result-figures :deep(.asset-unavailable) { flex: 1; min-height: 0; }
-.southwest-map-full { position: relative; height: 76%; padding: .5rem 1rem; }
+.southwest-map-full { position: relative; flex: 1; box-sizing: border-box; height: auto; min-height: 0; padding: .25rem .5rem; overflow: hidden; }
 .southwest-map-full > :deep(img) { width: 100%; height: 100%; object-fit: contain; }
 .southwest-map-full > span { position: absolute; bottom: .7rem; left: 1.2rem; padding: .3rem .5rem; background: #fffe; font-size: .8rem; }
-.southwest-layout { display: flex; flex-direction: column; gap: .25rem; height: 77%; min-height: 0; }
+.southwest-layout { display: flex; flex: 1; flex-direction: column; gap: .35rem; height: auto; min-height: 0; overflow: hidden; }
 .southwest-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); flex: 1; gap: .5rem; min-height: 0; }
-.southwest-layout.stage-2 .southwest-main { flex: 0 0 62%; }
-.southwest-layout.stage-3 .southwest-main { flex: 0 0 44%; }
+.southwest-layout.stage-2 .southwest-main, .southwest-layout.stage-3 .southwest-main { flex: 0 0 54%; }
 .southwest-example { display: flex; flex-direction: column; gap: .35rem; min-width: 0; min-height: 0; }
-.southwest-example pre { flex: 1; min-height: 0; margin: 0; overflow: hidden; font-size: .52rem; line-height: 1.13; }
+.southwest-example pre { flex: 1; min-height: 0; margin: 0; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .7rem; line-height: 1.2; }
 .southwest-main > .asset-frame, .southwest-main > .asset-unavailable { width: 100%; height: 100%; min-width: 0; min-height: 0; }
 .southwest-grid-note { padding: .25rem; background: #f1eee8; text-align: center; font-size: .56rem; }
 .southwest-layout > .overview-evidence { flex: 1; }
-.southwest-layout.stage-3 > .overview-evidence { flex: 0 0 27%; }
 .scope-diagram { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 75%; gap: 2.5rem; }
 .scope-flow { display: flex; align-items: center; gap: 1rem; }
 .scope-flow span { padding: .9rem 1.1rem; border: 1px solid #aaa; background: #fafafa; }
@@ -82,8 +83,8 @@
 .scope-boundaries { display: flex; gap: 1rem; }
 .scope-boundaries strong { padding: .7rem 1rem; border: 1px solid #a71d31; color: #a71d31; font-size: .9rem; }
 .scope-diagram p { text-align: center; font-size: 1.25rem; }
-.closing-layout { display: grid; grid-template-columns: 1.4fr .8fr; gap: 2rem; height: 72%; align-items: center; }
-.closing-image { display: grid; grid-template-rows: minmax(0, 1fr) auto; height: 100%; min-width: 0; min-height: 0; margin: 0; background: #111; }
+.closing-layout { display: grid; flex: 1; grid-template-columns: 1.4fr .8fr; gap: 2rem; height: auto; min-height: 0; overflow: hidden; align-items: center; }
+.closing-image { display: grid; grid-template-rows: minmax(0, 1fr) auto; height: 100%; min-width: 0; min-height: 0; margin: 0; overflow: hidden; background: #111; }
 .closing-image figcaption { padding: .3rem; color: #fff; text-align: center; font-size: .68rem; }
 .closing-card { display: flex; flex-direction: column; align-items: flex-start; gap: 1rem; }
 .closing-card > code { padding: .7rem; background: #282828 !important; color: #fff !important; font-size: 1.2rem; }

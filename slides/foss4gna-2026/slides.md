@@ -52,7 +52,7 @@ title: From observations to a mosaic
 <SouthwestStoryboard :step="$clicks" />
 
 <!--
-0:30–1:30. Start with the July monthly mosaic preview. Rotate three seasonally spaced monthly mosaics together around the vertical axis, reveal one representative source datatake from each month with its acquisition date and footprint outline, then reassemble the labeled mosaics. These are 1,200 m display previews from separate preview opens, not rendered pixels from the 300 m array definition shown later. The animation explains the relationship between source scenes and a monthly mosaic, not the provenance of every output pixel. Overlapping scenes contribute unevenly; a Sentinel-2 granule is a tile, not a full orbit swath. The pass selection is illustrative, not exhaustive. Scene-level cloud ranking does not guarantee cloud-free pixels. Reuse the same preview files on slide 10.
+0:30–1:30. Start with the July monthly mosaic preview. Rotate three seasonally spaced monthly mosaics together around the vertical axis, reveal two representative source datatakes per month as overlapping translucent layers, with both acquisition dates and footprint outlines, then reassemble the labeled mosaics. These are 1,200 m display previews from separate preview opens, not rendered pixels from the 300 m array definition shown later. The animation explains the relationship between source scenes and a monthly mosaic, not the provenance of every output pixel. Overlapping scenes contribute unevenly; a Sentinel-2 granule is a tile, not a full orbit swath. The pass selection is illustrative, not exhaustive. Scene-level cloud ranking does not guarantee cloud-free pixels. Reuse the same preview files on slide 10.
 -->
 
 ---
@@ -123,12 +123,12 @@ title: A year of HLS, an entire UTM zone
 ---
 
 <div class="map-first">
-  <AssetImage asset="hls/coverage.svg" alt="Observed 2025 HLS item footprints in UTM zone 15N with selected point and window" />
-  <div class="map-caption"><strong>2025 · 30 m · RGB</strong><span>UTM zone 15N · observed item footprints · HLSS30_2.0</span></div>
+  <AssetImage asset="hls/coverage.svg" alt="Year-unioned footprints for 302 unique 2025 HLS MGRS tiles in UTM zone 15N, with selected point and window" />
+  <div class="map-caption"><strong>2025 · 30 m · RGB</strong><span>UTM zone 15N · 302 year-unioned MGRS tile footprints · HLSS30_2.0</span></div>
 </div>
 
 <!--
-5:00–5:45. The reference is NASA MAAP's existing HLS STAC GeoParquet archive. This example selects HLSS30_2.0 (Sentinel-derived HLS), not a combined Landsat/Sentinel array. The archive avoids first harvesting this collection through CMR STAC API queries, but metadata preparation and access still have costs. Keep auth, partition-access setup, and grid inspection in the linked notebook.
+5:00–5:45. The reference is NASA MAAP's existing HLS STAC GeoParquet archive, not a new CMR harvest. This example selects HLSS30_2.0 (Sentinel-derived HLS), not a combined Landsat/Sentinel array. The 2025 view uses the 12 year partitions named by the current Iceberg manifest; metadata preparation and access still have costs. Keep auth, partition setup, and grid inspection in the linked notebook.
 -->
 
 ---
@@ -141,39 +141,34 @@ title: Open the big array
 
 <div class="array-layout">
   <div class="code-pane">
-    <pre v-if="$clicks !== 1"><code>imagery = lazycogs.open(
-    href=index_href,
-    bbox=zone15_bounds_aligned,
-    crs="EPSG:32615",
-    resolution=30,
-    bands=["B04", "B03", "B02"],
-    time_period="P1D",
-    datetime="2025-01-01T00:00:00Z/2025-12-31T23:59:59Z",
-    filter=zone15_filter,
-    duckdb_client=index_client,
-    store=hls_store,
-)</code></pre>
+    <pre v-if="$clicks !== 1"><code>daily_args = {
+    "href": index_href,
+    "bbox": zone15_bounds_aligned,
+    "crs": "EPSG:32615",
+    "resolution": 30,
+    "bands": ["B04", "B03", "B02"],
+    "datetime": "2025-01-01T00:00:00Z/2025-12-31T23:59:59Z",
+    "filter": zone15_filter,
+    "duckdb_client": index_client,
+    "store": hls_store,
+}
+imagery = lazycogs.open(**daily_args, time_period="P1D")</code></pre>
     <pre v-else><code>monthly = lazycogs.open(
-    href=index_href,
-    bbox=zone15_bounds_aligned,
-    crs="EPSG:32615",
-    resolution=30,
-    bands=["B04", "B03", "B02"],
-    time_period="P1M",
-    datetime="2025-01-01T00:00:00Z/2025-12-31T23:59:59Z",
-    filter="proj:epsg = '32615' AND eo:cloud_cover &lt; 50",
-    sortby="eo:cloud_cover",
-    duckdb_client=index_client,
-    store=hls_store,
+    **{
+        **daily_args,
+        "filter": "proj:epsg = '32615' AND eo:cloud_cover &lt; 50",
+        "time_period": "P1M",
+        "sortby": "eo:cloud_cover",
+    },
 )</code></pre>
     <div class="tiny-links"><span>{{ $clicks === 1 ? "alternate monthly filtered open" : "baseline daily open" }}</span><br><a href="https://developmentseed.org/lazycogs/notebooks/hls-s3/" target="_blank">S3 notebook</a> · <a href="https://developmentseed.org/lazycogs/notebooks/hls-https/" target="_blank">HTTPS notebook</a></div>
   </div>
-  <div class="repr-pane"><AssetFrame asset="hls/array.html" title="Actual Xarray DataArray HTML representation" /></div>
+  <div class="repr-pane"><div class="repr-label">Actual baseline daily DataArray repr</div><AssetFrame asset="hls/array.html" title="Actual baseline daily Xarray DataArray HTML representation" /></div>
 </div>
 <p class="footnote">Direct HLS S3 access requires compute in AWS us-west-2. Use HTTPS elsewhere.</p>
 
 <!--
-5:45–8:00. The setup provides the named archive href, aligned UTM 15N bbox, projection filter, DuckDB client, and store. Start with the executed 2025 daily RGB open, reveal the separately executed monthly open with `eo:cloud_cover < 50`, then return to daily for the rest of the demo. The same current 2025 archive accepted both opens; monthly grouping produced 12 time coordinates. This is scene-level filtering, not a pixel cloud mask. The actual repr reports 365 daily steps, 3 bands, int16, and about 15.2 TB logical array size. Logical size is not downloaded bytes or resident memory. Opening queries a representative item, inspects COG metadata per selected band, queries timestamps, and builds coordinates; no pixel windows are read yet. Avoid “instant” and “no files touched.” Dask chunks matter for lazy downstream arithmetic. Direct HLS S3 requires compute in AWS us-west-2; HTTPS is the alternative.
+5:45–8:00. The setup provides the named archive href, aligned UTM 15N bbox, projection filter, DuckDB client, and store. Keep `daily_args` and `imagery` as the unfiltered-by-cloud daily baseline. Reveal the independently executed monthly open with `eo:cloud_cover < 50`, then return to the daily baseline. The current Iceberg snapshot accepted both opens; the 2025 selection uses 12 manifest-listed parquet partitions and monthly grouping produced 12 time coordinates. This is scene-level filtering, not a pixel cloud mask. The repr shown is the actual baseline daily array, not the monthly result; it reports 365 daily steps, 3 bands, int16, and 15.16 TB logical array size. Logical size is not downloaded bytes or resident memory. Opening queries a representative item, inspects COG metadata per selected band, queries timestamps, and builds coordinates; no pixel windows are read yet. Avoid “instant” and “no files touched.” Dask chunks matter for lazy downstream arithmetic. Direct HLS S3 requires compute in AWS us-west-2; HTTPS is the alternative.
 -->
 
 ---
@@ -213,7 +208,19 @@ title: Inspect the request
 
 <div class="plan-layout">
   <div>
-    <pre><code>window = imagery.sel(
+    <pre><code>seasonal_filter = {"op": "and", "args": [
+    {"op": "=", "args": [{"property": "proj:epsg"}, "32615"]},
+    {"op": "&lt;", "args": [{"property": "eo:cloud_cover"}, 30]},
+]}
+seasonal_args = {**daily_args, "filter": seasonal_filter}
+filtered_daily = lazycogs.open(
+    **seasonal_args, time_period="P1D",
+)
+point_x, point_y = 576465, 5196159
+selected_dates = [
+    "2025-04-07", "2025-07-14", "2025-10-10",
+]
+window = filtered_daily.sel(
     time=selected_dates,
     x=slice(point_x - 2500, point_x + 2500),
     y=slice(point_y + 2500, point_y - 2500),
@@ -225,7 +232,7 @@ plan = window.lazycogs.explain()</code></pre>
 </div>
 
 <!--
-10:15–12:15. Read the actual summary labels and counts. explain() queries the index but does not read pixels. fetch_headers=True adds COG header inspection and overview/window information, but keep it out of the visible main example. Planned COG reads are not exact HTTP request or byte counts.
+10:15–12:15. This is a second daily open, `filtered_daily`, using the scene-level `eo:cloud_cover < 30` predicate; it does not mutate the unfiltered `imagery` baseline. The selected dates are the three low-cloud seasonal scenes in the following slide. Read the actual plan: 9 chunk reads and 15 planned COG reads. `explain()` queries the index but does not read pixels. Planned COG reads are not exact HTTP requests or byte counts. `fetch_headers=True` adds COG header/overview detail, which is not needed here.
 -->
 
 ---
@@ -239,24 +246,23 @@ title: Compute the subset
 <div class="results-layout">
   <div class="result-left">
     <div class="result-map"><AssetImage asset="hls/selection.svg" alt="Observed HLS 2025 item footprints marking the point and nearby window" /><span>point · nearby window</span></div>
-    <pre><code>point_x, point_y = 576465, 5196159
-point = imagery.sel(
+    <pre><code>point = imagery.sel(
     x=point_x, y=point_y, method="nearest",
 ).compute()
-window = imagery.sel(
+nearby = filtered_daily.sel(
     x=slice(point_x - 2500, point_x + 2500),
     y=slice(point_y + 2500, point_y - 2500),
-    time=["2025-01-03", "2025-06-29", "2025-12-31"],
+    time=selected_dates,
 ).compute()</code></pre>
   </div>
   <div class="result-figures">
-    <div><h3>Point RGB · 2025</h3><AssetImage asset="hls/point-rgb.svg" alt="Actual HLS RGB-band digital number series through 2025 with missing dates as gaps" /></div>
-    <div v-click><h3>Nearby RGB · 3 selected dates</h3><AssetImage asset="hls/nearby-rgb.png" alt="Actual HLS RGB window on three selected dates" /></div>
+    <div><h3>Point RGB · unfiltered daily baseline</h3><AssetImage asset="hls/point-rgb.svg" alt="Actual HLS RGB-band digital number series through 2025 with 242 missing dates as gaps" /></div>
+    <div v-click><h3>Nearby RGB · 5 km · scene cloud &lt; 30%</h3><AssetImage asset="hls/nearby-rgb.png" alt="Actual HLS 5 km RGB window from a separate daily view filtered to scenes under 30 percent cloud cover" /></div>
   </div>
 </div>
 
 <!--
-12:15–15:00. First trace the nearest-grid-cell selection across the 2025 daily array. The RGB lines are raw int16 digital numbers with 123 valid observations; missing dates remain gaps, and the values are not reflectance. Then reveal the 5 km by 5 km nearby window on three valid dates (2025-01-03, 2025-06-29, 2025-12-31). Its RGB montage clips stored values at 2000. Both point and window are actual computed results. Scene filtering is not pixel cloud masking. No timing claim.
+12:15–15:00. The point series is computed from `imagery`, the original unfiltered-by-cloud 2025 daily baseline: 123 dates have valid RGB values and the other 242 remain gaps. Values are stored int16 DNs, not reflectance. The nearby montage is different: it comes from `filtered_daily`, a second daily open with scene `eo:cloud_cover < 30`, then a 5 km `.sel().compute()`. Its dates are April 7 (4% scene cloud), July 14 (6%), and October 10 (0%), selected near spring/summer/fall. The display clips DN to 0–2000. Scene cloud filtering is not pixel cloud masking, and the seasonal views are illustrative, not a quantitative phenology result.
 -->
 
 ---
@@ -290,12 +296,12 @@ title: Many projections. One Southwest array.
     </div>
     <AssetFrame asset="southwest/array.html" title="Actual Xarray DataArray representation for the Southwest monthly array" />
   </div>
-  <SouthwestOverviewPyramid v-if="$clicks >= 2" />
-  <SouthwestMosaicStrip v-if="$clicks >= 3" />
+  <SouthwestMosaicStrip v-if="$clicks === 2" />
+  <SouthwestOverviewPyramid v-if="$clicks === 3" />
 </div>
 
 <!--
-15:00–17:45. Begin with selected source footprints colored by CRS. Reveal the monthly open on the left and actual Xarray repr on the right. The definition requests a 300 m EPSG:3310 target grid. Sampled red-band COG headers report 10 m native pixels and 20, 40, about 80, and about 160 m overviews; the transformed target is about 300 m in each sample CRS, so the 159.8 m level is selected. This is evidence from sampled COGs, not a guarantee for every item. The seasonal mosaic images are separate 1,200 m display-preview opens, not materialized 300 m array pixels. lazycogs samples nearest-neighbor; existing overview pixels may themselves use another resampler. First-valid mosaics follow scene cloud-cover order, not means or medians. Scene ranking is not a pixel cloud mask. This is a new target-grid array definition, not automatic optimization of arbitrary xarray coarsen operations.
+15:00–17:45. Begin with selected source footprints colored by CRS. Reveal the monthly open on the left and actual Xarray repr on the right. The definition requests a 300 m EPSG:3310 target grid. Next show the seasonal mosaic images, which are separate 1,200 m display-preview opens, not materialized 300 m array pixels. Finish with measured source-COG overview evidence: sampled red-band COG headers report 10 m native pixels and 20, 40, about 79.97, and about 159.825 m overviews. The transformed 300 m target is about 300 m in each sample CRS, so the 159.825 m level is selected. This evidence covers sampled COGs, not every item. lazycogs samples nearest-neighbor; existing overview pixels may themselves use another resampler. First-valid mosaics follow scene cloud-cover order, not means or medians. Scene ranking is not a pixel cloud mask. This is a new target-grid array definition, not automatic optimization of arbitrary xarray coarsen operations.
 -->
 
 ---
