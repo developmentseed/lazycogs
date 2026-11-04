@@ -14,6 +14,15 @@ const document = computed(() => {
   const html = assets[`../assets/${props.asset}`]
   return html?.replace('</body>', `<style>${xarrayStyles}</style></body>`)
 })
+
+// Use Xarray's native disclosure control, just as clicking “Attributes” would.
+function prepareFrame(event: Event) {
+  const frame = event.target as HTMLIFrameElement
+  frame.contentDocument?.querySelectorAll<HTMLLabelElement>('.xr-section-summary').forEach((label) => {
+    if (label.textContent?.trim().startsWith('Attributes:') && label.control?.tagName === 'INPUT')
+      (label.control as HTMLInputElement).checked = false
+  })
+}
 </script>
 
 <template>
@@ -25,6 +34,7 @@ const document = computed(() => {
     loading="eager"
     sandbox="allow-same-origin"
     scrolling="no"
+    @load="prepareFrame"
   />
   <div v-else class="asset-unavailable">Verified asset unavailable: {{ asset }}</div>
 </template>

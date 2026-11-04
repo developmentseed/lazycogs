@@ -10,8 +10,12 @@
   --xr-background-color-row-even: #f6f8fa;
   --xr-background-color-row-odd: #ffffff;
 }
+/* Notebook hosts normally supply a sans-serif body font. The iframe has no host. */
+body { margin: 8px; font: 14px/1.4 system-ui, sans-serif; color: var(--xr-font-color0); }
 pre.xr-text-repr-fallback { display: none; }
 ul.xr-sections, dl.xr-attrs { display: grid; }
+/* Retain Xarray's grid, with a narrower name column for a half-slide embed. */
+ul.xr-sections { grid-template-columns: 100px auto auto 1fr 0 20px 0 20px; }
 li.xr-var-item, ul.xr-var-list { display: contents; }
 .xr-section-details { display: none; }
 ul.xr-dim-list li { margin-bottom: 0; margin-left: 0; }

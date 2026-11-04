@@ -1,5 +1,10 @@
+/* Slidev's inactive Goto dialog can leave its title suggestions on screen. */
+#slidev-goto-dialog.-top-20 .autocomplete-list { display: none; }
+
 /* Layout only: typography, colors and Shiki highlighting come from the DS theme. */
-.title-wordmark { width: 25rem; max-width: 100%; }
+.title-wordmark { width: 14rem; height: 14rem; object-fit: contain; }
+.title-layout .subtitle-text { align-items: center; }
+.title-layout .subtitle-text .text-lg { font-size: 1.5rem; }
 .slidev-layout.default { padding: 2.5rem 3rem; }
 .slidev-layout h1 { margin-bottom: 1.2rem; }
 .slidev-layout .slidev-code { font-size: 17px !important; line-height: 1.5 !important; }
@@ -24,11 +29,11 @@
 .array-output { height: 100%; overflow: hidden; }
 .point-plot { height: 21.5rem !important; margin-top: 0.5rem; }
 .window-slide .slidev-code { font-size: 15px !important; line-height: 1.4 !important; }
-.window-images { height: 15rem !important; margin-top: 0.5rem; }
+.window-images { height: 11rem !important; margin-top: 0.5rem; }
 .may-result { height: 23rem; display: flex; flex-direction: column; gap: 0.5rem; }
 .may-result .slidev-code { font-size: 16px !important; }
 .may-image { min-height: 0; flex: 1; }
-.closing-wordmark { width: 28rem; margin: 1rem 0 2rem; }
+.closing-wordmark { width: 11rem; height: 11rem; object-fit: contain; margin: 0 0 1rem; }
 .closing-message { font-size: 30px; line-height: 1.3; }
 .closing-links { display: flex; align-items: center; justify-content: space-between; margin-top: 2rem; }
 .docs-link { font-size: 30px; }

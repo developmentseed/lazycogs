@@ -53,7 +53,7 @@ The month is unpadded. Exact objects are public; anonymous remote wildcard listi
 
 Sources actually present in `/home/henry/workspace/hrodmn/stac-gti-xarray/`: `demo.ipynb`, `Dockerfile`, `README.md`. Do not cite the absent `src/stac_gti_xarray/_core.py`.
 
-The displayed `/tmp/tmp0umyk8_2/items_projected.parquet` is the projected filename under the saved notebook run's temporary directory. It is not a persistent file distributed with this deck. The snippet isolates one red-band open using `driver="GTI"` and `LOCATION_FIELD="assets.red.href"`; the Parquet may include other band asset columns too, and contains metadata, not raster pixels. The notebook's per-band symlink workaround stays in notes. The displayed half-open single-day predicate simplifies the notebook loop's inclusive next-midnight filter. GTI selects/reprojects/mosaics; Python assembles dates and bands.
+The displayed `/tmp/tmp0umyk8_2/items_projected.parquet` is the projected filename under the saved notebook run's temporary directory. It is not a persistent file distributed with this deck. The snippet isolates one red-band open using `driver="GTI"` and `LOCATION_FIELD="assets.red.href"`; the Parquet may include other band asset columns too, and contains metadata, not raster pixels. The notebook's per-band symlink workaround stays in notes. `dt_filter` is the notebook loop's June 1 predicate with its inclusive next-midnight bound; its setup stays in notes. GTI selects/reprojects/mosaics; Python assembles dates and bands.
 
 The prototype worked. Distributing the native build/runtime chain was the obstacle. The current Dockerfile starts from a GDAL Alpine image and builds rasterio from source; distinguish that from the speaker's earlier source-built GDAL experience.
 
@@ -84,6 +84,6 @@ No live auth is needed to present. Reproduction requires NASA Earthdata credenti
 
 Build with `cd slides && pnpm build`. Follow `../README.md` for local preview and publishing paths. Check all twelve slides plus slide 11's result state for readable code, clipping, the correct array repr, and bundled resources with external network access blocked.
 
-Xarray reprs are imported verbatim into isolated iframes. `assets/deck/xarray.css` adapts the color variables and grid/list/attribute fixes from `docs/stylesheets/extra.css` without its MkDocs/Jupyter host selectors. The stylesheet is injected inside each frame, not just into the parent deck. The two QR images are local SVGs, not runtime services.
+Xarray reprs are imported verbatim into isolated iframes. `assets/deck/xarray.css` adapts the color variables and grid/list/attribute fixes from `docs/stylesheets/extra.css` without its MkDocs/Jupyter host selectors. The stylesheet is injected inside each frame, not just into the parent deck. Frame setup collapses Attributes using Xarray's native disclosure control so the coordinate summary fits; the original source markup remains unchanged. The two QR images are local SVGs, not runtime services.
 
 Preserve the submitted proposal in `AGENTS.md` verbatim. Keep the scope caveats in closing notes: compatible STAC-indexed COGs, not a general raster engine. Closing docs URL is verified against `mkdocs.yml`: https://developmentseed.org/lazycogs/.

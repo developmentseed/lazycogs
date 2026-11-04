@@ -109,12 +109,10 @@ title: The useful array interface already exists
 
 ```python
 import odc.stac
-
 cube = odc.stac.load(
     items,
     bands=["B04", "B03", "B02"],
-    crs="EPSG:32615",
-    resolution=30,
+    crs="EPSG:32615", resolution=30,
     chunks={"time": 1, "x": 2048, "y": 2048},
 )
 small = cube.sel(
@@ -164,7 +162,7 @@ red = rioxarray.open_rasterio(
     "/tmp/tmp0umyk8_2/items_projected.parquet",
     driver="GTI",
     LOCATION_FIELD="assets.red.href",
-    FILTER="datetime >= '2025-06-01' AND datetime < '2025-06-02'",
+    FILTER=dt_filter,
     RESX=10, RESY=10,
     chunks={"x": 2048, "y": 2048},
 )
@@ -175,7 +173,7 @@ red = rioxarray.open_rasterio(
 [github.com/hrodmn/stac-gti-xarray](https://github.com/hrodmn/stac-gti-xarray)
 
 <!--
-4:45–6:00. Read the actual local demo.ipynb and Dockerfile, not the absent src/stac_gti_xarray/_core.py. This snippet is the red-band, one-day core of the working experiment. The concrete projected Parquet path is derived from the saved run's /tmp/tmp0umyk8_2/items.parquet path and its items_projected.parquet assignment. It is a historical temporary path, not a persistent file shipped with the deck. Regenerating the demo creates another temporary directory. The displayed half-open day predicate is a simplified single-day filter; the prototype's loop uses a <= following-midnight bound.
+4:45–6:00. Read the actual local demo.ipynb and Dockerfile, not the absent src/stac_gti_xarray/_core.py. This snippet is the red-band, one-day core of the working experiment. The concrete projected Parquet path is derived from the saved run's /tmp/tmp0umyk8_2/items.parquet path and its items_projected.parquet assignment. It is a historical temporary path, not a persistent file shipped with the deck. Regenerating the demo creates another temporary directory. The preconfigured dt_filter is the notebook loop's June 1 predicate: datetime >= '2025-06-01 00:00:00' AND datetime <= '2025-06-02 00:00:00'. Keep its inclusive next-midnight bound when describing the saved prototype; this is not a claim about strict non-overlapping day bins.
 
 LOCATION_FIELD selects the red asset's href column. The Parquet contains metadata and may contain all the other band asset columns too; it does not contain the raster pixels. GTI does source selection, reprojection, and mosaicking. Python loops over dates and bands and concatenates the arrays. The prototype uses per-band symlinks to avoid an opener-option caching issue; omit that workaround from the main snippet, which opens just red. The notebook also specifies the target bounds and other options in its full call.
 
