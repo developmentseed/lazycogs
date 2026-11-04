@@ -1,18 +1,22 @@
-# HLS slide assets: BLOCKED
+# HLS slide assets: partial; remaining assets BLOCKED
 
-No slide-ready HLS assets are supplied in this directory. The requested array repr, coverage and selection maps, explain plan, RGB time series, nearby RGB images, and verified alternate snippet all require a reproducible query/read against the HLS source. The HTTPS notebook states that the COG assets require an Earthdata Login bearer token. No task-specific token or already-configured authenticated HTTPStore was provided. I did not inspect credential stores, discover credentials, or fetch HLS pixels. Do not use this directory as if the requested slide assets were available.
+This directory contains only provenance-supported outputs and clearly labeled limits. Layout interface is available now:
 
-The existing `docs/notebooks/hls-https.ipynb` output for its array represents 2025 through 2026-05-09 (494 daily coordinates), so it does not satisfy the requested 2025-only scope. The saved S3 notebook output does show 2025, but the notebook explicitly sets up credentials and accesses `lp-prod-protected`; that is not task-authorized provenance for fresh pixel work. Neither output is substituted here for verified reproduction.
+- `array.html`: saved Xarray HTML repr with Xarray stylesheet embedded for offline viewing.
+- `coverage.svg` and `selection.svg`: same map of the requested UTM grid bounds and the saved notebook point/window. It explicitly says this is not observed scene coverage.
+- `nearby-rgb.png`: actual saved RGB output from the HLS notebook, showing ten September 2025 subset dates. It is not a synthetic image.
+- `snippets.md`: executed baseline configuration plus a candidate alternate marked unverified/BLOCKED.
+- `extract_saved_outputs.py`: extracts the saved HTML/image outputs and makes the target-grid selection map. It does not query data or read pixels.
+- `manifest.json`: provenance and blocked-item status.
 
-The requested public-metadata/HTTPS path also requires authenticated COG reads: its `HTTPStore` is explicitly configured with `Authorization: Bearer <token>` in the notebook. Publicly reachable GeoParquet metadata does not make those pixel assets public.
+## Source and verification limits
 
-When access is explicitly provisioned, reproduce under this interface and replace this blocked status with actual outputs and provenance:
+The baseline array HTML came from the real saved result in `docs/notebooks/hls-s3.ipynb`, cell 15. Its executed code selects collection `HLSS30_2.0`, explicit dates 2025-01-01 through 2025-12-31, `EPSG:32615`, 30 m, daily steps, and B04/B03/B02. The saved repr reports shape `(3, 365, 310967, 22266)`, `int16`, 7,581,770,388,090 values (15,163,540,776,180 logical bytes). This is historical notebook output, not a fresh rerun.
 
-- `array.html` — actual offline Xarray `_repr_html_()` with original Xarray CSS/assets embedded
-- `coverage.svg`, `selection.svg` — actual coverage and point/window overlays
-- `plan.txt`, `plan.svg` or `plan.png` — actual `subset.lazycogs.explain()` result
-- `point-rgb.svg` or `point-rgb.png`, `nearby-rgb.png` — actual pixel results with gaps preserved
-- `snippets.md` — only executed and verified baseline/alternate opens
-- `manifest.json` — source, exact commands, checks, dimensions, scope, units, and provenance
+The saved September RGB figure is from that notebook's `subset.plot.imshow(...)` output (cell 21), where a 15 km by 10 km window was plotted for ten non-nodata days in September 2025. The notebook uses `vmin=0`, `vmax=2000`; the RGB values are raw `int16` HLS band digital numbers, not physical reflectance. The saved S3 notebook's point selection only covers September 2025, not the full year, so the requested year-long point time series is unavailable.
 
-The S3 path has a location restriction: direct HLS S3 access requires compute in AWS `us-west-2`; use HTTPS elsewhere. Keep auth, grid discovery, and storage setup behind named setup variables in any slide code.
+Existing local Earthdata auth succeeded using the HTTPS notebook's existing token path, without logging or exposing the token. A bounded authenticated HEAD to a documented HTTPS HLS COG succeeded (HTTP 200). However the unsigned public MAAP parquet object needed to query current spatial metadata returned HTTP 403 (`PermissionDeniedError`). No protected S3/AWS credential discovery was used. Thus no current index query, current `eo:cloud_cover` support check, alternate-open run, or `subset.lazycogs.explain()` was possible.
+
+`coverage.svg`/`selection.svg` show the requested array grid rectangle and saved point/window only. They do not claim source-scene coverage. Plan assets and point-series assets remain BLOCKED rather than replaced with fake output.
+
+Direct HLS S3 access requires compute in AWS `us-west-2`; use HTTPS elsewhere. Keep auth, grid inspection, and storage configuration behind named variables in slide code.

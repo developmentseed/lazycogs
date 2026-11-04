@@ -1,36 +1,70 @@
 {
-  "status": "BLOCKED",
-  "reason": "HLS HTTPS COG assets require an Earthdata Login bearer token; no task-specific authenticated HTTPStore was provided. No credentials were discovered or fetched and no HLS pixel reads were attempted.",
-  "source": {
-    "metadata_archive": "NASA MAAP HLS STAC GeoParquet archive; notebook collection HLSS30_2.0",
-    "pixel_assets": "https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/",
-    "access_evidence": "docs/notebooks/hls-https.ipynb, cells 12-15: explicitly documents EDL-token requirement and configures HTTPStore Authorization bearer header"
+  "status": "PARTIAL_BLOCKED",
+  "identity": {
+    "branch": "feat/deck-hls-assets",
+    "base": "1889231defacb16ccceb3901df9252e35cbecdba",
+    "initial_commit": "2a7821a820ded9b803fc3cdd2edfd923e29369ff"
   },
-  "existing_output_review": {
-    "https_notebook": "Saved output inspected; its array spans 2025-01-01 through 2026-05-09 (494 dates), not the requested 2025-only scope.",
-    "s3_notebook": "Saved output inspected; 2025 extent is present, but notebook setup uses NASA credential discovery and lp-prod-protected S3, so it was not used as an authorized reproduction or pixel source."
+  "source": {
+    "archive": "NASA MAAP HLS STAC GeoParquet archive",
+    "collection": "HLSS30_2.0",
+    "pixel_href_root": "https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/",
+    "provenance": "docs/notebooks/hls-s3.ipynb, saved execution outputs; historical output only, not re-executed"
+  },
+  "historical_baseline": {
+    "notebook_cell": 15,
+    "datetime": "2025-01-01T00:00:00Z/2025-12-31T23:59:59Z",
+    "projection_filter": "proj:epsg = 32615",
+    "crs": "EPSG:32615",
+    "resolution_m": 30,
+    "time_period": "P1D",
+    "bands": ["B04", "B03", "B02"],
+    "shape_band_time_y_x": [3, 365, 310967, 22266],
+    "dtype": "int16",
+    "logical_values": 7581770388090,
+    "logical_bytes": 15163540776180,
+    "logical_bytes_note": "logical uncompressed size, not downloaded or resident bytes",
+    "physical_units_scaling": "Raw HLS int16 digital numbers; saved plot uses vmin=0, vmax=2000. No physical reflectance conversion shown.",
+    "time_coordinate_scope": "Saved HTML repr reports 2025-01-01 through 2025-12-31 (365 daily coordinates)."
+  },
+  "authentication": {
+    "method": "Existing credentials via HTTPS notebook's existing Earthdata token endpoint and bearer HTTPStore path.",
+    "result": "Token acquisition succeeded; token, password, and headers were withheld.",
+    "bounded_asset_check": "Authenticated HEAD to a documented HTTPS HLS COG returned HTTP 200; 10,715,789 bytes reported. No pixel body downloaded in this check.",
+    "protected_s3_or_aws_credentials": "Not accessed or discovered."
+  },
+  "metadata_access": {
+    "attempt": "Unsigned public-object HEAD using the notebook's stated bucket/key and us-west-2 region.",
+    "result": "HTTP 403 Forbidden / obstore PermissionDeniedError for 2025-01 HLSS30_2.0 parquet object.",
+    "impact": "No current archive query, scene field verification, current open, or explain plan could be run."
+  },
+  "saved_rgb": {
+    "notebook_cell": 21,
+    "scope": "Ten dates in September 2025, from the notebook's 15 km by 10 km subset following a non-nodata point selection.",
+    "plot_scaling": "vmin=0, vmax=2000; raw digital numbers, not reflectance.",
+    "source": "Existing real saved notebook PNG, extracted without modification."
+  },
+  "map": {
+    "files": ["coverage.svg", "selection.svg"],
+    "scope": "Requested full UTM target grid bounds plus the notebook point/window.",
+    "limitation": "Not a source-scene coverage map; current source footprints unavailable due parquet 403."
   },
   "notebook_reconciliation": {
     "file": "docs/notebooks/hls-https.ipynb",
-    "change": "Configured stac_search_args now include explicit 2025 datetime and the already-configured hive-aware duckdb_client.",
-    "reexecution": "Not run; authentication is unavailable. Existing saved output is stale for the changed call."
+    "change": "Explicit 2025 datetime predicate and caller-supplied hive-aware DuckDB client added to stac_search_args.",
+    "reexecution": "Not run; parquet metadata access returned 403. Prior HTTPS output remains stale and must not be presented as current."
   },
-  "checks": {
-    "archive_field_support": "BLOCKED: no current source query executed; no eo:cloud_cover predicate is claimed or provided as verified.",
-    "baseline_and_alternate_open": "BLOCKED: neither was run against authorized current source data.",
-    "dimensions_and_logical_bytes": "BLOCKED: no valid 2025 result reproduced.",
-    "pixel_units_scaling_and_dates": "BLOCKED: no pixels read.",
-    "array_html_coverage_plan_and_plots": "BLOCKED: no new outputs created."
-  },
-  "location_caveat": "Direct HLS S3 access requires compute in AWS us-west-2; use HTTPS elsewhere.",
   "assets": {
-    "array.html": "BLOCKED",
-    "coverage.svg": "BLOCKED",
-    "selection.svg": "BLOCKED",
-    "plan.txt": "BLOCKED",
-    "plan.svg_or_png": "BLOCKED",
-    "point-rgb.svg_or_png": "BLOCKED",
-    "nearby-rgb.png": "BLOCKED",
-    "snippets.md": "BLOCKED"
-  }
+    "array.html": "AVAILABLE: real historical Xarray HTML repr with embedded Xarray CSS",
+    "coverage.svg": "AVAILABLE: requested grid bounds with point/window; explicitly not data coverage",
+    "selection.svg": "AVAILABLE: same requested-grid map",
+    "nearby-rgb.png": "AVAILABLE: actual saved ten-date September figure",
+    "snippets.md": "PARTIAL: historical baseline; monthly filtered candidate marked unverified",
+    "plan.txt": "BLOCKED: current index query unavailable",
+    "plan.svg_or_png": "BLOCKED: no actual explain output",
+    "point-rgb.svg_or_png": "BLOCKED: no saved year-long point time series; current index query unavailable",
+    "current_coverage_footprints": "BLOCKED: public parquet object returned HTTP 403",
+    "verified_monthly_cloud_filter": "BLOCKED: current field/predicate could not be checked and open could not be run"
+  },
+  "location_caveat": "Direct HLS S3 access requires compute in AWS us-west-2; use HTTPS elsewhere."
 }
