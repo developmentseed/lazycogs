@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 
 const props = defineProps<{ asset: string; alt: string }>()
-const assets = import.meta.glob('../assets/{hls,southwest-notebook}/*.{svg,png,webp}', {
+const assets = import.meta.glob('../assets/{hls,southwest-notebook,stac-geoparquet}/*.{svg,png,webp}', {
   eager: true,
   import: 'default',
   query: '?url',

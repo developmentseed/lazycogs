@@ -7,11 +7,15 @@ highlighter: shiki
 colorSchema: light
 fonts:
   webfonts: []
-favicon: /images/logos/hor--pos@2x.png
+favicon: /favicon.svg
 drawings:
   persist: false
+routerMode: hash
 theme: ../theme
+addons:
+  - slidev-addon-qrcode
 layout: title
+image: /images/theme/lena-delta.jpg
 ---
 
 <script setup>
@@ -36,9 +40,14 @@ super lazy analysis of massive COG archives
     <h5 text-sm><code text-primary>Henry Rodman · Development Seed</code></h5>
   </div>
 </DecorativeRectangle>
+<LogoHorPos position="top-left" height="24px" />
 
 <!--
-0:00–0:20. Henry Rodman, Development Seed. “Query satellite imagery collections like everyone wants to: as a big array.” This is a view over an existing archive, not a proposal to rewrite all its pixels. Target 20 minutes presenting, then 5 minutes discussing.
+0:00–0:20
+
+- Henry Rodman, Development Seed.
+- Query satellite imagery collections as a big array, without rewriting the archive.
+- 20-minute talk, then 5 minutes for discussion.
 -->
 
 ---
@@ -54,139 +63,183 @@ title: I want to work with this as an array
 <p class="caption">May 2025 · Sentinel-2 · Southwest US · 300 m</p>
 
 <!--
-0:20–1:10. Start with the actual saved May plot from docs/notebooks/demo_southwest_monthly.ipynb. The notebook covers March–June 2025, not the old deck's March/July/November sequence. This image is assembled from overlapping observations, not one ready-made image in the archive. Observations are acquired at different times and contribute unevenly. Later we will show exactly how this monthly view was defined and selected. Display stretch is stored DN 0–4000; not a physical reflectance claim. Source provenance is in assets/southwest-notebook/.
+0:20–1:10
+
+- May 2025 Southwest Sentinel-2 mosaic from the monthly notebook.
+- Overlapping observations from different times contribute to this image.
+- We'll return to how we define and select this monthly view.
 -->
+
 
 ---
 layout: default
-class: index-slide
-title: GeoParquet holds metadata. COGs hold pixels.
+class: stac-pattern-slide
+title: Search STAC, then hand the items to odc-stac
 ---
 
-# GeoParquet holds metadata. COGs hold pixels.
-
-<p class="lead">STAC items: footprints · timestamps · properties · asset links</p>
-
-<div class="index-content">
-<div>
+# Search STAC, then hand the items to xarray ✨
 
 ```python
-from rustac import DuckdbClient
+from pystac_client import Client
+import odc.stac
 
-index_uri = (
-    "https://s3.us-west-2.amazonaws.com/nasa-maap-data-store/"
-    "file-staging/nasa-map/hls-stac-geoparquet-archive/v2/"
-    "HLSS30_2.0/year=2025/month=1/HLSS30_2.0-2025-1.parquet"
-)
-items = DuckdbClient().search(
-    index_uri,
+catalog = Client.open("https://earth-search.aws.element84.com/v1")
+items = catalog.search(
+    collections=["sentinel-2-c1-l2a"],
     bbox=(-96, 44, -90, 48),
     datetime="2025-01-01/2025-01-31",
-)
-```
+).item_collection()
 
-</div>
-<div class="index-link">
-<AssetQRCode value="https://maap-project.github.io/hls-stac-geoparquet-archive/" />
-<a href="https://maap-project.github.io/hls-stac-geoparquet-archive/">maap-project.github.io/<br>hls-stac-geoparquet-archive/</a>
-</div>
-</div>
-
-<p class="caption">NASA MAAP publishes the HLS index. Someone prepares and maintains it.</p>
-
-<!--
-1:10–2:30. Introduce STAC at rest: items in GeoParquet describe the imagery; their assets link to COG pixels elsewhere. rustac's DuckdbClient searches that metadata. The URI is a concrete January 2025 HLSS30_2.0 object, using the archive's unpadded month key. The existing capture resolved the current Iceberg snapshot and verified this exact public object over HTTPS. This short example is a January regional item search, not the full-year array we open later.
-
-Do not imply a remote **/*.parquet wildcard can be searched anonymously. Exact public objects are readable but bucket listing is denied. The S3 notebook configures AWS credentials with ListBucket privileges for wildcard searches; the HTTPS notebook copies individual objects to a local hive tree. Our verified 2025 capture follows the published Iceberg metadata and manifests, then caches the twelve 2025 HLSS30 partitions locally. See assets/hls/reproduce.py and manifest.json. Index preparation and metadata access still cost work. NASA MAAP maintains the index; lazycogs does not decide which scenes we want.
--->
-
----
-layout: default
-title: The useful array interface already exists
----
-
-# The useful array interface already exists
-
-```python
-import odc.stac
 cube = odc.stac.load(
     items,
-    bands=["B04", "B03", "B02"],
+    bands=["red", "green", "blue"],
     crs="EPSG:32615", resolution=30,
     chunks={"time": 1, "x": 2048, "y": 2048},
 )
 small = cube.sel(
-    x=slice(574000, 579000),
-    y=slice(5199000, 5194000),
+    x=slice(574000, 579000), y=slice(5199000, 5194000),
 ).compute()
 ```
 
-<p class="sequence">retrieve items → build lazy array / task graph → do the work</p>
-<p class="caption">odc-stac · stackstac</p>
+<p class="sequence">retrieve items → build lazy array / task graph → read selected pixels</p>
+<p class="caption">stackstac follows the same item-first pattern</p>
 
 <!--
-2:30–3:45. Credit odc-stac and stackstac: these tools established the useful array interface and work well for many satellite workflows. `items` is the in-memory STAC item collection from the preceding search; stackstac.stack(items, ...) follows the same broad input pattern. This is a conventional example, not a timed comparison or a captured raster result.
+1:50–3:45
 
-Pixel reads are lazy. Dask graph optimization can prune work for a later selection. The motivation is the up-front item enumeration and graph construction for a large view when the eventual request may be small, not a claim that either tool eagerly downloads every pixel. In an earlier large-scale project, very large task graphs and repeated STAC API searches were obstacles in the speaker's workflow. Do not generalize that experience into a universal scaling limit or claim lazycogs is a drop-in replacement.
+- Familiar pattern: search STAC → collect matching items → build an array → select pixels.
+- odc-stac and stackstac established this useful array interface; pixel reads are lazy.
+- `item_collection()` retrieves all matching metadata before loading; Dask can prune later work.
+- In my large-scale workflow, repeated searches and large task graphs became obstacles.
+- Can we defer item discovery too, when the eventual selection may be small?
 -->
 
 ---
 layout: center
-title: What if we also deferred finding the files?
+class: bg-primary
+title: What if we also defer chunk-wise STAC searches?
 ---
 
 # We already defer reading pixels.
-# What if we also deferred finding the files?
+# What if we also defer chunk-wise STAC searches?
 
 <p class="sequence spacious">define array → select → query matching assets → read pixels</p>
 
 <p class="lead">Carry query criteria, not the complete item collection.</p>
 
 <!--
-3:45–4:45. This is the conceptual contrast: define the view first; when a spatial chunk and time step are requested, query the index for assets relevant to that request. Carry criteria instead of retaining the entire matching item collection up front.
+3:45–4:45
 
-Not zero work at open. lazycogs queries representative items, inspects COG headers, queries timestamps, and creates coordinates. It still needs a prepared index. Nor does it eliminate Dask graphs: Dask is available for chunk scheduling and downstream operations. A change of supported metadata filters, temporal grouping, extent, or target grid defines a new array. .sel(...) selects within an existing view; it does not redefine those choices.
+- Define the view first; query matching assets for requested spatial chunks and time steps.
+- Carry query criteria instead of the complete item collection.
+- Opening still needs a prepared index, representative items, COG headers, timestamps, and coordinates.
+- Dask remains available for scheduling and downstream work.
+- Filters, grouping, extent, and grid define the view; `.sel(...)` selects within it.
 -->
 
+---
+layout: default
+class: stac-intro-slide
+title: Cloud-native data needs cloud-native metadata
+---
+
+# Cloud-native data needs cloud-native metadata
+
+<AssetImage asset="stac-geoparquet/cloud-native-data-formats.excalidraw.png" alt="Cloud-native geospatial formats: COG, COPC, Zarr, and GeoParquet" class="stac-intro-image" />
+
+<p class="caption">STAC describes the assets. stac-geoparquet puts those descriptions in GeoParquet.</p>
+<p class="footnote">Image: <a href="https://www.gadom.ski/presentations/2025-11-04-stac-geoparquet.html#/4/1">Pete Gadomski · Cloud-Native Geospatial Metadata with stac-geoparquet</a></p>
+
+<!--
+1:10–1:30
+
+- Cloud-hosted data needs metadata: location, acquisition time, asset links.
+- STAC describes the assets; stac-geoparquet stores those descriptions in GeoParquet.
+- This talk uses COG pixels and GeoParquet metadata.
+- Credit Pete Gadomski for the diagram.
+-->
+
+---
+layout: default
+class: stac-intro-slide
+title: STAC items as a queryable table
+---
+
+# STAC items as a queryable table
+
+<AssetImage asset="stac-geoparquet/stac-data-storage.excalidraw.png" alt="STAC JSON properties such as datetime, proj:code, and eo:cloud_cover become top-level columns in stac-geoparquet" class="stac-intro-image" />
+
+<p class="caption">One row per item · geometry and properties as columns</p>
+<p class="footnote">Image: <a href="https://www.gadom.ski/presentations/2025-11-04-stac-geoparquet.html#/4/2">Pete Gadomski · Cloud-Native Geospatial Metadata with stac-geoparquet</a></p>
+
+<!--
+1:30–1:50
+
+- One row per STAC item; geometry, scene properties, and asset metadata as columns.
+- Query space, time, and scene properties with DuckDB without fetching individual JSON documents.
+- The table holds metadata and links; pixels stay in the COGs.
+- Credit Pete Gadomski for the diagram.
+-->
 ---
 layout: default
 title: GTI worked. Packaging was the obstacle.
 ---
 
-# GTI worked. Packaging was the obstacle.
+# GDAL's GTI driver works. Packaging is an obstacle.
+
+GTI = GDAL Raster Tile Index: query a tile index, then read and mosaic matching rasters.
 
 ```python
 import rioxarray
 
 red = rioxarray.open_rasterio(
-    "/tmp/tmp0umyk8_2/items_projected.parquet",
+    "items.parquet",
     driver="GTI",
     LOCATION_FIELD="assets.red.href",
-    FILTER=dt_filter,
+    FILTER="datetime >= '2026-05-01' AND datetime < '2026-06-01'",
     RESX=10, RESY=10,
     chunks={"x": 2048, "y": 2048},
 )
 ```
 
-<p class="sequence">GDAL + GTI + Parquet → rasterio → rioxarray</p>
+<p class="caption">Rasterio's PyPI wheels omit GDAL's Parquet/GeoParquet driver.<br>Build rasterio from source against a GDAL build with Parquet support.</p>
 
-[github.com/hrodmn/stac-gti-xarray](https://github.com/hrodmn/stac-gti-xarray)
+[hrodmn/stac-gti-xarray](https://github.com/hrodmn/stac-gti-xarray)
 
 <!--
-4:45–6:00. Read the actual local demo.ipynb and Dockerfile, not the absent src/stac_gti_xarray/_core.py. This snippet is the red-band, one-day core of the working experiment. The concrete projected Parquet path is derived from the saved run's /tmp/tmp0umyk8_2/items.parquet path and its items_projected.parquet assignment. It is a historical temporary path, not a persistent file shipped with the deck. Regenerating the demo creates another temporary directory. The preconfigured dt_filter is the notebook loop's June 1 predicate: datetime >= '2025-06-01 00:00:00' AND datetime <= '2025-06-02 00:00:00'. Keep its inclusive next-midnight bound when describing the saved prototype; this is not a claim about strict non-overlapping day bins.
+4:45–6:00
 
-LOCATION_FIELD selects the red asset's href column. The Parquet contains metadata and may contain all the other band asset columns too; it does not contain the raster pixels. GTI does source selection, reprojection, and mosaicking. Python loops over dates and bands and concatenates the arrays. The prototype uses per-band symlinks to avoid an opener-option caching issue; omit that workaround from the main snippet, which opens just red. The notebook also specifies the target bounds and other options in its full call.
+- GTI: GDAL Raster Tile Index. Query a GeoParquet index, then read, reproject, and mosaic rasters.
+- `LOCATION_FIELD` points to the red asset URL; Python loops over dates and bands.
+- The prototype worked; distributing the native build was the obstacle.
+- Rasterio's PyPI wheels lack the Parquet driver. This workflow needs rasterio built against a Parquet-enabled GDAL.
+- Installing a separate GDAL won't add drivers to the wheel's bundled GDAL.
+- That packaging experience motivated a narrower, GDAL-free implementation.
+-->
 
-It worked. The obstacle was distributing the native build chain and runtime linkage. The speaker originally built GDAL with Parquet support, then built rasterio against it. The current Dockerfile starts from ghcr.io/osgeo/gdal:alpine-normal-latest and uses uv --no-binary-package rasterio. Do not claim GTI failed at raster work, or that these historical packaging issues describe every current GDAL distribution. That experience motivated a deliberately narrower GDAL-free implementation.
+---
+layout: center
+class: wake-up-slide
+title: lazycogs wakes up
+---
+
+<ClosingLogo class="wake-up-wordmark" />
+
+<!--
+6:00–6:10
+
+- Pause for the logo to wake up, then introduce the array interface.
 -->
 
 ---
 layout: default
-class: array-slide
+class: array-slide hls-array-slide
 title: lazycogs — a year of HLS as an array
 ---
 
-# lazycogs: a year of HLS as an array
+# lazycogs
+
+> lazily construct an array from COGS indexed in STAC items
 
 <div class="array-columns">
 <div>
@@ -205,7 +258,6 @@ hls = lazycogs.open(
     duckdb_client=client,
     store=hls_store,
 )
-hls
 ```
 
 </div>
@@ -214,15 +266,57 @@ hls
 </div>
 </div>
 
-<p class="caption">≈15 TB logical array size. Not downloaded bytes or memory use.</p>
-<p class="footnote">Direct HLS S3 access requires compute in AWS us-west-2. <a href="https://developmentseed.org/lazycogs/notebooks/hls-https/">HTTPS is the alternative</a>.</p>
+<p class="caption">≈15 TB logical array size · no pixel windows read yet</p>
+<p class="footnote">Direct HLS S3 access requires AWS us-west-2 compute; use the <a href="https://developmentseed.org/lazycogs/notebooks/hls-https/">HTTPS notebook</a> elsewhere.</p>
 
 <!--
-6:00–8:30. This is the verified 2025 HLSS30_2.0 daily RGB view: band=3, time=365, y=310967, x=22266, int16, nodata=-9999. It is Sentinel-derived HLS, not a combined Landsat/Sentinel array. The literal bbox is aligned to the source grid in UTM zone 15N. About 15 TB is the size of the logical dense array if materialized, not bytes transferred or RAM allocated.
+6:10–8:30
 
-The actual HTML repr is assets/hls/array.html from the separately verified 2025 capture, not the stale saved HTTPS notebook output (494 time steps), or the S3 notebook's old ascending-y output. The displayed code shortens the equivalent CQL2 projection and datetime predicates; its full setup is in assets/hls/capture_assets.py. Run from docs/notebooks: the local hive tree contains the 12 manifest-listed 2025 partitions prepared by assets/hls/reproduce.py. client = DuckdbClient(use_hive_partitioning=True). hls_store is the preconfigured Earthdata-authenticated HTTPSStore from obtain_store(); the capture used HTTPS, not direct S3. HLS pixel access needs NASA Earthdata credentials. No credentials, downloads, or network calls are required to present these saved outputs.
+- A year of Sentinel-derived HLS: 365 daily steps, three RGB bands, 30 m, UTM zone 15N.
+- About 15 TB if we materialized the dense array; no pixel windows loaded yet.
+- Opening queries metadata, reads COG headers, and builds coordinates.
+- HLS pixel access needs NASA Earthdata credentials; these saved outputs need no live access.
+- Coordinates: x ascending, y descending.
+-->
 
-Opening is not free: representative-item queries, COG headers for selected bands, timestamp queries, and coordinate construction happen up front. Pixel windows wait for a request. The coordinate convention is x ascending, y descending. The complete S3 and HTTPS workflows are linked from the docs. No opening timing or benchmark claim.
+---
+layout: cover
+class: foundations-slide
+background: /images/theme/Tanezrouft_Basin.jpg
+dim: true
+title: Built on these tools
+---
+
+# Built on these tools
+
+<div class="foundation-panels">
+<section class="foundation-panel">
+<h3>obstore</h3>
+<p>Cloud object storage</p>
+<p>Authenticated, asynchronous byte-range reads from the stores holding our COGs.</p>
+<a href="https://github.com/developmentseed/obstore">developmentseed/obstore</a>
+</section>
+<section class="foundation-panel">
+<h3>async-geotiff</h3>
+<p>COG reads without GDAL</p>
+<p>Read GeoTIFF metadata and fetch and decode the blocks needed for a pixel window, asynchronously.</p>
+<a href="https://github.com/developmentseed/async-geotiff">developmentseed/async-geotiff</a>
+</section>
+<section class="foundation-panel">
+<h3>rustac</h3>
+<p>STAC metadata queries</p>
+<p>Search STAC GeoParquet with DuckDB to find assets matching our space, time, and scene filters.</p>
+<a href="https://github.com/stac-utils/rustac-py">stac-utils/rustac-py</a>
+</section>
+</div>
+
+<!--
+8:30–9:00
+
+- obstore: authenticated cloud storage and asynchronous byte-range reads.
+- async-geotiff: COG metadata and pixel reads without GDAL.
+- rustac: STAC GeoParquet queries through DuckDB.
+- lazycogs adds the target grid, mosaicking, and Xarray interface.
 -->
 
 ---
@@ -234,16 +328,30 @@ title: Load one point
 
 ```python
 point = hls.sel(x=576465, y=5196159, method="nearest").compute()
+
+# Rows: dates. Columns: B04 (red), B03 (green), B02 (blue).
+point = point.where(point != -9999)
+table = point.transpose("time", "band").to_pandas()
+table.head(4)
 ```
 
-<AssetImage asset="hls/point-rgb.png" alt="Verified 2025 daily HLS RGB values at the selected point, with missing dates retained as gaps" class="point-plot" />
+| time | B04 (red) | B03 (green) | B02 (blue) |
+|---|---:|---:|---:|
+| 2025-01-01 | 1240 | 980 | 760 |
+| 2025-01-02 | NaN | NaN | NaN |
+| 2025-01-03 | 1310 | 1020 | 810 |
+| 2025-01-04 | NaN | NaN | NaN |
 
-<p class="caption">EPSG:32615 · stored digital numbers · missing observations remain gaps</p>
+<p class="caption">Illustrative pseudo values, not captured output · 365 dates × 3 bands<br>Stored digital numbers · missing observations become NaN</p>
 
 <!--
-8:30–10:30. Real plot from the unfiltered-by-cloud daily baseline just shown. The point is at x=576465, y=5196159 in EPSG:32615. The verified run has 123 days with all RGB bands valid and 242 missing dates; nodata remains gaps, not a line bridged across absent observations. Use the original PNG, not the later SVG's simplified-path marker additions. Values are stored DNs; no physical reflectance scale or units were verified in the index. Clouds can still produce bright values in this unfiltered view.
+9:00–10:30
 
-A point request still reads compressed COG tiles; it is not one pixel's worth of network bytes. The compute path is query index → find COGs → read windows/overviews → reproject/mosaic. Queries happen for requested spatial chunks and time steps. No need to read the entire year-long spatial array. No transfer-size or timing claim is being made.
+- Select one point across 365 dates and three bands, without loading the full spatial array.
+- Query index → find COGs → read windows/overviews → reproject and mosaic.
+- A point request still fetches compressed COG tiles, not one pixel's worth of bytes.
+- The table uses illustrative values; stored DNs, no cloud filter or verified reflectance scaling.
+- Mask -9999 nodata to NaN before pandas conversion; keep missing dates.
 -->
 
 ---
@@ -268,14 +376,17 @@ nearby = filtered.sel(
 
 <AssetImage asset="hls/nearby-rgb.png" alt="Verified 5 km HLS RGB windows for April 7, July 14 and October 10, from a separately opened scene-cloud-filtered daily array" class="window-images" />
 
-<p class="caption">5 km window · scene cloud cover &lt;30% ≠ pixel cloud masking</p>
+<p class="caption">5 km window · scene cloud cover &lt;30%</p>
 
 <!--
-10:30–12:45. This montage is not an output of the unfiltered baseline. Explicitly reopen with a supported scene-cloud predicate. For this short snippet, hls_args is the previous call's arguments including time_period='P1D', with its old filter removed. It does not include a chunks or sortby override. The capture script uses the equivalent CQL2-JSON and full-day timestamp range; see assets/hls/capture_nearby_rgb.py. A code/configuration crosswalk is in the deck outline.
+10:30–12:45
 
-These are the exact 5 km bounds around the point. Candidate observations were restricted to scene cloud <30 and dates chosen nearest April 15, July 15, October 10. Actual dates are April 7 (4% scene cloud), July 14 (6%), October 10 (0%). Plot stretch is DN 0–2000. This is an illustrative seasonal scene sequence, not quantitative phenology. Scene cloud filtering is not a pixel mask or guarantee of clear pixels.
-
-Optional: before computing, nearby.lazycogs.explain() would query the same index without reading pixels. The captured three-date plan has 9 band/chunk reads and 15 planned COG reads; do not equate these with HTTP request counts. Avoid a dedicated plan diagram. Supported metadata filters, grouping, extent, and resolution are the user's choices. Changing those defines a new array; .sel(...) selects inside it.
+- Reopen with scene cloud cover <30%; `hls_args` reuses the earlier setup without its old filter.
+- Select a 5 km window on April 7, July 14, and October 10.
+- Scene cloud cover: 4%, 6%, 0%. Scene filtering doesn't guarantee clear pixels.
+- Show seasonal differences; don't treat this as quantitative phenology.
+- New filter, new array; `.sel(...)` chooses a subset within it.
+- Optional: `.lazycogs.explain()` queries the index without reading pixels.
 -->
 
 ---
@@ -303,9 +414,13 @@ await rustac.search_to(
 <p class="sequence">STAC API search → local STAC GeoParquet → array views</p>
 
 <!--
-12:45–14:15. Return to Southwest Sentinel-2. Unlike the existing published HLS archive, we prepare this index ourselves. This is the search_to workflow from demo_southwest_monthly.ipynb, with the geographic bbox expanded to literal values. Verified with pyproj.Transformer.from_crs(3310, 4326, always_xy=True).transform_bounds(-444000, -609000, 681000, 500000). The notebook caches this file and searches only if it does not exist; limit=100 is the search page size and was omitted here for brevity, not a 100-item cap. March–June 2025 only.
+12:45–14:15
 
-The metadata is now local; COG asset links still point to the pixels. Index preparation is deliberately separate from opening a view and computing a subset. No live API search is necessary for the talk. These are compatible STAC-indexed COGs, not arbitrary raster inputs. Earth Search's public Sentinel-2 assets use an unsigned store in this notebook. Keep this setup out of the visible code on the following slide.
+- Back to Southwest Sentinel-2, March–June 2025.
+- Prepare our own index with `rustac.search_to`, instead of using the published HLS index.
+- Save metadata locally; asset links still point to remote COG pixels.
+- Prepare the index once, then open different array views and compute subsets.
+- Public Sentinel-2 assets need no signed storage requests.
 -->
 
 ---
@@ -331,6 +446,7 @@ monthly = lazycogs.open(
     dtype="int16",
     filter="eo:cloud_cover < 50",
     sortby="eo:cloud_cover",
+    mosaic_method=lazycogs.FirstMethod,
     store=store,
 )
 monthly
@@ -357,13 +473,15 @@ await may.load_async()
 <p class="caption">Monthly first-valid mosaic, ordered by scene cloud cover · nearest-neighbor sampling</p>
 
 <!--
-14:15–18:45. Start with the actual notebook Xarray HTML repr and its precise monthly open. Four time coordinates cover March–June; band=3, time=4, y=3697, x=3750, int16, about 333 MB logical size. This is not the old full-year uint16 seasonal preview configuration. Only variable names and uppercase CRS spelling are adapted for the slides. store = lazycogs.store_for('data/ca_spring_2025.parquet', skip_signature=True), as in the notebook. Notes and prepared output hide setup, not semantics.
+14:15–18:45
 
-Emphasize: “The index does not decide which scenes you want. You do.” We choose supported metadata filters, grouping, extent, target CRS and resolution. There is no single imposed scene selection or precomputed mosaic. A different filter, temporal grouping, or resolution defines another array; .sel(...) selects inside this view. Do not imply arbitrary query syntax or arbitrary pixel operations are supported.
-
-One simple reveal replaces the open/repr with the May selection, async load, and the exact opening image. No animation or custom diagram. The notebook chunks to 1024x1024 before selecting May, loads with await load_async(), then plots RGB with vmin=0, vmax=4000. This saved plot is the actual 300 m result, not a separately reopened coarser preview.
-
-Multiple source projections become one requested EPSG:3310 target grid. Appropriate source COG overviews support the coarser 300 m output; this is not an automatic rewrite of an arbitrary downstream .coarsen operation. lazycogs currently samples nearest-neighbor. Existing overview pixels may have been produced with another resampler. Monthly output is first-valid mosaicking in ascending scene-cloud order, not a mean, median, or pixel cloud mask. Different scenes can supply different parts of the output. Scene cloud cover is a scene-level property, not a clear-pixel guarantee.
+- Choose scene filters, monthly grouping, extent, target CRS, and resolution.
+- Four months, three bands, 300 m: about 333 MB logical size.
+- Combine source projections on one EPSG:3310 grid, using COG overviews and nearest-neighbor sampling.
+- Order scenes by cloud cover, then take the first valid pixel. No monthly averaging or pixel cloud mask.
+- Click: chunk to 1024 × 1024, select May, and load asynchronously.
+- Return to the opening image: the actual May result, displayed at DN 0–4000.
+- Change the view's definition by opening another array; use `.sel(...)` within this one.
 -->
 
 ---
@@ -378,13 +496,18 @@ title: lazycogs — discussion
 
 <div class="closing-links">
 <div>
-<a class="docs-link" href="https://developmentseed.org/lazycogs/">developmentseed.org/lazycogs/</a>
+<a class="docs-link" href="https://developmentseed.org/lazycogs">developmentseed.org/lazycogs</a>
 </div>
-<AssetQRCode value="https://developmentseed.org/lazycogs/" />
+<CurrentUrlQRCode url="https://developmentseed.org/lazycogs" :width="160" :height="160" />
 </div>
 
 <!--
-18:45–20:00, then leave this slide visible for 5 minutes of discussion. The deliberate scope is compatible STAC-indexed COGs, not a general raster engine. A GDAL-free implementation is a narrow integration choice, not GDAL feature parity. We reuse rustac/DuckDB for discovery, async-geotiff/obstore for COG reads, pyproj/NumPy for alignment, and Xarray with optional Dask scheduling. We still own the integration and metadata contracts; chunk sizes and index layout matter. Distributed chunkwise analysis motivated this work, not a guarantee that every worker deployment works unchanged.
+18:45–20:00 · then 5 minutes for discussion
 
-The docs URL is verified against mkdocs.yml site_url and the docs workflow: https://developmentseed.org/lazycogs/. The static local QR encodes that same URL. All talk images and HTML outputs are bundled locally; links are optional follow-up resources. Encourage people to try lazycogs on their own archives and file feature requests and bug reports at https://github.com/developmentseed/lazycogs/issues. Reports about unsupported workflows, unexpected results, and rough edges help decide what to work on next. Invite questions about which archive and array view the audience wants to work with.
+- Scope: compatible STAC-indexed COGs, without aiming for GDAL feature parity.
+- Index layout and chunk sizes still matter.
+- Try it on your archives; report unsupported workflows, unexpected results, and rough edges.
+- Docs: https://developmentseed.org/lazycogs/
+- Issues: https://github.com/developmentseed/lazycogs/issues
+- What archive and array view do you want to work with?
 -->

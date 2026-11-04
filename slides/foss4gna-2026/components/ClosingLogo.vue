@@ -21,8 +21,8 @@ const active = useIsSlideActive()
       <g class="googly-eyes">
         <ellipse cx="86.756" cy="75.433" rx="11" ry="10" />
         <ellipse cx="125.66" cy="75.433" rx="11" ry="10" />
-        <circle class="pupil" cx="89.5" cy="73.5" r="3.4" />
-        <circle class="pupil" cx="128.4" cy="73.5" r="3.4" />
+        <circle class="pupil" cx="93.35" cy="75.433" r="3.4" />
+        <circle class="pupil" cx="132.25" cy="75.433" r="3.4" />
       </g>
       <path class="feature" d="m 97.230022,90.871596 q 8.977838,9.263434 17.955678,0" />
       <path d="m 169.76502,56.351249 a 8,7.1964415 0 1 0 0,14.392883 8,7.1964415 0 1 1 0,-14.392883" fill="#000000" />
@@ -60,12 +60,12 @@ const active = useIsSlideActive()
   stroke: none;
 }
 .closing-logo.is-active .googly-eyes {
-  animation: googly-appear 8s ease-in-out infinite;
+  animation: googly-appear 8s steps(1, end) infinite;
 }
 
 @keyframes googly-appear {
-  0%, 55%, 100% { opacity: 0; }
-  64%, 82% { opacity: 1; }
+  0%, 82%, 100% { opacity: 0; }
+  64% { opacity: 1; }
 }
 
 @media (prefers-reduced-motion: reduce), print {
