@@ -18,7 +18,6 @@ const active = useIsSlideActive()
       <path class="stroke" d="m 106.20786,126.38141 89.7784,-46.317147 -89.7784,-46.31714 -89.778396,46.31714 z" />
       <path class="feature" d="m 76.281727,75.432549 q 10.474143,9.263429 20.948295,0" />
       <path class="feature eye-right-closed" d="m 115.1857,75.432549 q 10.47415,9.263429 20.94829,0" />
-      <path class="feature eye-right-open" d="M115.1857 75.432549 Q125.65985 62.66 136.13399 75.432549 Q125.65985 88.16 115.1857 75.432549 Z" />
       <g class="googly-eyes">
         <ellipse cx="86.756" cy="75.433" rx="11" ry="10" />
         <ellipse cx="125.66" cy="75.433" rx="11" ry="10" />
@@ -50,7 +49,6 @@ const active = useIsSlideActive()
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.closing-logo .eye-right-open { opacity: 0; }
 .closing-logo .googly-eyes {
   fill: #fff;
   stroke: #000;
@@ -74,6 +72,5 @@ const active = useIsSlideActive()
   .closing-logo.is-active .googly-eyes { animation: none; }
   .closing-logo .googly-eyes { opacity: 0; }
   .closing-logo .eye-right-closed { opacity: 1; }
-  .closing-logo .eye-right-open { opacity: 0; }
 }
 </style>
