@@ -1,12 +1,14 @@
-# Notebook-derived Southwest May assets
+# Notebook-derived Southwest assets
 
-These files are extracted from saved outputs in `docs/notebooks/demo_southwest_monthly.ipynb`; no notebook cells were rerun and no network data were fetched. The PNG is the saved May plot output, not a preview from the separate Southwest assets directories. `array.html` is the saved Xarray HTML representation of the May-selected DataArray, wrapped in a standalone document with the notebook's Xarray CSS and SVG symbols kept inline for offline use.
+These files are extracted from saved outputs in `docs/notebooks/demo_southwest_monthly.ipynb`; no notebook cells were rerun and no network data were fetched. The PNG is the saved May plot output, not a preview from the separate Southwest assets directories. `array.html` contains the actual saved Xarray HTML output beside the monthly `lazycogs.open(...)` call (cell 5): the four-month March–June array, not the May-selected repr. Its original output markup, CSS, and SVG are retained inside a minimal standalone HTML document for offline display.
 
 ## Notebook configuration
 
-The notebook configures the March–June 2025 query using local `data/ca_spring_2025.parquet`. Its projected AOI is EPSG:3310, `dst_bbox = (-444000, -609000, 681000, 500000)`, with `resolution=300`, `time_period="P1M"`, RGB bands, `dtype="int16"`, `filter="eo:cloud_cover < 50"`, and `sortby="eo:cloud_cover"`. The `rustac.search_to` call is conditional on the parquet not existing; it requests `sentinel-2-c1-l2a`, dates `2025-03-01/2025-06-30`, the transformed geographic bbox, and `limit=100`.
+The notebook uses local `data/ca_spring_2025.parquet`. Its projected AOI is EPSG:3310, `dst_bbox = (-444000, -609000, 681000, 500000)`, with `resolution=300`, `time_period="P1M"`, RGB bands, `dtype="int16"`, `filter="eo:cloud_cover < 50"`, and `sortby="eo:cloud_cover"`. The `rustac.search_to` call is conditional on the parquet not existing; it requests `sentinel-2-c1-l2a`, dates `2025-03-01/2025-06-30`, `bbox=bbox_4326`, and `limit=100`. `bbox_4326` is computed from the projected bbox with `Transformer.from_crs(dst_crs, "epsg:4326", always_xy=True).transform_bounds(*dst_bbox)`.
 
-The exact May selection and plot source is:
+The exact geographic bbox passed as `bbox=bbox_4326` to `rustac.search_to` is `(-125.38223191231621, 32.29621234930089, -111.75677519150827, 42.51937087572006)` (west, south, east, north). This is distinct from the projected `dst_bbox` above.
+
+The notebook's May selection and plot source is:
 
 ```python
 ca_may = ca_monthly.chunk(x=1024, y=1024).sel(time="2025-05-01")
@@ -23,10 +25,8 @@ ca_may.plot.imshow(
 )
 ```
 
-The exact projected bbox passed to `rustac.search_to` after `Transformer.from_crs("epsg:3310", "epsg:4326", always_xy=True).transform_bounds(...)` is `(-125.38223191231621, 32.29621234930089, -111.75677519150827, 42.51937087572006)` (west, south, east, north).
-
 ## Extraction and caveats
 
-Cell IDs, indices, execution counts, notebook/output hashes, and file hashes are in `provenance.json`. Image dimensions were checked by decoding the PNG; the result is 585 × 547 RGBA. `array.html` retains the actual output markup and self-contained Xarray stylesheet/SVG; it has no remote references and was checked offline for those resources.
+Cell IDs, indices, execution counts, source/output hashes, and file hashes are in `provenance.json`. `array.html` is the saved Xarray HTML output from cell 5 (four monthly coordinates, March–June; 333 MB, `int16`; shape `(band: 3, time: 4, y: 3697, x: 3750)`; EPSG:3310 at 300 m). The HTML payload and its inline Xarray CSS/SVG are copied unchanged from that output; only an outer standalone-document wrapper is added. The May selection has its own repr at cell 6, but it is not what `array.html` contains.
 
-The notebook's saved array representation reports four monthly coordinates (March–June), and the saved May selection reports date `2025-05-01`, RGB, `int16`, and a 300 m EPSG:3310 grid. The May plot is saved at cell 11 (execution count 8). The preceding `load_async()` cell has no execution count or saved output, so the notebook does not independently record that cell's successful execution; the saved plot is nevertheless the actual notebook output and is not represented as a fresh rerun. Scene-cloud filtering and ordering are as configured in the code; neither claim establishes pixel-level cloud masking.
+The PNG is the saved May plot at cell 11 (execution count 8), 585 × 547 RGBA. The preceding `load_async()` cell has no execution count or saved output, so the notebook does not independently record that cell's successful execution; the saved plot is the actual notebook output and was not regenerated here. Scene-cloud filtering and sorting are as configured in code; neither proves pixel-level cloud masking.

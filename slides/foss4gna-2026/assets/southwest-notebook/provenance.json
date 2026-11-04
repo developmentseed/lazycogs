@@ -7,11 +7,25 @@
     "collection": "sentinel-2-c1-l2a",
     "datetime": "2025-03-01/2025-06-30",
     "crs": "epsg:3310",
-    "projected_bbox_xyxy": [-444000, -609000, 681000, 500000],
-    "geographic_bbox_wsen": [-125.38223191231621, 32.29621234930089, -111.75677519150827, 42.51937087572006],
+    "projected_bbox_xyxy": [
+      -444000,
+      -609000,
+      681000,
+      500000
+    ],
+    "geographic_bbox_wsen": [
+      -125.38223191231621,
+      32.29621234930089,
+      -111.75677519150827,
+      42.51937087572006
+    ],
     "resolution": 300,
     "time_period": "P1M",
-    "bands": ["red", "green", "blue"],
+    "bands": [
+      "red",
+      "green",
+      "blue"
+    ],
     "dtype": "int16",
     "scene_filter": "eo:cloud_cover < 50",
     "sortby": "eo:cloud_cover",
@@ -31,7 +45,8 @@
       "execution_count": 3,
       "html_output_sha256": "d02b7cf719f9f4756824e96c27f36bccf727fd83ad572e83af240c6a4019c8b9",
       "html_output_bytes": 24310,
-      "extracted": false
+      "extracted": true,
+      "plain_text_summary": "<xarray.DataArray (band: 3, time: 4, y: 3697, x: 3750)> Size: 333MB; dtype=int16; months 2025-03-01 through 2025-06-01; EPSG:3310; 300 m grid."
     },
     "may_selection_html": {
       "index": 6,
@@ -56,7 +71,10 @@
       "code": "ca_may.plot.imshow(\n    rgb=\"band\",\n    vmin=0,\n    vmax=4000,\n    size=6,\n    aspect=ca_may.shape[2] / ca_may.shape[1],\n)",
       "output_mime": "image/png",
       "png_sha256": "a1d0e7d1414e9b0aa8f819362d49d8428fdd88b761164ca85220b8b80dd5bf89",
-      "dimensions_px": [585, 547],
+      "dimensions_px": [
+        585,
+        547
+      ],
       "mode": "RGBA"
     }
   },
@@ -66,8 +84,10 @@
       "bytes": 536470
     },
     "array.html": {
-      "sha256": "d0e46d9f580978bf24b9d007722586fdc4ac0af75f0f566b6416328c6f233471",
-      "bytes": 32030,
+      "sha256": "d6c646a10f9758837ba1feee04a8c6a3d45c4c14c565af0df51fc9254df0b24b",
+      "bytes": 24467,
+      "xarray_payload_sha256": "d02b7cf719f9f4756824e96c27f36bccf727fd83ad572e83af240c6a4019c8b9",
+      "xarray_payload_bytes": 24310,
       "embedded_xarray_css": true,
       "embedded_svg_symbols": true,
       "external_resource_references": false
@@ -75,7 +95,7 @@
   },
   "caveats": [
     "Cell 10 load_async has no execution count or saved output; the saved PNG is a notebook image output at cell 11, execution count 8, but the notebook does not independently preserve evidence that cell 10 ran successfully.",
-    "The May selection HTML is an Xarray/Dask lazy representation with chunks (3, 1024, 1024), not evidence that an 83 MB materialized raster was saved.",
+    "array.html contains cell 5's monthly four-timestep DataArray representation beside the lazycogs.open call; it is not the May-only cell 6 representation.",
     "The saved base array representation has four monthly timesteps for March through June 2025. The May plot is the notebook's saved plot output; it was not regenerated during extraction.",
     "Scene-level cloud filtering and sorting do not prove pixel-level cloud masking."
   ]
