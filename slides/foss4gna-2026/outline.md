@@ -12,10 +12,10 @@ Use the Development Seed theme retained in `../theme/`, following `~/workspace/d
 |---|---|---|
 | 1. Title | 0:00–0:20 | Development Seed logo at top left, lazycogs wordmark and subtitle, Lena Delta image along the bottom, Henry Rodman / Development Seed event panel |
 | 2. I want to work with this as an array | 0:20–1:10 | Actual May Southwest notebook RGB plot |
-| 3. Cloud-native data needs cloud-native metadata | 1:10–1:30 | Cloud-native formats image from Pete Gadomski, STAC / stac-geoparquet introduction, source link |
-| 4. STAC items as a queryable table | 1:30–1:50 | STAC JSON → GeoParquet diagram from Pete Gadomski, source link |
-| 5. Search STAC, then hand the items to odc-stac | 1:50–3:45 | Earth Search query via pystac-client → item collection → chunked odc-stac load and selection; credit stackstac |
-| 6. What if we also defer chunk-wise STAC searches? | 3:45–4:45 | Orange brand background; define → select → query assets → read pixels |
+| 3. Search STAC, then hand the items to Xarray | 1:10–3:05 | Earth Search query via pystac-client → item collection → chunked odc-stac load and selection; credit stackstac |
+| 4. What if we also defer STAC searches? | 3:05–4:05 | Orange brand background; define → select → query assets → read pixels |
+| 5. Cloud-native data needs cloud-native metadata | 4:05–4:25 | Cloud-native formats image from Pete Gadomski, STAC / stac-geoparquet introduction, source link |
+| 6. STAC items as a queryable table | 4:25–4:45 | STAC JSON → GeoParquet diagram from Pete Gadomski, source link |
 | 7. GTI worked. Packaging was the obstacle. | 4:45–6:00 | GDAL Raster Tile Index definition, prototype open, Parquet driver / source-build requirement |
 | 8. lazycogs wakes up | 6:00–6:10 | Large animated logo on its own |
 | 9. lazycogs: a year of HLS as an array | 6:10–8:30 | Literal grid/extent, 2025 daily RGB open, verified HTML repr |
@@ -44,9 +44,9 @@ Deferred asset discovery carries query criteria rather than the whole matching i
 
 Read `docs/notebooks/hls-s3.ipynb`, `hls-https.ipynb`, and `assets/hls/{README.md,manifest.json,reproduce.py}` before changing the examples.
 
-Slides 3–4 introduce stac-geoparquet with unchanged images from Pete Gadomski's November 4, 2025 presentation and visible source links. Image URLs and attribution are recorded in `assets/stac-geoparquet/README.md`.
+Slides 5–6 introduce stac-geoparquet with unchanged images from Pete Gadomski's November 4, 2025 presentation and visible source links. Image URLs and attribution are recorded in `assets/stac-geoparquet/README.md`.
 
-Slide 5 illustrates a STAC API → item collection → odc-stac workflow using pystac-client, Earth Search's `sentinel-2-c1-l2a` collection, January 2025, and common red/green/blue asset names. `item_collection()` retrieves matching metadata before the chunked `odc.stac.load()` call; pixel reads wait for compute. This is illustrative code, not a captured result or benchmark, and it is separate from the later HLS example.
+Slide 3 illustrates a STAC API → item collection → odc-stac workflow using pystac-client, Earth Search's `sentinel-2-c1-l2a` collection, January 2025, and common red/green/blue asset names. `item_collection()` retrieves matching metadata before the chunked `odc.stac.load()` call; pixel reads wait for compute. This is illustrative code, not a captured result or benchmark, and it is separate from the later HLS example.
 
 The later HLS array uses a prepared GeoParquet index. Exact public partition objects are readable; anonymous remote wildcard listing is not. The S3 notebook's wildcard path uses bucket-listing privileges. The HTTPS notebook downloads exact objects to a local hive tree. The verified captures resolve the published Iceberg snapshot/manifests and cache twelve 2025 HLSS30 partitions. NASA MAAP maintains the archive: https://maap-project.github.io/hls-stac-geoparquet-archive/.
 

@@ -105,7 +105,7 @@ small = cube.sel(
 <p class="caption">stackstac follows the same item-first pattern</p>
 
 <!--
-1:50–3:45
+1:10–3:05
 
 - Familiar pattern: search STAC → collect matching items → build an array → select pixels.
 - odc-stac and stackstac established this useful array interface; pixel reads are lazy.
@@ -117,18 +117,18 @@ small = cube.sel(
 ---
 layout: center
 class: bg-primary
-title: What if we also defer chunk-wise STAC searches?
+title: What if we also defer STAC searches?
 ---
 
 # We already defer reading pixels.
-# What if we also defer chunk-wise STAC searches?
+# What if we also defer STAC searches?
 
 <p class="sequence spacious">define array → select → query matching assets → read pixels</p>
 
 <p class="lead">Carry query criteria, not the complete item collection.</p>
 
 <!--
-3:45–4:45
+3:05–4:05
 
 - Define the view first; query matching assets for requested spatial chunks and time steps.
 - Carry query criteria instead of the complete item collection.
@@ -151,7 +151,7 @@ title: Cloud-native data needs cloud-native metadata
 <p class="footnote">Image: <a href="https://www.gadom.ski/presentations/2025-11-04-stac-geoparquet.html#/4/1">Pete Gadomski · Cloud-Native Geospatial Metadata with stac-geoparquet</a></p>
 
 <!--
-1:10–1:30
+4:05–4:25
 
 - Cloud-hosted data needs metadata: location, acquisition time, asset links.
 - STAC describes the assets; stac-geoparquet stores those descriptions in GeoParquet.
@@ -173,13 +173,14 @@ title: STAC items as a queryable table
 <p class="footnote">Image: <a href="https://www.gadom.ski/presentations/2025-11-04-stac-geoparquet.html#/4/2">Pete Gadomski · Cloud-Native Geospatial Metadata with stac-geoparquet</a></p>
 
 <!--
-1:30–1:50
+4:25–4:45
 
 - One row per STAC item; geometry, scene properties, and asset metadata as columns.
 - Query space, time, and scene properties with DuckDB without fetching individual JSON documents.
 - The table holds metadata and links; pixels stay in the COGs.
 - Credit Pete Gadomski for the diagram.
 -->
+
 ---
 layout: default
 title: GTI worked. Packaging was the obstacle.
