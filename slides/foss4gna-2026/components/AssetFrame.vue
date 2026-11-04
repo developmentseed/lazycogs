@@ -1,21 +1,26 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import xarrayStyles from '../assets/deck/xarray.css?raw'
 
 const props = defineProps<{ asset: string; title: string }>()
-const assets = import.meta.glob('../assets/{hls,southwest}/*.{html,svg,png,webp}', {
+const assets = import.meta.glob('../assets/{hls,southwest-notebook}/*.html', {
   eager: true,
   import: 'default',
-  query: '?url',
+  query: '?raw',
 }) as Record<string, string>
 
-const src = computed(() => assets[`../assets/${props.asset}`])
+// Keep the original repr intact; apply the documentation's fixes inside its frame.
+const document = computed(() => {
+  const html = assets[`../assets/${props.asset}`]
+  return html?.replace('</body>', `<style>${xarrayStyles}</style></body>`)
+})
 </script>
 
 <template>
   <iframe
-    v-if="src"
+    v-if="document"
     class="asset-frame"
-    :src="src"
+    :srcdoc="document"
     :title="title"
     loading="eager"
     sandbox="allow-same-origin"
