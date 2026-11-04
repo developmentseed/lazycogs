@@ -6,7 +6,7 @@ const active = useIsSlideActive()
 <template>
   <svg
     class="closing-logo"
-    :class="{ 'is-winking': active }"
+    :class="{ 'is-active': active }"
     viewBox="0 0 200 200"
     role="img"
     aria-label="lazycogs"
@@ -19,6 +19,12 @@ const active = useIsSlideActive()
       <path class="feature" d="m 76.281727,75.432549 q 10.474143,9.263429 20.948295,0" />
       <path class="feature eye-right-closed" d="m 115.1857,75.432549 q 10.47415,9.263429 20.94829,0" />
       <path class="feature eye-right-open" d="M115.1857 75.432549 Q125.65985 62.66 136.13399 75.432549 Q125.65985 88.16 115.1857 75.432549 Z" />
+      <g class="googly-eyes">
+        <ellipse cx="86.756" cy="75.433" rx="11" ry="10" />
+        <ellipse cx="125.66" cy="75.433" rx="11" ry="10" />
+        <circle class="pupil" cx="89.5" cy="73.5" r="3.4" />
+        <circle class="pupil" cx="128.4" cy="73.5" r="3.4" />
+      </g>
       <path class="feature" d="m 97.230022,90.871596 q 8.977838,9.263434 17.955678,0" />
       <path d="m 169.76502,56.351249 a 8,7.1964415 0 1 0 0,14.392883 8,7.1964415 0 1 1 0,-14.392883" fill="#000000" />
       <text xml:space="preserve" style="font-weight:800;font-size:40.2134px;font-family:'JetBrainsMono Nerd Font';font-variation-settings:normal;-inkscape-font-specification:'JetBrainsMono Nerd Font, Ultra-Bold';writing-mode:lr-tb;direction:ltr;fill:#d45500;stroke-width:0.538572;fill-opacity:1" x="11.903498" y="18.922346" transform="scale(0.99475497,1.0052727)"><tspan style="stroke-width:0.538572;fill:#d45500;fill-opacity:1" x="11.903498" y="18.922346">lazycogs</tspan></text>
@@ -45,23 +51,28 @@ const active = useIsSlideActive()
   stroke-linejoin: round;
 }
 .closing-logo .eye-right-open { opacity: 0; }
-.closing-logo.is-winking .eye-right-closed { animation: wink-closed 1.8s both; }
-.closing-logo.is-winking .eye-right-open { animation: wink-open 1.8s both; }
-
-@keyframes wink-closed {
-  0%, 18%, 42%, 100% { opacity: 1; }
-  28%, 35% { opacity: 0; }
+.closing-logo .googly-eyes {
+  fill: #fff;
+  stroke: #000;
+  stroke-width: 2;
+  opacity: 0;
 }
-@keyframes wink-open {
-  0%, 18%, 42%, 100% { opacity: 0; }
-  28%, 35% { opacity: 1; }
+.closing-logo .googly-eyes .pupil {
+  fill: #000;
+  stroke: none;
+}
+.closing-logo.is-active .googly-eyes {
+  animation: googly-appear 8s ease-in-out infinite;
+}
+
+@keyframes googly-appear {
+  0%, 55%, 100% { opacity: 0; }
+  64%, 82% { opacity: 1; }
 }
 
 @media (prefers-reduced-motion: reduce), print {
-  .closing-logo.is-winking .eye-right-closed,
-  .closing-logo.is-winking .eye-right-open {
-    animation: none;
-  }
+  .closing-logo.is-active .googly-eyes { animation: none; }
+  .closing-logo .googly-eyes { opacity: 0; }
   .closing-logo .eye-right-closed { opacity: 1; }
   .closing-logo .eye-right-open { opacity: 0; }
 }
