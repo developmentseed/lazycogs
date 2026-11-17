@@ -22,8 +22,9 @@ jobs:
       - name: Check docs
         run: uv run --group docs mkdocs build --strict
 
-      # Use ruff-action so we get annotations in the Github UI
-      - uses: astral-sh/ruff-action@v3
+      # Use the locked Ruff version and keep GitHub annotations.
+      - name: Run Ruff
+        run: uv run --locked ruff check --output-format=github
 
   test:
     runs-on: ubuntu-latest
