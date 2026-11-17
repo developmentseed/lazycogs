@@ -1,0 +1,53 @@
+/* Slidev's inactive Goto dialog can leave its title suggestions on screen. */
+#slidev-goto-dialog.-top-20 .autocomplete-list { display: none; }
+
+/* Layout only: typography, colors and Shiki highlighting come from the DS theme. */
+.title-wordmark { width: 14rem; height: 14rem; object-fit: contain; }
+.title-layout .subtitle-text { align-items: center; }
+.title-layout .subtitle-text .text-lg { font-size: 1.5rem; }
+.slidev-layout.default { padding: 2.5rem 3rem; }
+.slidev-layout h1 { margin-bottom: 1.2rem; }
+.slidev-layout .slidev-code { font-size: 17px !important; line-height: 1.5 !important; }
+.caption, .footnote { color: var(--slidev-theme-muted); }
+.caption { font-size: 17px; margin-top: 0.6rem; }
+.footnote { font-size: 14px; margin-top: 0.4rem; }
+.lead { font-size: 23px; }
+.sequence { font-size: 24px; margin-top: 1.2rem; }
+.spacious { margin: 2.5rem 0; }
+.hero-image { height: 23rem !important; }
+.image-slide h1 { font-size: 2.5rem; margin-bottom: 0.3rem; }
+.image-slide .caption { text-align: center; margin-top: 0; }
+.stac-intro-slide h1 { font-size: 2.2rem; }
+.stac-intro-image { height: 21rem !important; background: #fff; }
+.stac-intro-slide .caption { font-size: 16px; }
+.stac-intro-slide .footnote { font-size: 12px; }
+.stac-pattern-slide h1 { font-size: 2.2rem; }
+.stac-pattern-slide .slidev-code { font-size: 14px !important; line-height: 1.25 !important; }
+.stac-pattern-slide .sequence { font-size: 21px; margin-top: 0.8rem; }
+.array-columns { display: grid; grid-template-columns: 1.1fr 1fr; gap: 1.5rem; height: 23rem; }
+.array-columns > div { min-width: 0; }
+.array-columns .slidev-code { font-size: 14px !important; line-height: 1.55 !important; }
+.array-output { height: 100%; overflow: hidden; }
+.hls-array-slide h1 { font-size: 2.5rem; margin-bottom: 0.5rem; }
+.hls-array-slide blockquote { margin: 0 0 0.5rem; padding: 0.25rem 0.75rem; }
+.hls-array-slide blockquote p { margin: 0; }
+.hls-array-slide .array-columns { height: 21rem; }
+.hls-array-slide .footnote { font-size: 12px; }
+.point-plot { height: 21.5rem !important; margin-top: 0.5rem; }
+.foundations-slide { padding: 2.5rem 3rem; }
+.foundation-panels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.foundation-panel { display: flex; flex-direction: column; padding: 1.25rem; min-height: 19rem; color: #222; background: rgb(255 255 255 / 94%); border: 1px solid rgb(0 0 0 / 12%); border-radius: 0.5rem; }
+.foundation-panel h3 { font-size: 1.6rem; margin: 0 0 0.75rem; }
+.foundation-panel p { font-size: 18px; line-height: 1.45; }
+.foundation-panel a { margin-top: auto; padding-top: 1rem; font-size: 14px; overflow-wrap: anywhere; }
+.window-slide .slidev-code { font-size: 15px !important; line-height: 1.4 !important; }
+.window-images { height: 11rem !important; margin-top: 0.5rem; }
+.may-result { height: 23rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.may-result .slidev-code { font-size: 16px !important; }
+.may-image { min-height: 0; flex: 1; }
+.wake-up-wordmark { width: 22rem; height: 22rem; margin: 0 auto; }
+.closing-wordmark { width: 14rem; height: 14rem; object-fit: contain; margin: 0 auto 1rem; }
+.closing-message { font-size: 30px; line-height: 1.3; text-align: center; }
+.closing-links { display: flex; align-items: center; justify-content: space-between; margin-top: 2rem; }
+.docs-link { font-size: 30px; }
+.closing-links .qrcode-container { width: 10rem; height: 10rem; }

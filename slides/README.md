@@ -1,0 +1,38 @@
+# lazycogs presentations
+
+This is the Slidev project for lazycogs talks. It uses the DevelopmentSeed theme from [ds-slidev-template](https://github.com/developmentseed/ds-slidev-template). The theme source and its README are retained under `theme/`; the template repository at the reference revision did not include a license file. The project maintainer confirmed permission to publish the bundled theme and its assets in this deck; this does not assert a broader upstream license.
+
+## Edit and preview
+
+Install the pinned dependencies and start the FOSS4G North America 2026 presentation locally from this directory:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm dev
+```
+
+Edit `foss4gna-2026/slides.md` to change the deck and speaker notes. The Southwest example uses the March–June array representation and saved May plot from the [monthly notebook](../docs/notebooks/demo_southwest_monthly.ipynb). The HLS example uses a saved array representation and a three-date image strip; see the [HLS notebook](../docs/notebooks/hls-https.ipynb) for the workflow. The stac-geoparquet slides credit Pete Gadomski for both diagrams. An image-only slide after “What if we also defer STAC searches?” plays an animated WebP made from the [Tenor GIF](https://tenor.com/vZ9l.gif). The library overview uses three panels over a resized WebP of the DS template's Tanezrouft Basin image.
+
+The small components under `foss4gna-2026/components/` embed local images and sandboxed Xarray HTML documents. The logo-only introduction and closing slides periodically switch googly eyes on and off instantly, with pupils looking right. Reduced-motion and print views retain the resting expression. `assets/deck/xarray.css` adapts the Xarray-specific rules from `../docs/stylesheets/extra.css` and is injected inside each iframe so color variables, grid/list layouts, and attribute styling work offline. The source HTML representations are retained unchanged. The closing QR code uses the theme's `CurrentUrlQRCode` component with an explicit destination URL and the `slidev-addon-qrcode` addon. It renders locally with the bundled DS symbol; no remote QR service is called.
+
+The talk runtime has no remote font dependency: the shared theme uses its bundled Antarctica font with system sans-serif and monospace fallbacks, and Slidev webfonts are disabled for this deck. Use Slidev's presenter view for speaker notes; the production build emits the website presentation. PDF export is optional and requires `playwright-chromium` plus its browser, which are not part of the pinned dependencies. Once available, run `pnpm exec slidev export foss4gna-2026/slides.md --format pdf --output .cache/foss4gna-2026.pdf` from `slides/`. Check exported slides for reveal-dependent content: slide 15 has one native click that replaces the monthly open/repr with the May selection and image. The closing-logo animation has a static print fallback; there are no source-pass diagrams.
+
+## Build for the website
+
+The production site is hosted under `/lazycogs/`. From the repository root, build MkDocs first, then build the deck into the same output directory:
+
+```sh
+uv run --locked --group docs mkdocs build --strict
+pnpm --dir slides install --frozen-lockfile
+pnpm --dir slides build
+```
+
+To preview the combined site locally, serve `site/` at the `/lazycogs/` URL prefix and open **Presentations → FOSS4G North America 2026** in the docs navigation. `mkdocs serve` on its own does not build the deck.
+
+The build script writes to `../site/presentations/foss4gna-2026` with the base `/lazycogs/presentations/foss4gna-2026/`. The deck uses Slidev's hash routing, so links such as `/lazycogs/presentations/foss4gna-2026/#/14` survive refreshes without server-side SPA rewrites.
+
+Pull requests to `main` validate the combined build without publishing. Pushes to `main`, or manual workflow runs on `main`, build MkDocs first, build Slidev into that output, then publish the combined site once with `mkdocs gh-deploy --dirty --force`. Main-branch runs are serialized to prevent overlapping or out-of-order deployments. MkDocs 1.6.1 does not provide a `gh-deploy --no-build` option; `--dirty` is used so its deployment build does not clean the Slidev output before publication. Do not use Slidev's standalone deployment configuration for the shared Pages site.
+
+The deck's favicon is a copy of the MkDocs site's `docs/favicon.svg`, stored in `public/favicon.svg`.
+
+The deck uses Slidev's native `publicDir` Vite setting to share assets from `slides/public/` while keeping the presentation source in its own directory. The theme and package dependencies remain shared under `slides/`.

@@ -40,6 +40,9 @@ nav:
       - rioxarray interoperability: notebooks/rioxarray.ipynb
       - lazycogs vs odc-stac: notebooks/lazycogs-odc-stac.ipynb
   - Performance: performance.md
+  - Presentations:
+      # Slidev is built after MkDocs and lives outside docs/.
+      - FOSS4G North America 2026: /lazycogs/presentations/foss4gna-2026/
   - API Reference:
       - open / open_async: api/open.md
       - Mosaic methods: api/mosaic.md

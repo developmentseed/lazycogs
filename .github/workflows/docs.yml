@@ -1,23 +1,31 @@
 name: Deploy Docs
 
 on:
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  build:
+    if: github.event_name == 'pull_request'
+    name: Build combined site
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v6
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: latest
 
       - name: Set up Python
         run: uv python install 3.13
@@ -25,5 +33,76 @@ jobs:
       - name: Install docs dependencies
         run: uv sync --group docs
 
-      - name: Deploy docs
-        run: uv run mkdocs gh-deploy --force
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: slides/pnpm-lock.yaml
+
+      - name: Install Slidev dependencies
+        working-directory: slides
+        run: pnpm install --frozen-lockfile
+
+      - name: Build MkDocs site
+        run: uv run mkdocs build --strict
+
+      - name: Build presentation
+        working-directory: slides
+        run: pnpm build
+
+      - &verify_presentation
+        name: Verify presentation in combined site
+        run: |
+          test -s site/presentations/foss4gna-2026/index.html
+          grep -Fq 'href="/lazycogs/presentations/foss4gna-2026/"' site/index.html
+
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: latest
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install docs dependencies
+        run: uv sync --group docs
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: slides/pnpm-lock.yaml
+
+      - name: Install Slidev dependencies
+        working-directory: slides
+        run: pnpm install --frozen-lockfile
+
+      - name: Build MkDocs site
+        run: uv run mkdocs build --strict
+
+      - name: Build presentation
+        working-directory: slides
+        run: pnpm build
+
+      - *verify_presentation
+
+      - name: Deploy combined site
+        run: uv run mkdocs gh-deploy --dirty --force

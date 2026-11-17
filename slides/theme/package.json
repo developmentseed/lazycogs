@@ -1,0 +1,26 @@
+{
+  "name": "slidev-theme-devseed",
+  "version": "1.0.0",
+  "description": "DevelopmentSeed brand colors and custom layouts for Slidev - extends the default theme",
+  "keywords": [
+    "slidev-theme",
+    "slidev",
+    "developmentseed"
+  ],
+  "engines": {
+    "node": ">=18.0.0",
+    "slidev": ">=0.48.0"
+  },
+  "scripts": {},
+  "slidev": {
+    "colorSchema": "light",
+    "highlighter": "shiki",
+    "defaults": {
+      "fonts": {
+        "sans": "Roboto",
+        "serif": "Roboto",
+        "mono": "Roboto Mono"
+      }
+    }
+  }
+}
