@@ -1,0 +1,1 @@
+import{o as t,a as o,b as s,an as c}from"../modules/vue-0N0q2gwW.js";import{_ as a}from"../index-BNZ8ElRl.js";const n={},r={class:"slidev-layout center h-full grid place-content-center"},l={class:"my-auto"};function d(e,_){return t(),o("div",r,[s("div",l,[c(e.$slots,"default")])])}const m=a(n,[["render",d]]);export{m as I};

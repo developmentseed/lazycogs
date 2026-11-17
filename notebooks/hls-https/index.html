@@ -1066,7 +1066,7 @@
   <span class="md-ellipsis">
     
   
-    API Reference
+    Presentations
   
 
     
@@ -1079,6 +1079,88 @@
         
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Presentations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="/lazycogs/presentations/foss4gna-2026/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FOSS4G North America 2026
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2707,7 +2789,9 @@ data type: int16
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">stac_search_args</span> <span class="o">=</span> <span class="p">{</span>
     <span class="s2">"href"</span><span class="p">:</span> <span class="s2">"data/"</span> <span class="o">+</span> <span class="n">HLS_STAC_GEOPARQUET_HIVE_FORMAT</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">collection</span><span class="o">=</span><span class="s2">"HLSS30_2.0"</span><span class="p">),</span>
+    <span class="s2">"datetime"</span><span class="p">:</span> <span class="s2">"2025-01-01T00:00:00Z/2025-12-31T23:59:59Z"</span><span class="p">,</span>
     <span class="s2">"filter"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"op"</span><span class="p">:</span> <span class="s2">"="</span><span class="p">,</span> <span class="s2">"args"</span><span class="p">:</span> <span class="p">[{</span><span class="s2">"property"</span><span class="p">:</span> <span class="s2">"proj:epsg"</span><span class="p">},</span> <span class="n">epsg_code</span><span class="p">]},</span>
+    <span class="s2">"duckdb_client"</span><span class="p">:</span> <span class="n">duckdb_client</span><span class="p">,</span>
 <span class="p">}</span>
 
 <span class="n">da</span> <span class="o">=</span> <span class="n">lazycogs</span><span class="o">.</span><span class="n">open</span><span class="p">(</span>
@@ -2726,7 +2810,9 @@ data type: int16
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-9">stac_search_args = {
     "href": "data/" + HLS_STAC_GEOPARQUET_HIVE_FORMAT.format(collection="HLSS30_2.0"),
+    "datetime": "2025-01-01T00:00:00Z/2025-12-31T23:59:59Z",
     "filter": {"op": "=", "args": [{"property": "proj:epsg"}, epsg_code]},
+    "duckdb_client": duckdb_client,
 }
 
 da = lazycogs.open(
