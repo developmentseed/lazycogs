@@ -141,10 +141,10 @@ title: Super duper
 ---
 
 <script setup>
-import duperOfficeGif from './assets/deck/duper-office.gif?url'
+import duperOfficeAnimation from './assets/deck/duper-office.webp?url'
 </script>
 
-<img :src="duperOfficeGif" alt="Super duper — The IT Crowd" class="absolute inset-0 w-full h-full object-contain" />
+<img :src="duperOfficeAnimation" alt="Super duper — The IT Crowd" class="absolute inset-0 w-full h-full object-contain" />
 
 <!--
 Source: https://tenor.com/vZ9l.gif
@@ -158,7 +158,7 @@ title: Cloud-native data needs cloud-native metadata
 
 # Cloud-native data needs cloud-native metadata
 
-<AssetImage asset="stac-geoparquet/cloud-native-data-formats.excalidraw.png" alt="Cloud-native geospatial formats: COG, COPC, Zarr, and GeoParquet" class="stac-intro-image" />
+<AssetImage asset="stac-geoparquet/cloud-native-data-formats.excalidraw.webp" alt="Cloud-native geospatial formats: COG, COPC, Zarr, and GeoParquet" class="stac-intro-image" />
 
 <p class="caption">STAC describes the assets. stac-geoparquet puts those descriptions in GeoParquet.</p>
 <p class="footnote">Image: <a href="https://www.gadom.ski/presentations/2025-11-04-stac-geoparquet.html#/4/1">Pete Gadomski · Cloud-Native Geospatial Metadata with stac-geoparquet</a></p>
@@ -180,7 +180,7 @@ title: STAC items as a queryable table
 
 # STAC items as a queryable table
 
-<AssetImage asset="stac-geoparquet/stac-data-storage.excalidraw.png" alt="STAC JSON properties such as datetime, proj:code, and eo:cloud_cover become top-level columns in stac-geoparquet" class="stac-intro-image" />
+<AssetImage asset="stac-geoparquet/stac-data-storage.excalidraw.webp" alt="STAC JSON properties such as datetime, proj:code, and eo:cloud_cover become top-level columns in stac-geoparquet" class="stac-intro-image" />
 
 <p class="caption">One row per item · geometry and properties as columns</p>
 <p class="footnote">Image: <a href="https://www.gadom.ski/presentations/2025-11-04-stac-geoparquet.html#/4/2">Pete Gadomski · Cloud-Native Geospatial Metadata with stac-geoparquet</a></p>
@@ -296,7 +296,7 @@ hls = lazycogs.open(
 ---
 layout: cover
 class: foundations-slide
-background: /images/theme/Tanezrouft_Basin.jpg
+background: /images/theme/Tanezrouft_Basin.webp
 dim: true
 title: Built on these tools
 ---

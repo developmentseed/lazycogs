@@ -54,6 +54,12 @@ jobs:
         working-directory: slides
         run: pnpm build
 
+      - &verify_presentation
+        name: Verify presentation in combined site
+        run: |
+          test -s site/presentations/foss4gna-2026/index.html
+          grep -Fq 'href="/lazycogs/presentations/foss4gna-2026/"' site/index.html
+
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
@@ -95,6 +101,8 @@ jobs:
       - name: Build presentation
         working-directory: slides
         run: pnpm build
+
+      - *verify_presentation
 
       - name: Deploy combined site
         run: uv run mkdocs gh-deploy --dirty --force

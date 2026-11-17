@@ -11,7 +11,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Edit `foss4gna-2026/slides.md` to change the deck. The sixteen-slide FOSS4GNA talk uses short highlighted Python snippets, actual Xarray HTML representations, and prepared notebook results. The Southwest example uses the March–June monthly array and the notebook's saved May image, extracted under `foss4gna-2026/assets/southwest-notebook/`; it does not use the older seasonal preview assets. HLS results and provenance are under `foss4gna-2026/assets/hls/`. The stac-geoparquet introduction uses two diagrams from Pete Gadomski's presentation, with visible source links and provenance under `foss4gna-2026/assets/stac-geoparquet/`. An image-only slide after “What if we also defer STAC searches?” plays the [Tenor GIF](https://tenor.com/vZ9l.gif), bundled locally as `foss4gna-2026/assets/deck/duper-office.gif`. The library overview uses three panels over the DS template's Tanezrouft Basin image, bundled under `public/images/theme/`.
+Edit `foss4gna-2026/slides.md` to change the deck. The sixteen-slide FOSS4GNA talk uses short highlighted Python snippets, actual Xarray HTML representations, and prepared notebook results. The Southwest example uses the March–June monthly array and the notebook's saved May image, extracted under `foss4gna-2026/assets/southwest-notebook/`; it does not use the older seasonal preview assets. HLS results and provenance are under `foss4gna-2026/assets/hls/`. The stac-geoparquet introduction uses two diagrams from Pete Gadomski's presentation, with visible source links and provenance under `foss4gna-2026/assets/stac-geoparquet/`. An image-only slide after “What if we also defer STAC searches?” plays an animated WebP made from the [Tenor GIF](https://tenor.com/vZ9l.gif). The library overview uses three panels over a resized WebP of the DS template's Tanezrouft Basin image.
 
 The small components under `foss4gna-2026/components/` embed local images and sandboxed Xarray HTML documents. The logo-only introduction and closing slides periodically switch googly eyes on and off instantly, with pupils looking right. Reduced-motion and print views retain the resting expression. `assets/deck/xarray.css` adapts the Xarray-specific rules from `../docs/stylesheets/extra.css` and is injected inside each iframe so color variables, grid/list layouts, and attribute styling work offline. The source HTML representations are retained unchanged. The closing QR code uses the theme's `CurrentUrlQRCode` component with an explicit destination URL and the `slidev-addon-qrcode` addon. It renders locally with the bundled DS symbol; no remote QR service is called. The working structure, pacing, code/output crosswalk, and caveats are in [`foss4gna-2026/outline.md`](foss4gna-2026/outline.md); the submitted proposal is preserved in [`foss4gna-2026/AGENTS.md`](foss4gna-2026/AGENTS.md).
 
@@ -19,11 +19,15 @@ The talk runtime has no remote font dependency: the shared theme uses its bundle
 
 ## Build for the website
 
-The production site is hosted under `/lazycogs/`. Build the deck with its full presentation base path and output directly into the MkDocs site directory:
+The production site is hosted under `/lazycogs/`. From the repository root, build MkDocs first, then build the deck into the same output directory:
 
 ```sh
-pnpm build
+uv run --locked --group docs mkdocs build --strict
+pnpm --dir slides install --frozen-lockfile
+pnpm --dir slides build
 ```
+
+To preview the combined site locally, serve `site/` at the `/lazycogs/` URL prefix and open **Presentations → FOSS4G North America 2026** in the docs navigation. `mkdocs serve` on its own does not build the deck.
 
 The build script writes to `../site/presentations/foss4gna-2026` with the base `/lazycogs/presentations/foss4gna-2026/`. The deck uses Slidev's hash routing, so links such as `/lazycogs/presentations/foss4gna-2026/#/14` survive refreshes without server-side SPA rewrites.
 
