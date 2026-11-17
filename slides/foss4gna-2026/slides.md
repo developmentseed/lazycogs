@@ -1,7 +1,7 @@
 ---
 title: "lazycogs: super lazy analysis of massive COG archives"
 info: |
-  FOSS4GNA 2026 · Sacramento, CA · 2026-11-03
+  FOSS4GNA 2026 · Sacramento, CA · 2026-11-04
   Henry Rodman · Development Seed
 highlighter: shiki
 colorSchema: light
@@ -36,7 +36,7 @@ super lazy analysis of massive COG archives
 >
   <div w-full h-full relative flex flex-col items-end justify-end p-4 text-white text-right>
     <p text-3xl font-300>FOSS4GNA 2026<br>Sacramento, CA</p>
-    <h4 text-md font-mono>2026-11-03</h4>
+    <h4 text-md font-mono>2026-11-04</h4>
     <h5 text-sm><code text-primary>Henry Rodman · Development Seed</code></h5>
   </div>
 </DecorativeRectangle>
@@ -123,9 +123,6 @@ title: What if we also defer STAC searches?
 # We already defer reading pixels.
 # What if we also defer STAC searches?
 
-<p class="sequence spacious">define array → select → query matching assets → read pixels</p>
-
-<p class="lead">Carry query criteria, not the complete item collection.</p>
 
 <!--
 3:05–4:05
@@ -135,6 +132,22 @@ title: What if we also defer STAC searches?
 - Opening still needs a prepared index, representative items, COG headers, timestamps, and coordinates.
 - Dask remains available for scheduling and downstream work.
 - Filters, grouping, extent, and grid define the view; `.sel(...)` selects within it.
+-->
+
+---
+layout: none
+class: bg-black
+title: Super duper
+---
+
+<script setup>
+import duperOfficeGif from './assets/deck/duper-office.gif?url'
+</script>
+
+<img :src="duperOfficeGif" alt="Super duper — The IT Crowd" class="absolute inset-0 w-full h-full object-contain" />
+
+<!--
+Source: https://tenor.com/vZ9l.gif
 -->
 
 ---

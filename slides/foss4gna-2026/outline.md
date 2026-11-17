@@ -2,7 +2,7 @@
 
 ## Format
 
-25 minutes: about 20 minutes presenting, then 5 minutes discussing. Fifteen slides, with one native click on slide 14 to replace the array definition with its May result. No live queries or live notebook execution. The logo-only introduction and closing slides periodically show googly eyes while active. Reduced-motion and print views keep the resting expression.
+25 minutes: about 20 minutes presenting, then 5 minutes discussing. Sixteen slides, with one native click on slide 15 to replace the array definition with its May result. No live queries or live notebook execution. The logo-only introduction and closing slides periodically show googly eyes while active. Reduced-motion and print views keep the resting expression.
 
 Use the Development Seed theme retained in `../theme/`, following `~/workspace/devseed/ds-slidev-template/`. Its implementation uses Antarctica for headings/body, Shiki's GitHub light/dark code themes, and standard Slidev layouts. Local font assets and monospace fallbacks avoid runtime font downloads. Talk-local CSS only handles layout. Fenced Python blocks use Shiki rather than hand-styled `<pre>` elements.
 
@@ -14,17 +14,18 @@ Use the Development Seed theme retained in `../theme/`, following `~/workspace/d
 | 2. I want to work with this as an array | 0:20–1:10 | Actual May Southwest notebook RGB plot |
 | 3. Search STAC, then hand the items to Xarray | 1:10–3:05 | Earth Search query via pystac-client → item collection → chunked odc-stac load and selection; credit stackstac |
 | 4. What if we also defer STAC searches? | 3:05–4:05 | Orange brand background; define → select → query assets → read pixels |
-| 5. Cloud-native data needs cloud-native metadata | 4:05–4:25 | Cloud-native formats image from Pete Gadomski, STAC / stac-geoparquet introduction, source link |
-| 6. STAC items as a queryable table | 4:25–4:45 | STAC JSON → GeoParquet diagram from Pete Gadomski, source link |
-| 7. GTI worked. Packaging was the obstacle. | 4:45–6:00 | GDAL Raster Tile Index definition, prototype open, Parquet driver / source-build requirement |
-| 8. lazycogs wakes up | 6:00–6:10 | Large animated logo on its own |
-| 9. lazycogs: a year of HLS as an array | 6:10–8:30 | Literal grid/extent, 2025 daily RGB open, verified HTML repr |
-| 10. Built on these tools | 8:30–9:00 | Three panels for obstore, async-geotiff, and rustac, with repo links over the Tanezrouft Basin background |
-| 11. Load one point | 9:00–10:30 | Literal EPSG:32615 point and code for a date × RGB value table, with nodata masked |
-| 12. A new scene filter, then a small window | 10:30–12:45 | Explicit reopened filtered view, 5 km selection, matching seasonal RGB montage |
-| 13. This time, prepare our own index | 12:45–14:15 | rustac.search_to from Earth Search to local Southwest GeoParquet |
-| 14. Your scene selection. Your target grid. | 14:15–18:45 | Exact monthly Southwest open + notebook HTML; one click shows May selection/load and opening image |
-| 15. Discussion | 18:45–20:00 | Logo, bold “stay lazy”, prominent docs link and theme QR component; notes invite trials, feature requests and bug reports |
+| 5. Super duper | Transition at 4:05 | Image-only IT Crowd GIF from [Tenor](https://tenor.com/vZ9l.gif), bundled locally |
+| 6. Cloud-native data needs cloud-native metadata | 4:05–4:25 | Cloud-native formats image from Pete Gadomski, STAC / stac-geoparquet introduction, source link |
+| 7. STAC items as a queryable table | 4:25–4:45 | STAC JSON → GeoParquet diagram from Pete Gadomski, source link |
+| 8. GTI worked. Packaging was the obstacle. | 4:45–6:00 | GDAL Raster Tile Index definition, prototype open, Parquet driver / source-build requirement |
+| 9. lazycogs wakes up | 6:00–6:10 | Large animated logo on its own |
+| 10. lazycogs: a year of HLS as an array | 6:10–8:30 | Literal grid/extent, 2025 daily RGB open, verified HTML repr |
+| 11. Built on these tools | 8:30–9:00 | Three panels for obstore, async-geotiff, and rustac, with repo links over the Tanezrouft Basin background |
+| 12. Load one point | 9:00–10:30 | Literal EPSG:32615 point and code for a date × RGB value table, with nodata masked |
+| 13. A new scene filter, then a small window | 10:30–12:45 | Explicit reopened filtered view, 5 km selection, matching seasonal RGB montage |
+| 14. This time, prepare our own index | 12:45–14:15 | rustac.search_to from Earth Search to local Southwest GeoParquet |
+| 15. Your scene selection. Your target grid. | 14:15–18:45 | Exact monthly Southwest open + notebook HTML; one click shows May selection/load and opening image |
+| 16. Discussion | 18:45–20:00 | Logo, bold “stay lazy”, prominent docs link and theme QR component; notes invite trials, feature requests and bug reports |
 
 Speaker notes contain prerequisites, explanations, limitations, and transitions. Rehearse to 20 minutes; background runs to about six minutes. Do not add timing or scaling claims without new evidence.
 
