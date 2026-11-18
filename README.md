@@ -83,6 +83,46 @@ da = lazycogs.open(
 )
 ```
 
+### Single COG and single item reads
+
+Sometimes you don't want a reprojected mosaic — you want to read one asset (or
+a few bands of one item) exactly as stored. `lazycogs.open_cog` and
+`lazycogs.open_item` read COGs **at their native grid** (native CRS, resolution,
+and shape, no reprojection), returning lazy `(band, y, x)` DataArrays
+with rioxarray-compatible metadata. Opening fetches metadata for each requested
+asset without decoding pixels; metadata read-ahead can include compressed tile
+bytes. `sel` and `isel` on the returned array make no storage requests. Select
+bands and a spatial window before loading.
+
+```python
+import lazycogs
+
+# One COG → (band, y, x) at native resolution, band labelled 1..N.
+# Use a file:// URI for a local COG (e.g. Path(...).resolve().as_uri()).
+da = lazycogs.open_cog("s3://bucket/scene/B04.tif")
+
+# Several same-grid assets of one STAC item, stacked and labelled by asset key.
+# `item` is a STAC item dict (e.g. a rustac search result) or a pystac Item.
+da = lazycogs.open_item(item, bands=["B04", "B08"])
+# da.dims == ("band", "y", "x"); da["band"] == ["B04", "B08"]
+window = da.sel(band="B08").isel(y=slice(100, 356), x=slice(200, 456))
+pixels = window.load()  # Requests this native window from B08 only.
+```
+
+`open_item` raises `ValueError` unless the requested assets are single-band
+COGs with the same CRS, affine transform, and shape and a common dtype that
+preserves their raw values. It exposes `nodata`/`scale`/`offset` as scalar CF
+attributes (`_FillValue`/`scale_factor`/`add_offset`) only when all requested
+bands agree.
+
+Loading requests the bounding window at full native resolution, including the
+gaps in sparse or strided selections. TIFF tile reads can fetch beyond that
+window. `open_item` reads pixels only from selected assets, while `open_cog`
+reads all bands in the window before subsetting. For assets on different grids
+or to mosaic a whole collection, use `lazycogs.open`. Both functions accept the same
+`store=`/`path_from_href=` arguments as `lazycogs.open`, and each has an
+`await`-able `_async` variant (`open_cog_async`, `open_item_async`).
+
 ### Temporal grouping
 
 By default, `lazycogs.open()` groups items into one time step per UTC calendar day (`time_period="P1D"`). Coarser composites (`"PnD"`, `"P1W"`, `"P1M"`, or `"P1Y"`) also use UTC dates.

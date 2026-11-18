@@ -14,6 +14,7 @@ src/lazycogs/
   _grid.py           output affine transform and grid dimensions
   _reproject.py      warp-map computation and nearest-neighbor sampling
   _storage_ext.py    STAC Storage Extension metadata parsing
+  _single.py         open_cog()/open_item(): native-resolution single-COG and single-item reads
   _store.py          HREF-to-store resolution and store_for()
   _temporal.py       temporal grouping strategies and _TimeStep predicates
   _mosaic_methods.py pixel-selection strategies
@@ -54,6 +55,21 @@ When xarray asks the backend array for data, `MultiBandStacBackendArray.__getite
 6. Return data in top-down raster order.
 
 The sync path submits this coroutine to the shared lazycogs event loop via `run_on_loop()`. The async path uses xarray's async indexing adapter and stays on the caller's loop.
+
+## Native-grid single reads
+
+`open_cog` and `open_item` fetch metadata from each requested asset at open,
+without decoding pixels. Metadata read-ahead may fetch compressed tile bytes.
+Item assets must be single-band, share a grid, and admit a lossless common
+output dtype. The backend validates these requirements from metadata.
+
+`sel` and `isel` issue no storage requests on the returned lazy array. Each
+backend read requests the bounding window at full resolution. The TIFF reader
+fetches intersecting tiles, so sparse or strided spatial indexing may read
+pixels between selected positions. For items, the backend reads only the
+selected assets; for a multiband COG it reads all bands before subsetting.
+Values remain raw; shared CF attributes describe nodata, scale and offset.
+The sync and async open entry points provide the same array behavior.
 
 ## Grid and coordinate convention
 
