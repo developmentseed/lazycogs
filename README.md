@@ -85,7 +85,7 @@ da = lazycogs.open(
 
 ### Temporal grouping
 
-By default, `lazycogs.open()` groups items into one time step per calendar day (`time_period="P1D"`). You can also request coarser composites with `"PnD"`, `"P1W"`, `"P1M"`, or `"P1Y"`.
+By default, `lazycogs.open()` groups items into one time step per UTC calendar day (`time_period="P1D"`). Coarser composites (`"PnD"`, `"P1W"`, `"P1M"`, or `"P1Y"`) also use UTC dates.
 
 For sub-daily collections, two modes are available:
 

@@ -90,6 +90,18 @@ def _parse_timestamp(datetime_str: str) -> datetime:
     return parsed.astimezone(UTC)
 
 
+def _parse_utc_date(datetime_str: str) -> date:
+    """Return the UTC calendar date of a timestamp, or a bare date unchanged.
+
+    DuckDB returns ``timestamptz`` columns in the session time zone, which
+    defaults to the system's, so the leading ``YYYY-MM-DD`` of a timestamp
+    string is not always its UTC date.
+    """
+    if "T" not in datetime_str:
+        return date.fromisoformat(datetime_str[:10])
+    return _parse_timestamp(datetime_str).date()
+
+
 def _format_utc_timestamp(value: datetime, *, timespec: str = "auto") -> str:
     """Return a stable UTC timestamp string ending in ``Z``."""
     return value.astimezone(UTC).isoformat(timespec=timespec).replace("+00:00", "Z")
@@ -160,8 +172,8 @@ class _DayGrouper(_TemporalGrouper):
     """Group items by calendar day (``P1D``)."""
 
     def group_key(self, datetime_str: str) -> str:
-        """Return the ``YYYY-MM-DD`` portion of *datetime_str*."""
-        return datetime_str[:10]
+        """Return the UTC ``YYYY-MM-DD`` date of *datetime_str*."""
+        return _parse_utc_date(datetime_str).isoformat()
 
     def datetime_filter(self, group_key: str) -> str:
         """Return a range covering the whole day."""
@@ -178,8 +190,7 @@ class _WeekGrouper(_TemporalGrouper):
 
     def group_key(self, datetime_str: str) -> str:
         """Return an ``YYYY-Www`` ISO week label for *datetime_str*."""
-        d = date.fromisoformat(datetime_str[:10])
-        iso = d.isocalendar()
+        iso = _parse_utc_date(datetime_str).isocalendar()
         return f"{iso.year}-W{iso.week:02d}"
 
     def datetime_filter(self, group_key: str) -> str:
@@ -205,8 +216,8 @@ class _MonthGrouper(_TemporalGrouper):
     """Group items by calendar month (``P1M``)."""
 
     def group_key(self, datetime_str: str) -> str:
-        """Return the ``YYYY-MM`` portion of *datetime_str*."""
-        return datetime_str[:7]
+        """Return the UTC ``YYYY-MM`` month of *datetime_str*."""
+        return _parse_utc_date(datetime_str).isoformat()[:7]
 
     def datetime_filter(self, group_key: str) -> str:
         """Return a range covering the full month."""
@@ -223,8 +234,8 @@ class _YearGrouper(_TemporalGrouper):
     """Group items by calendar year (``P1Y``)."""
 
     def group_key(self, datetime_str: str) -> str:
-        """Return the ``YYYY`` portion of *datetime_str*."""
-        return datetime_str[:4]
+        """Return the UTC ``YYYY`` year of *datetime_str*."""
+        return _parse_utc_date(datetime_str).isoformat()[:4]
 
     def datetime_filter(self, group_key: str) -> str:
         """Return a range covering the full year."""
@@ -245,8 +256,7 @@ class _FixedDayGrouper(_TemporalGrouper):
 
     def _bucket(self, datetime_str: str) -> int:
         """Return the zero-based bucket index for *datetime_str*."""
-        d = date.fromisoformat(datetime_str[:10])
-        return (d - _EPOCH).days // self._n
+        return (_parse_utc_date(datetime_str) - _EPOCH).days // self._n
 
     def group_key(self, datetime_str: str) -> str:
         """Return a zero-padded decimal bucket index as the group label."""

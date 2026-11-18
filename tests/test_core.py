@@ -157,6 +157,46 @@ def test_build_time_steps_day_two_days():
     assert len(time_steps) == 2
 
 
+def test_build_time_steps_day_uses_utc_midnight_in_non_utc_session(tmp_path):
+    """Build UTC day steps whose filters find the right items across midnight."""
+    parquet = str(tmp_path / "items.parquet")
+    rustac.write_sync(
+        parquet,
+        [
+            {
+                "type": "Feature",
+                "stac_version": "1.0.0",
+                "id": f"fake-{i}",
+                "geometry": {"type": "Point", "coordinates": [0.0, 0.0]},
+                "bbox": [-0.1, -0.1, 0.1, 0.1],
+                "properties": {"datetime": dt},
+                "links": [],
+                "assets": {},
+            }
+            for i, dt in enumerate(
+                ["2023-01-15T23:59:59.999999Z", "2023-01-16T00:00:00Z"],
+            )
+        ],
+    )
+    client = DuckdbClient()
+    client.execute("SET TimeZone = 'Australia/Sydney'")
+
+    time_steps = _build_time_steps(
+        parquet,
+        duckdb_client=client,
+        temporal_grouper=_DayGrouper(),
+    )
+
+    assert [step.coord for step in time_steps] == [
+        np.datetime64("2023-01-15", "D"),
+        np.datetime64("2023-01-16", "D"),
+    ]
+    assert [
+        [item["id"] for item in client.search(parquet, datetime=step.datetime_filter)]
+        for step in time_steps
+    ] == [["fake-0"], ["fake-1"]]
+
+
 def test_build_time_steps_month_deduplicates_same_month():
     """Items in the same month collapse to one time step with MonthGrouper."""
     table = _items_to_arrow(_FAKE_ITEMS_SAME_MONTH)
