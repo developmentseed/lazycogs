@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.7.1](https://github.com/developmentseed/lazycogs/compare/v0.7.0...v0.7.1) (2026-11-18)
+
+
+### Bug Fixes
+
+* group calendar time periods by UTC date ([#96](https://github.com/developmentseed/lazycogs/issues/96)) ([6a6bd8a](https://github.com/developmentseed/lazycogs/commit/6a6bd8a31448efd6141a29aa5fe83703ff60b963))
+* mask NaN nodata pixels when mosaicking ([#91](https://github.com/developmentseed/lazycogs/issues/91)) ([387790c](https://github.com/developmentseed/lazycogs/commit/387790c6479afdc375d62bf09ed1a8b52aca3759))
+* read items in the last second of each time step ([#97](https://github.com/developmentseed/lazycogs/issues/97)) ([468831d](https://github.com/developmentseed/lazycogs/commit/468831da542ec73fbc39929188e7818ea3200cf5))
+
 ## [0.7.0](https://github.com/developmentseed/lazycogs/compare/v0.6.2...v0.7.0) (2026-07-01)
 
 
