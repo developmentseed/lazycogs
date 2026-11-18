@@ -16,10 +16,12 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
 from async_geotiff import GeoTIFF
 from pyproj import CRS
 from rasterix import RasterIndex
-from xarray import Coordinates, DataArray, concat
+from xarray import Coordinates, DataArray, Variable
+from xarray.core import indexing
 
 from lazycogs._core import (
     _ordered_bands,
@@ -27,62 +29,79 @@ from lazycogs._core import (
     _spatial_ref_dataarray,
 )
 from lazycogs._executor import run_on_loop
+from lazycogs._native_backend import NativeBackendArray
 from lazycogs._store import resolve
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from async_geotiff import RasterArray, Store
+    from async_geotiff import Store
 
 __all__ = ["open_cog", "open_cog_async", "open_item", "open_item_async"]
 
 
-def _cf_attrs(geotiff: GeoTIFF) -> dict[str, object]:
-    """Return CF/rioxarray attrs, attaching only ones that carry meaning."""
+def _cf_attrs(sources: tuple[GeoTIFF, ...]) -> dict[str, object]:
+    """Return scalar CF attributes only when every source band agrees."""
     attrs: dict[str, object] = {"grid_mapping": "spatial_ref"}
-    if geotiff.nodata is not None:
-        attrs["_FillValue"] = geotiff.nodata
-    scale = geotiff.scales[0] if geotiff.scales else 1.0
-    offset = geotiff.offsets[0] if geotiff.offsets else 0.0
-    if scale != 1.0:
-        attrs["scale_factor"] = scale
-    if offset != 0.0:
-        attrs["add_offset"] = offset
+    nodata = [source.nodata for source in sources for _ in range(source.count)]
+    scales = [
+        value
+        for source in sources
+        for value in (source.scales or (1.0,) * source.count)
+    ]
+    offsets = [
+        value
+        for source in sources
+        for value in (source.offsets or (0.0,) * source.count)
+    ]
+    for name, values, default in (
+        ("_FillValue", nodata, None),
+        ("scale_factor", scales, 1.0),
+        ("add_offset", offsets, 0.0),
+    ):
+        first = values[0]
+        if (
+            first is not None
+            and first != default
+            and all(
+                value == first
+                or (value is not None and np.isnan(value) and np.isnan(first))
+                for value in values
+            )
+        ):
+            attrs[name] = first
     return attrs
 
 
 def _build_cog_dataarray(
-    geotiff: GeoTIFF,
-    raster: RasterArray,
+    sources: tuple[GeoTIFF, ...],
     *,
-    band_coord: list[int | str] | None = None,
+    band_coord: list[int | str] | list[str] | None = None,
 ) -> DataArray:
-    """Wrap a native-resolution read in a rioxarray-compatible DataArray.
-
-    ``band_coord`` labels the band dimension; it defaults to 1-based integer
-    band indices and is set to the asset key when stacking a STAC item.
-    """
-    data = raster.data
-    crs = CRS.from_user_input(raster.crs)
-
+    """Wrap inspected headers in a lazy rioxarray-compatible DataArray."""
+    geotiff = sources[0]
+    crs = CRS.from_user_input(geotiff.crs)
     index = RasterIndex.from_transform(
-        raster.transform,
-        width=raster.width,
-        height=raster.height,
+        geotiff.transform,
+        width=geotiff.width,
+        height=geotiff.height,
         x_dim="x",
         y_dim="y",
         crs=crs,
     )
     spatial_coords = _spatial_coords_with_eager_variables(index)
-    spatial_ref = _spatial_ref_dataarray(crs, raster.transform)
-
-    bands = band_coord if band_coord is not None else list(range(1, data.shape[0] + 1))
+    spatial_ref = _spatial_ref_dataarray(crs, geotiff.transform)
+    backend = NativeBackendArray(sources, multiband=band_coord is None)
+    bands = band_coord if band_coord is not None else list(range(1, geotiff.count + 1))
+    variable = Variable(
+        ("band", "y", "x"),
+        indexing.LazilyIndexedArray(backend),
+        attrs=_cf_attrs(sources),
+    )
     return DataArray(
-        data,
-        dims=("band", "y", "x"),
+        variable,
         coords=Coordinates({"band": bands, "spatial_ref": spatial_ref})
         | spatial_coords,
-        attrs=_cf_attrs(geotiff),
     )
 
 
@@ -128,8 +147,7 @@ async def open_cog_async(
     """
     resolved_store, path = resolve(href, store=store, path_fn=path_from_href)
     geotiff = await GeoTIFF.open(path, store=resolved_store)
-    raster = await geotiff.read()
-    return _build_cog_dataarray(geotiff, raster)
+    return _build_cog_dataarray((geotiff,))
 
 
 def open_cog(
@@ -174,14 +192,14 @@ def _assets_from_item(item: dict[str, Any]) -> dict[str, Any]:
     return assets
 
 
-async def _read_asset_band(
+async def _inspect_asset_band(
     assets: dict[str, Any],
     band: str,
     *,
     store: Store | None,
     path_from_href: Callable[[str], str] | None,
-) -> DataArray:
-    """Open and read one single-band asset as a ``(band, y, x)`` DataArray."""
+) -> GeoTIFF:
+    """Inspect one single-band asset without reading pixels."""
     geotiff = await _open_asset(
         assets,
         band,
@@ -193,8 +211,7 @@ async def _read_asset_band(
             f"Asset {band!r} is a {geotiff.count}-band COG; open_item stacks "
             "single-band assets. Use lazycogs.open_cog to read a multi-band COG.",
         )
-    raster = await geotiff.read()
-    return _build_cog_dataarray(geotiff, raster, band_coord=[band])
+    return geotiff
 
 
 async def open_item_async(
@@ -234,9 +251,9 @@ async def open_item_async(
     if not resolved_bands:
         raise ValueError("No assets available to open from the STAC item.")
 
-    arrays = await asyncio.gather(
+    sources = await asyncio.gather(
         *[
-            _read_asset_band(
+            _inspect_asset_band(
                 assets,
                 band,
                 store=store,
@@ -246,16 +263,18 @@ async def open_item_async(
         ],
     )
 
-    # join="exact" rejects assets that are not on one native grid; drop_conflicts
-    # keeps _FillValue/scale_factor/add_offset only when every band agrees.
-    try:
-        return concat(arrays, dim="band", join="exact", combine_attrs="drop_conflicts")
-    except ValueError as exc:
+    first = sources[0]
+    if any(
+        source.crs != first.crs
+        or source.transform != first.transform
+        or (source.height, source.width) != (first.height, first.width)
+        for source in sources[1:]
+    ):
         raise ValueError(
             "open_item requires every asset to share one native grid (CRS, "
-            "resolution, and extent). Use lazycogs.open to mosaic assets that "
-            "differ.",
-        ) from exc
+            "transform, and shape). Use lazycogs.open to mosaic assets that differ.",
+        )
+    return _build_cog_dataarray(tuple(sources), band_coord=resolved_bands)
 
 
 def open_item(
