@@ -6,121 +6,93 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   benchmark:
+    outputs:
+      report: ${{ steps.report.outcome }}
     runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
-
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2 # Include the first parent of the PR test merge.
+          persist-credentials: false
 
       - name: Install uv
         uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57
 
       - name: Restore benchmark data cache
-        id: cache-data
         uses: actions/cache@v5
         with:
           path: .benchmark_data
           key: benchmark-data-${{ hashFiles('scripts/prepare_benchmark_data.py') }}
-          restore-keys: |
-            benchmark-data-
 
       - name: Prepare benchmark data
-        run: uv run python scripts/prepare_benchmark_data.py
+        run: uv run --locked python scripts/prepare_benchmark_data.py
 
-      - name: Restore baseline cache (PR only)
-        id: cache-baseline
-        if: github.event_name == 'pull_request'
-        uses: actions/cache/restore@v4
-        with:
-          path: .benchmarks
-          key: benchmark-baseline-${{ github.sha }}
-          restore-keys: |
-            benchmark-baseline-
-
-      - name: Check whether a baseline exists
-        id: baseline-check
-        if: github.event_name == 'pull_request'
-        run: |
-          BASELINE=".benchmarks/Linux-CPython-3.13-64bit/0001_main.json"
-          if [ -f "$BASELINE" ]; then
-            echo "has_baseline=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_baseline=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::No main baseline found — comparison skipped for this PR."
-          fi
-
-      - name: Run benchmarks (main)
-        if: github.event_name == 'push'
-        run: |
-          uv run pytest tests/benchmarks/ \
-            --benchmark-enable \
-            --benchmark-min-rounds=3 \
-            --benchmark-max-time=5 \
-            --benchmark-save=main \
-            --benchmark-storage=.benchmarks \
-            -v
-
-      - name: Save baseline cache (main only)
-        if: github.event_name == 'push'
-        uses: actions/cache/save@v4
-        with:
-          path: .benchmarks
-          key: benchmark-baseline-${{ github.sha }}
-
-      - name: Run benchmarks (PR — compare against baseline)
-        if: >
-          github.event_name == 'pull_request' &&
-          steps.baseline-check.outputs.has_baseline == 'true'
-        run: |
-          uv run pytest tests/benchmarks/ \
-            --benchmark-enable \
-            --benchmark-min-rounds=3 \
-            --benchmark-max-time=5 \
-            --benchmark-save=pr-${{ github.sha }} \
-            --benchmark-storage=.benchmarks \
-            --benchmark-compare='*_main' \
-            --benchmark-compare-fail=mean:20% \
-            -v
-
-      - name: Post benchmark comparison comment
-        if: >
-          github.event_name == 'pull_request' &&
-          steps.baseline-check.outputs.has_baseline == 'true'
+      - name: Run benchmarks
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PYTEST_ADDOPTS: >-
+            --benchmark-enable --benchmark-min-rounds=3 --benchmark-max-time=5
+            --benchmark-warmup=on --benchmark-warmup-iterations=1
+            --benchmark-storage=${{ github.workspace }}/.benchmarks
         run: |
-          uv run python scripts/format_benchmark_comparison.py \
-            --baseline '.benchmarks/**/*_main.json' \
-            --pr '.benchmarks/**/*_pr-*.json' \
-            > benchmark_report.md
-
-          PR=${{ github.event.pull_request.number }}
-          REPO=${{ github.repository }}
-
-          COMMENT_ID=$(gh api "repos/$REPO/issues/$PR/comments" \
-            --jq '.[] | select(.body | startswith("<!-- lazycogs-benchmark-comparison -->")) | .id' \
-            | head -1)
-
-          if [ -n "$COMMENT_ID" ]; then
-            gh api "repos/$REPO/issues/comments/$COMMENT_ID" \
-              -X PATCH -f body="$(cat benchmark_report.md)"
+          if [[ "$GITHUB_EVENT_NAME" == push ]]; then
+            uv run --locked pytest tests/benchmarks/ -v
           else
-            gh api "repos/$REPO/issues/$PR/comments" \
-              -X POST -f body="$(cat benchmark_report.md)"
+            git worktree add --detach "$RUNNER_TEMP/base" "$GITHUB_SHA^1"
+            ln -s "$GITHUB_WORKSPACE/.benchmark_data" "$RUNNER_TEMP/base/.benchmark_data"
+            (cd "$RUNNER_TEMP/base" && uv run --locked pytest tests/benchmarks/ --benchmark-save=main -v)
+            uv run --locked pytest tests/benchmarks/ --benchmark-save="pr-$GITHUB_SHA" \
+              --benchmark-compare='*_main' --benchmark-compare-fail=mean:20% -v
           fi
 
-      - name: Run benchmarks (PR — no baseline, informational only)
-        if: >
-          github.event_name == 'pull_request' &&
-          steps.baseline-check.outputs.has_baseline == 'false'
+      - name: Summarize benchmark comparison
+        id: report
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
         run: |
-          uv run pytest tests/benchmarks/ \
-            --benchmark-enable \
-            --benchmark-min-rounds=3 \
-            --benchmark-max-time=5 \
-            --benchmark-save=pr-${{ github.sha }} \
-            --benchmark-storage=.benchmarks \
-            -v
+          if ! compgen -G '.benchmarks/*/*_pr-*.json' > /dev/null; then
+            echo 'Benchmark comparison unavailable; see the benchmark logs.' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          uv run --locked python scripts/format_benchmark_comparison.py \
+            --baseline '.benchmarks/**/*_main.json' --pr '.benchmarks/**/*_pr-*.json' > benchmark_report.md
+          cat benchmark_report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: >-
+          ${{ !cancelled() && steps.report.outcome == 'success' &&
+          github.event.pull_request.head.repo.full_name == github.repository }}
+        with:
+          name: benchmark-report
+          path: benchmark_report.md
+
+  comment:
+    needs: benchmark
+    if: >-
+      ${{ !cancelled() && github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      needs.benchmark.outputs.report == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: benchmark-report
+
+      - name: Update comparison comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          id=$(gh api --paginate "repos/$REPO/issues/$PR/comments" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- lazycogs-benchmark-comparison -->"))) | .id' | head -1)
+          if [[ -n "$id" ]]; then
+            gh api "repos/$REPO/issues/comments/$id" -X PATCH -F body=@benchmark_report.md
+          else
+            gh api "repos/$REPO/issues/$PR/comments" -X POST -F body=@benchmark_report.md
+          fi
