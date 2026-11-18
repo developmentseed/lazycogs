@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.8.0](https://github.com/developmentseed/lazycogs/compare/v0.7.1...v0.8.0) (2026-11-18)
+
+
+### Features
+
+* Single-COG/item reads on native grid ([#79](https://github.com/developmentseed/lazycogs/issues/79)) ([af77e0d](https://github.com/developmentseed/lazycogs/commit/af77e0d51c2c15d01765fa6c1c8b07a47792409a))
+
+
+### Bug Fixes
+
+* **deps:** require rustac 0.9.19 or newer to avoid GIL stalls during STAC searches ([#101](https://github.com/developmentseed/lazycogs/issues/101)) ([7ef3aa0](https://github.com/developmentseed/lazycogs/commit/7ef3aa0253c050815af15d1f23c2de9cfe6adfca))
+
 ## [0.7.1](https://github.com/developmentseed/lazycogs/compare/v0.7.0...v0.7.1) (2026-11-18)
 
 
