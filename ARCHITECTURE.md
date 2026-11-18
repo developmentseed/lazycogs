@@ -56,6 +56,16 @@ When xarray asks the backend array for data, `MultiBandStacBackendArray.__getite
 
 The sync path submits this coroutine to the shared lazycogs event loop via `run_on_loop()`. The async path uses xarray's async indexing adapter and stays on the caller's loop.
 
+## Native-grid single reads
+
+`open_cog` and `open_item` open COG headers to describe a lazy native-grid
+array. Item assets must be single-band and share a grid; validation precedes
+pixel I/O. Selection is also pixel-I/O-free. Materialization reads the selected
+spatial window at full resolution and, for items, only the selected assets.
+For a multiband COG the spatial window is read for all bands before subsetting
+bands. Values remain raw; CF attributes describe nodata, scale and offset.
+The sync and async open entry points provide the same array behavior.
+
 ## Grid and coordinate convention
 
 `compute_output_grid()` creates a north-up raster grid with an affine transform whose origin is the top-left corner of the top-left pixel and whose y scale is negative. Pixel-centre x coordinates increase west-to-east; y coordinates decrease north-to-south. Label-based y slicing therefore uses `sel(y=slice(north, south))`.

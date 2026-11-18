@@ -88,8 +88,10 @@ da = lazycogs.open(
 Sometimes you don't want a reprojected mosaic — you want to read one asset (or
 a few bands of one item) exactly as stored. `lazycogs.open_cog` and
 `lazycogs.open_item` read COGs **at their native grid** (native CRS, resolution,
-and shape, no reprojection), returning eagerly-loaded `(band, y, x)` DataArrays
-with the same rioxarray-compatible metadata as `lazycogs.open`.
+and shape, no reprojection), returning lazy `(band, y, x)` DataArrays
+with the same rioxarray-compatible metadata as `lazycogs.open`. Opening and
+selecting read headers but not pixels; select bands and a spatial window before
+loading to avoid reading the full image.
 
 ```python
 import lazycogs
@@ -101,13 +103,17 @@ da = lazycogs.open_cog("s3://bucket/scene/B04.tif")
 # `item` is a STAC item dict (e.g. a rustac search result) or a pystac Item.
 da = lazycogs.open_item(item, bands=["B04", "B08"])
 # da.dims == ("band", "y", "x"); da["band"] == ["B04", "B08"]
+window = da.sel(band="B08").isel(y=slice(100, 356), x=slice(200, 456))
+pixels = window.load()  # Reads only the selected asset and spatial window.
 ```
 
 `open_item` requires every selected asset to be a single-band COG sharing the
 same native grid (CRS, resolution, extent); it raises a `ValueError` otherwise.
 `nodata`/`scale`/`offset` are read from each asset file and surfaced as scalar
 CF attributes (`_FillValue`/`scale_factor`/`add_offset`) only when all selected
-bands agree. For assets at differing resolutions, or to mosaic across a whole
+bands agree. Pixel values remain raw, at full native resolution. For a
+multiband COG, a spatial window is read before bands are subset, so all bands
+in that window are fetched. For assets at differing resolutions, or to mosaic across a whole
 collection, use `lazycogs.open` instead. Both functions accept the same
 `store=`/`path_from_href=` arguments as `lazycogs.open`, and each has an
 `await`-able `_async` variant (`open_cog_async`, `open_item_async`).

@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import numpy as np
 import pytest
+import xarray as xr
+from async_geotiff import GeoTIFF, Window
 from obstore.store import LocalStore
 from pyproj import CRS
 
@@ -44,7 +48,7 @@ def test_nodata_advertised_as_fillvalue(native_da):
 
 
 def test_values_loaded(native_da):
-    """Pixel values are read eagerly and finite."""
+    """Materialized pixel values are finite."""
     data = native_da.to_numpy()
     assert data.shape == (1, 2048, 2048)
     assert data.max() > 0
@@ -129,6 +133,155 @@ def test_open_item_rejects_unknown_band(two_band_item):
     store = LocalStore()
     with pytest.raises(ValueError, match="not present"):
         lazycogs.open_item(two_band_item, bands=["b04", "missing"], store=store)
+
+
+@pytest.fixture
+def pixel_reads(monkeypatch):
+    """Record full-resolution reads while retaining real local COG I/O."""
+    reads = []
+    original = GeoTIFF.read
+
+    async def record(geotiff, *, window=None):
+        reads.append(window)
+        return await original(geotiff, window=window)
+
+    monkeypatch.setattr(GeoTIFF, "read", record)
+    return reads
+
+
+@pytest.mark.parametrize("asynchronous", [False, True], ids=["sync", "async"])
+def test_cog_selection_reads_only_native_window(
+    synthetic_cog_multiband,
+    pixel_reads,
+    asynchronous,
+):
+    """Opening and selecting are header-only; materialization reads a window."""
+    href = synthetic_cog_multiband.as_uri()
+    if asynchronous:
+        da = asyncio.run(lazycogs.open_cog_async(href, store=LocalStore()))
+    else:
+        da = lazycogs.open_cog(href, store=LocalStore())
+    assert pixel_reads == []
+    assert da.dtype == np.dtype("uint16")
+    assert da.attrs["_FillValue"] == 0
+    selected = da.isel(band=[1, 0], y=slice(17, 21), x=slice(23, 28))
+    assert pixel_reads == []
+    loaded = selected.load()
+    assert pixel_reads == [Window(col_off=23, row_off=17, width=5, height=4)]
+    rows = np.arange(17, 21)[:, None]
+    cols = np.arange(23, 28)[None, :]
+    expected = np.stack([((cols + rows * 2048 + b * 100) % 65535 + 1) for b in [1, 0]])
+    np.testing.assert_array_equal(loaded.to_numpy(), expected)
+    assert list(loaded.band.values) == [2, 1]
+    assert loaded.dtype == np.dtype("uint16")
+    assert CRS.from_wkt(loaded.spatial_ref.attrs["crs_wkt"]).to_epsg() == 32632
+
+
+@pytest.mark.parametrize("asynchronous", [False, True], ids=["sync", "async"])
+def test_item_selection_reads_only_selected_asset_window(
+    two_band_item,
+    pixel_reads,
+    asynchronous,
+):
+    """One selected asset and spatial window produce one full-resolution read."""
+    if asynchronous:
+        da = asyncio.run(
+            lazycogs.open_item_async(
+                two_band_item,
+                bands=["b08", "b04"],
+                store=LocalStore(),
+            ),
+        )
+    else:
+        da = lazycogs.open_item(two_band_item, bands=["b08", "b04"], store=LocalStore())
+    assert pixel_reads == []
+    assert list(da.band.values) == ["b08", "b04"]
+    selected = da.sel(band="b08").isel(y=slice(17, 21), x=slice(23, 28))
+    assert pixel_reads == []
+    loaded = selected.load()
+    assert pixel_reads == [Window(col_off=23, row_off=17, width=5, height=4)]
+    rows = np.arange(17, 21)[:, None]
+    cols = np.arange(23, 28)[None, :]
+    np.testing.assert_array_equal(
+        loaded.to_numpy(),
+        (cols + rows * 2048 + 1000) % 65535 + 1,
+    )
+    assert loaded.dims == ("y", "x")
+    assert loaded.band.item() == "b08"
+    assert loaded.dtype == np.dtype("uint16")
+    assert loaded.attrs["_FillValue"] == 0
+
+
+@pytest.mark.parametrize("asynchronous", [False, True], ids=["sync", "async"])
+def test_grid_mismatch_fails_before_pixel_reads(
+    synthetic_cog,
+    synthetic_cog_offgrid,
+    pixel_reads,
+    asynchronous,
+):
+    """Grid validation completes from headers before any pixel reads."""
+    item = _item(b04=synthetic_cog, off=synthetic_cog_offgrid)
+    if asynchronous:
+        with pytest.raises(ValueError, match="native grid"):
+            asyncio.run(
+                lazycogs.open_item_async(
+                    item,
+                    bands=["b04", "off"],
+                    store=LocalStore(),
+                ),
+            )
+    else:
+        with pytest.raises(ValueError, match="native grid"):
+            lazycogs.open_item(item, bands=["b04", "off"], store=LocalStore())
+    assert pixel_reads == []
+
+
+def test_scalar_selection_reads_one_pixel(synthetic_cog, pixel_reads):
+    """Scalar indexing returns a scalar with its spatial coordinates intact."""
+    da = lazycogs.open_cog(synthetic_cog.as_uri(), store=LocalStore())
+    selected = da.isel(band=0, y=17, x=23)
+    assert pixel_reads == []
+    assert selected.item() == (23 + 17 * 2048) % 65535 + 1
+    assert pixel_reads == [Window(col_off=23, row_off=17, width=1, height=1)]
+    assert selected.dims == ()
+    assert selected.x.item() == da.x.values[23]
+    assert selected.y.item() == da.y.values[17]
+
+
+def test_item_selected_band_order_and_values(two_band_item, pixel_reads):
+    """Reordered asset selections retain their labels and source values."""
+    da = lazycogs.open_item(two_band_item, bands=["b04", "b08"], store=LocalStore())
+    selected = da.isel(band=[1, 0], y=slice(17, 21), x=slice(23, 28))
+    assert pixel_reads == []
+    loaded = selected.load()
+    assert len(pixel_reads) == 2
+    assert all(
+        w == Window(col_off=23, row_off=17, width=5, height=4) for w in pixel_reads
+    )
+    rows = np.arange(17, 21)[:, None]
+    cols = np.arange(23, 28)[None, :]
+    expected = np.stack(
+        [(cols + rows * 2048 + seed) % 65535 + 1 for seed in [1000, 0]],
+    )
+    np.testing.assert_array_equal(loaded.to_numpy(), expected)
+    assert list(loaded.band.values) == ["b08", "b04"]
+
+
+def test_sync_async_selected_results_match(two_band_item):
+    """Both entry points preserve values and coordinates after selection."""
+    sync = lazycogs.open_item(two_band_item, bands=["b08", "b04"], store=LocalStore())
+    async_da = asyncio.run(
+        lazycogs.open_item_async(
+            two_band_item,
+            bands=["b08", "b04"],
+            store=LocalStore(),
+        ),
+    )
+    selection = {"band": [1, 0], "y": slice(7, 10), "x": slice(11, 15)}
+    xr.testing.assert_identical(
+        sync.isel(**selection).load(),
+        async_da.isel(**selection).load(),
+    )
 
 
 def test_open_item_rejects_item_without_assets():
