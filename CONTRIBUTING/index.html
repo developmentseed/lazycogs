@@ -1457,6 +1457,7 @@
 <p>Once the data is in place:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>tests/benchmarks<span class="w"> </span>--benchmark-enable
 </code></pre></div>
+<p>On pull requests, CI benchmarks the proposed merge and its first parent on the same runner, using the same local dataset. A test whose mean runtime increases by more than 20% fails the check. Look in the <strong>Benchmarks</strong> run summary for the comparison, including when the threshold is exceeded. Same-repository PRs also get a comment. Fork PRs run after any required maintainer approval and do not need write access.</p>
 <h2 id="building-docs">Building docs<a class="headerlink" href="#building-docs" title="Permanent link">&para;</a></h2>
 <p>Install the docs dependencies and serve the site locally:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>uv<span class="w"> </span>run<span class="w"> </span>--group<span class="w"> </span>docs<span class="w"> </span>mkdocs<span class="w"> </span>serve
