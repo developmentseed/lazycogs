@@ -58,12 +58,17 @@ The sync path submits this coroutine to the shared lazycogs event loop via `run_
 
 ## Native-grid single reads
 
-`open_cog` and `open_item` open COG headers to describe a lazy native-grid
-array. Item assets must be single-band and share a grid; validation precedes
-pixel I/O. Selection is also pixel-I/O-free. Materialization reads the selected
-spatial window at full resolution and, for items, only the selected assets.
-For a multiband COG the spatial window is read for all bands before subsetting
-bands. Values remain raw; CF attributes describe nodata, scale and offset.
+`open_cog` and `open_item` fetch metadata from each requested asset at open,
+without decoding pixels. Metadata read-ahead may fetch compressed tile bytes.
+Item assets must be single-band, share a grid, and admit a lossless common
+output dtype. The backend validates these requirements from metadata.
+
+`sel` and `isel` issue no storage requests on the returned lazy array. Each
+backend read requests the bounding window at full resolution. The TIFF reader
+fetches intersecting tiles, so sparse or strided spatial indexing may read
+pixels between selected positions. For items, the backend reads only the
+selected assets; for a multiband COG it reads all bands before subsetting.
+Values remain raw; shared CF attributes describe nodata, scale and offset.
 The sync and async open entry points provide the same array behavior.
 
 ## Grid and coordinate convention

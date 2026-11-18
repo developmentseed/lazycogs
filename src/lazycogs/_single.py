@@ -131,18 +131,16 @@ async def open_cog_async(
     Async variant of :func:`open_cog` for use inside a running event loop.
 
     Args:
-        href: Asset URL or path. When ``store`` is ``None``, an obstore-backed
-            store is auto-resolved from the URL root; otherwise only the object
-            path is extracted from the HREF.
+        href: COG URL (use a ``file://`` URI for local files). With a custom
+            store, a store-relative object path is also accepted.
         store: Pre-configured :class:`async_geotiff.Store` for all reads.
         path_from_href: Optional callable ``(href) -> path`` overriding the
             default ``urlparse`` extraction (see :func:`lazycogs.open`).
 
     Returns:
         DataArray at the COG's native CRS, resolution, and shape — no
-        reprojection. Source ``nodata`` is set as ``_FillValue`` and any
-        ``scale``/``offset`` as ``scale_factor``/``add_offset`` so rioxarray's
-        ``mask_and_scale`` decoding applies them.
+        reprojection. Values are not masked or scaled. Shared source metadata
+        is exposed as scalar CF attributes.
 
     """
     resolved_store, path = resolve(href, store=store, path_fn=path_from_href)
@@ -162,11 +160,12 @@ def open_cog(
     and shape, no reprojection or mosaicking. Use :func:`lazycogs.open` for a
     reprojected mosaic across a STAC/geoparquet collection, or
     :func:`open_item` to stack several same-grid assets of one STAC item.
+    Open fetches metadata without decoding pixels. ``sel`` and ``isel`` do
+    not access storage; loading reads all bands in the bounding window.
 
     Args:
-        href: Asset URL or path. When ``store`` is ``None``, an obstore-backed
-            store is auto-resolved from the URL root; otherwise only the object
-            path is extracted from the HREF.
+        href: COG URL (use a ``file://`` URI for local files). With a custom
+            store, a store-relative object path is also accepted.
         store: Pre-configured :class:`async_geotiff.Store` for all reads.
         path_from_href: Optional callable ``(href) -> path`` overriding the
             default ``urlparse`` extraction (see :func:`lazycogs.open`).
@@ -241,9 +240,9 @@ async def open_item_async(
         attrs only when all selected bands agree.
 
     Raises:
-        ValueError: If the item has no assets, a requested band is missing or
-            lacks an href, an asset is multi-band, or the selected assets do
-            not share one native grid.
+        ValueError: If the item has no assets, an asset key or href is missing,
+            an asset is multiband, grids differ, or dtypes cannot be promoted
+            without loss.
 
     """
     assets = _assets_from_item(item)
@@ -293,9 +292,11 @@ def open_item(
     Reads the requested single-band assets of one STAC item at their native
     grid — no reprojection or mosaicking — and stacks them into a single
     DataArray whose ``band`` coordinate is labelled by asset key. All selected
-    assets must share the same native CRS, resolution, and shape. This is the
-    multi-band complement to :func:`open_cog`; use :func:`lazycogs.open` for a
-    reprojected mosaic across a whole collection.
+    assets must share the same CRS, affine transform, and shape, and their
+    dtypes must promote without loss. Open fetches metadata for each requested
+    asset without decoding pixels. ``sel`` and ``isel`` do not access storage;
+    loading reads the bounding window from only the selected assets. Use
+    :func:`lazycogs.open` for a reprojected mosaic across a whole collection.
 
     Args:
         item: A STAC item as a dict (e.g. a ``rustac`` search result).
@@ -311,9 +312,9 @@ def open_item(
         the ``band`` coordinate labelled by asset key.
 
     Raises:
-        ValueError: If the item has no assets, a requested band is missing or
-            lacks an href, an asset is multi-band, or the selected assets do
-            not share one native grid.
+        ValueError: If the item has no assets, an asset key or href is missing,
+            an asset is multiband, grids differ, or dtypes cannot be promoted
+            without loss.
 
     """
     return run_on_loop(

@@ -6,10 +6,12 @@ import asyncio
 
 import numpy as np
 import pytest
+import rasterio
 import xarray as xr
 from async_geotiff import GeoTIFF, Window
 from obstore.store import LocalStore
 from pyproj import CRS
+from rasterio.transform import from_origin
 
 import lazycogs
 
@@ -72,6 +74,53 @@ def _item(**assets) -> dict:
 def two_band_item(synthetic_cog, synthetic_cog_b):
     """A STAC item with two same-grid single-band assets."""
     return _item(b04=synthetic_cog, b08=synthetic_cog_b)
+
+
+class _RecordingStore:
+    """Record object requests while serving real local COG bytes."""
+
+    def __init__(self) -> None:
+        self.local = LocalStore()
+        self.paths: list[str] = []
+
+    async def get_range_async(self, *, path, start, end):
+        """Record and forward a single-range request."""
+        self.paths.append(path)
+        return await self.local.get_range_async(path=path, start=start, end=end)
+
+    async def get_ranges_async(self, *, path, starts, ends):
+        """Record and forward a multirange request."""
+        self.paths.append(path)
+        return await self.local.get_ranges_async(path=path, starts=starts, ends=ends)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("asynchronous", [False, True], ids=["sync", "async"])
+async def test_item_storage_requests_follow_open_select_load(
+    synthetic_cog,
+    synthetic_cog_b,
+    synthetic_cog_c,
+    asynchronous,
+    anyio_backend,
+):
+    """Open inspects requested assets; only load accesses the selected asset again."""
+    item = _item(b04=synthetic_cog, b08=synthetic_cog_b, other=synthetic_cog_c)
+    store = _RecordingStore()
+    bands = ["b04", "b08"]
+    if asynchronous:
+        da = await lazycogs.open_item_async(item, bands=bands, store=store)
+    else:
+        da = lazycogs.open_item(item, bands=bands, store=store)
+    assert set(store.paths) == {str(synthetic_cog), str(synthetic_cog_b)}
+    store.paths.clear()
+
+    selected = da.sel(band="b08").isel(y=slice(17, 21), x=slice(23, 28))
+    assert store.paths == []
+    if asynchronous:
+        await selected.load_async()
+    else:
+        selected.load()
+    assert set(store.paths) == {str(synthetic_cog_b)}
 
 
 def test_open_item_stacks_bands_by_asset_key(two_band_item):
@@ -254,6 +303,63 @@ def test_scalar_selection_reads_one_pixel(synthetic_cog, pixel_reads):
     assert selected.dims == ()
     assert selected.x.item() == da.x.values[23]
     assert selected.y.item() == da.y.values[17]
+
+
+def test_sparse_spatial_selection_reads_bounding_window(synthetic_cog, pixel_reads):
+    """Sparse selection reads one logical rectangle, then returns selected pixels."""
+    da = lazycogs.open_cog(synthetic_cog.as_uri(), store=LocalStore())
+    selected = da.isel(y=[17, 200], x=[23, 190])
+    assert pixel_reads == []
+    rows = np.array([17, 200])[:, None]
+    cols = np.array([23, 190])[None, :]
+    expected = (cols + rows * 2048) % 65535 + 1
+    np.testing.assert_array_equal(selected.load().values[0], expected)
+    assert pixel_reads == [Window(col_off=23, row_off=17, width=168, height=184)]
+
+
+@pytest.mark.parametrize(
+    ("dtypes", "values", "expected_dtype"),
+    [
+        (("uint64", "int64"), (2**63 + 1, -1), None),
+        (("uint64", "float64"), (2**63 + 1, 0.5), None),
+        (("uint32", "float32"), (2**32 - 1, 0.5), "float64"),
+    ],
+)
+def test_item_dtype_promotion_preserves_raw_values(
+    tmp_path,
+    pixel_reads,
+    dtypes,
+    values,
+    expected_dtype,
+):
+    """The dtype contract comes from headers and must preserve source samples."""
+    paths = []
+    for dtype, value in zip(dtypes, values, strict=True):
+        path = tmp_path / f"{dtype}.tif"
+        with rasterio.open(
+            path,
+            "w",
+            driver="COG",
+            height=128,
+            width=128,
+            count=1,
+            dtype=dtype,
+            crs="EPSG:32632",
+            transform=from_origin(500000, 5600000, 10, 10),
+        ) as dst:
+            dst.write(np.full((1, 128, 128), value, dtype=dtype))
+        paths.append(path)
+
+    item = _item(first=paths[0], second=paths[1])
+    if expected_dtype is None:
+        with pytest.raises(ValueError, match="losslessly"):
+            lazycogs.open_item(item)
+        assert pixel_reads == []
+    else:
+        da = lazycogs.open_item(item)
+        assert da.dtype == np.dtype(expected_dtype)
+        assert pixel_reads == []
+        np.testing.assert_array_equal(da.isel(y=0, x=0).load().values, values)
 
 
 def test_item_selected_band_order_and_values(two_band_item, pixel_reads):

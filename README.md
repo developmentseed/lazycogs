@@ -89,14 +89,16 @@ Sometimes you don't want a reprojected mosaic — you want to read one asset (or
 a few bands of one item) exactly as stored. `lazycogs.open_cog` and
 `lazycogs.open_item` read COGs **at their native grid** (native CRS, resolution,
 and shape, no reprojection), returning lazy `(band, y, x)` DataArrays
-with the same rioxarray-compatible metadata as `lazycogs.open`. Opening and
-selecting read headers but not pixels; select bands and a spatial window before
-loading to avoid reading the full image.
+with rioxarray-compatible metadata. Opening fetches metadata for each requested
+asset without decoding pixels; metadata read-ahead can include compressed tile
+bytes. `sel` and `isel` on the returned array make no storage requests. Select
+bands and a spatial window before loading.
 
 ```python
 import lazycogs
 
 # One COG → (band, y, x) at native resolution, band labelled 1..N.
+# Use a file:// URI for a local COG (e.g. Path(...).resolve().as_uri()).
 da = lazycogs.open_cog("s3://bucket/scene/B04.tif")
 
 # Several same-grid assets of one STAC item, stacked and labelled by asset key.
@@ -104,17 +106,20 @@ da = lazycogs.open_cog("s3://bucket/scene/B04.tif")
 da = lazycogs.open_item(item, bands=["B04", "B08"])
 # da.dims == ("band", "y", "x"); da["band"] == ["B04", "B08"]
 window = da.sel(band="B08").isel(y=slice(100, 356), x=slice(200, 456))
-pixels = window.load()  # Reads only the selected asset and spatial window.
+pixels = window.load()  # Requests this native window from B08 only.
 ```
 
-`open_item` requires every selected asset to be a single-band COG sharing the
-same native grid (CRS, resolution, extent); it raises a `ValueError` otherwise.
-`nodata`/`scale`/`offset` are read from each asset file and surfaced as scalar
-CF attributes (`_FillValue`/`scale_factor`/`add_offset`) only when all selected
-bands agree. Pixel values remain raw, at full native resolution. For a
-multiband COG, a spatial window is read before bands are subset, so all bands
-in that window are fetched. For assets at differing resolutions, or to mosaic across a whole
-collection, use `lazycogs.open` instead. Both functions accept the same
+`open_item` raises `ValueError` unless the requested assets are single-band
+COGs with the same CRS, affine transform, and shape and a common dtype that
+preserves their raw values. It exposes `nodata`/`scale`/`offset` as scalar CF
+attributes (`_FillValue`/`scale_factor`/`add_offset`) only when all requested
+bands agree.
+
+Loading requests the bounding window at full native resolution, including the
+gaps in sparse or strided selections. TIFF tile reads can fetch beyond that
+window. `open_item` reads pixels only from selected assets, while `open_cog`
+reads all bands in the window before subsetting. For assets on different grids
+or to mosaic a whole collection, use `lazycogs.open`. Both functions accept the same
 `store=`/`path_from_href=` arguments as `lazycogs.open`, and each has an
 `await`-able `_async` variant (`open_cog_async`, `open_item_async`).
 

@@ -33,7 +33,26 @@ class NativeBackendArray(BackendArray):
             first.height,
             first.width,
         )
-        self.dtype = np.result_type(*(np.dtype(source.dtype) for source in sources))
+        dtypes = []
+        for source in sources:
+            dtype = source.dtype
+            if dtype is None:
+                raise ValueError("Unsupported GeoTIFF sample dtype.")
+            dtypes.append(dtype)
+
+        self.dtype = np.result_type(*dtypes)
+        if np.issubdtype(self.dtype, np.floating):
+            precision = np.finfo(self.dtype).nmant + 1
+            # NumPy considers int64 -> float64 safe even though it can round.
+            if any(
+                np.issubdtype(dtype, np.integer)
+                and int(np.iinfo(dtype).max).bit_length() > precision
+                for dtype in dtypes
+            ):
+                raise ValueError(
+                    f"Cannot losslessly stack asset dtypes {dtypes!r} as {self.dtype}. "
+                    "Choose compatible assets with bands= or open them separately.",
+                )
 
     def __copy__(self) -> NativeBackendArray:
         """Share the immutable backend and its stores across xarray copies."""
