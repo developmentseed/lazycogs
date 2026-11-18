@@ -264,16 +264,20 @@ async def open_item_async(
     )
 
     first = sources[0]
-    if any(
-        source.crs != first.crs
-        or source.transform != first.transform
-        or (source.height, source.width) != (first.height, first.width)
-        for source in sources[1:]
-    ):
-        raise ValueError(
-            "open_item requires every asset to share one native grid (CRS, "
-            "transform, and shape). Use lazycogs.open to mosaic assets that differ.",
-        )
+    for band, source in zip(resolved_bands[1:], sources[1:], strict=True):
+        differences = []
+        if source.crs != first.crs:
+            differences.append("CRS")
+        if source.transform != first.transform:
+            differences.append("transform")
+        if (source.height, source.width) != (first.height, first.width):
+            differences.append("shape")
+        if differences:
+            raise ValueError(
+                f"Asset {band!r} differs from {resolved_bands[0]!r} in native grid "
+                f"fields: {', '.join(differences)}. Use lazycogs.open to mosaic "
+                "assets that differ.",
+            )
     return _build_cog_dataarray(tuple(sources), band_coord=resolved_bands)
 
 

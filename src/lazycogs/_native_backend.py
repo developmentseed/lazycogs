@@ -49,7 +49,7 @@ class NativeBackendArray(BackendArray):
         return indexing.explicit_indexing_adapter(
             key,
             self.shape,
-            indexing.IndexingSupport.BASIC,
+            indexing.IndexingSupport.OUTER,
             self._sync_getitem,
         )
 
@@ -58,35 +58,49 @@ class NativeBackendArray(BackendArray):
         return await indexing.async_explicit_indexing_adapter(
             key,
             self.shape,
-            indexing.IndexingSupport.BASIC,
+            indexing.IndexingSupport.OUTER,
             self._async_getitem,
         )
 
     def _sync_getitem(self, key: tuple[Any, ...]) -> np.ndarray:
         return run_on_loop(self._async_getitem(key))
 
-    async def _async_getitem(self, key: tuple[Any, ...]) -> np.ndarray:
+    async def _async_getitem(  # noqa: C901, PLR0912
+        self,
+        key: tuple[Any, ...],
+    ) -> np.ndarray:
         selections = []
         scalar_axes = []
         for axis, (index, size) in enumerate(zip(key, self.shape, strict=True)):
             if isinstance(index, (int, np.integer)):
                 pos = int(index)
-                if pos < 0:
-                    pos += size
                 if not 0 <= pos < size:
                     raise IndexError(f"index {index} is out of bounds for axis {axis}")
                 selections.append(range(pos, pos + 1))
                 scalar_axes.append(axis)
-            else:
+            elif isinstance(index, slice):
                 selections.append(range(*index.indices(size)))
+            else:
+                positions = np.asarray(index, dtype=np.intp)
+                if np.any((positions < 0) | (positions >= size)):
+                    raise IndexError(f"index is out of bounds for axis {axis}")
+                selections.append(positions)
 
         bands, rows, cols = selections
         shape = (len(bands), len(rows), len(cols))
         if not all(shape):
             result = np.empty(shape, dtype=self.dtype)
         else:
-            row_start, row_end = min(rows[0], rows[-1]), max(rows[0], rows[-1]) + 1
-            col_start, col_end = min(cols[0], cols[-1]), max(cols[0], cols[-1]) + 1
+            row_start, row_end = (
+                (min(rows[0], rows[-1]), max(rows[0], rows[-1]) + 1)
+                if isinstance(rows, range)
+                else (int(rows.min()), int(rows.max()) + 1)
+            )
+            col_start, col_end = (
+                (min(cols[0], cols[-1]), max(cols[0], cols[-1]) + 1)
+                if isinstance(cols, range)
+                else (int(cols.min()), int(cols.max()) + 1)
+            )
             window = Window(
                 col_start,
                 row_start,
@@ -95,13 +109,26 @@ class NativeBackendArray(BackendArray):
             )
             if self.multiband:
                 raster = await self.sources[0].read(window=window)
-                result = np.asarray(raster.data)[list(bands)]
+                data = np.asarray(raster.data)
+                if isinstance(bands, range) and bands.step == 1:
+                    result = data[bands.start : bands.stop]
+                else:
+                    result = np.take(data, list(bands), axis=0)
             else:
+                unique_bands = list(dict.fromkeys(bands))
                 rasters = await asyncio.gather(
-                    *(self.sources[band].read(window=window) for band in bands),
+                    *(self.sources[band].read(window=window) for band in unique_bands),
                 )
-                result = np.stack([np.asarray(raster.data)[0] for raster in rasters])
-            result = np.take(result, np.asarray(rows) - row_start, axis=1)
-            result = np.take(result, np.asarray(cols) - col_start, axis=2)
+                data = dict(zip(unique_bands, rasters, strict=True))
+                if len(bands) == 1:
+                    result = np.asarray(data[bands[0]].data)
+                else:
+                    result = np.stack(
+                        [np.asarray(data[band].data)[0] for band in bands],
+                    )
+            if not (isinstance(rows, range) and rows.step == 1):
+                result = np.take(result, np.asarray(rows) - row_start, axis=1)
+            if not (isinstance(cols, range) and cols.step == 1):
+                result = np.take(result, np.asarray(cols) - col_start, axis=2)
             result = result.astype(self.dtype, copy=False)
         return np.squeeze(result, axis=tuple(scalar_axes)) if scalar_axes else result
