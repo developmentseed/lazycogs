@@ -571,6 +571,43 @@ def test_read_chunk_async_returns_all_bands():
         assert result[b].shape == (1, chunk_height, chunk_width)
 
 
+def test_read_chunk_async_nan_nodata_falls_through_to_next_item():
+    """NaN nodata pixels in the first item are filled from the next item."""
+    chunk_width, chunk_height = 4, 4
+    chunk_affine = Affine(1.0, 0.0, 0.0, 0.0, -1.0, 4.0)
+    dst_crs = CRS.from_epsg(4326)
+
+    first = np.full((1, chunk_height, chunk_width), np.nan, dtype=np.float32)
+    first[..., :2] = 1.0
+    second = np.full((1, chunk_height, chunk_width), 2.0, dtype=np.float32)
+    reads = iter([first, second])
+
+    async def _fake_read_item_band(*args, **kwargs):
+        return {"B01": (next(reads), np.nan)}
+
+    items = [{"id": "item-0", "assets": {}}, {"id": "item-1", "assets": {}}]
+
+    with patch(
+        "lazycogs._chunk_reader._read_item_band",
+        side_effect=_fake_read_item_band,
+    ):
+        result = asyncio.run(
+            read_chunk_async(
+                items=items,
+                bands=["B01"],
+                chunk_affine=chunk_affine,
+                dst_crs=dst_crs,
+                chunk_width=chunk_width,
+                chunk_height=chunk_height,
+                nodata=np.nan,
+                max_concurrent_reads=1,
+            ),
+        )
+
+    np.testing.assert_array_equal(result["B01"][..., :2], 1.0)
+    np.testing.assert_array_equal(result["B01"][..., 2:], 2.0)
+
+
 def test_read_chunk_async_early_exit():
     """All bands filled on first item → remaining items are skipped."""
     chunk_width, chunk_height = 4, 4
