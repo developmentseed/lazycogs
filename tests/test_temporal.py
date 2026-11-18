@@ -6,6 +6,7 @@ from datetime import date
 
 import numpy as np
 import pytest
+import rustac
 
 from lazycogs._temporal import (
     _DayGrouper,
@@ -33,8 +34,11 @@ class TestDayGrouper:
     def test_group_key_bare_date(self):
         assert self.g.group_key("2023-01-15") == "2023-01-15"
 
-    def test_datetime_filter_returns_date(self):
-        assert self.g.datetime_filter("2023-01-15") == "2023-01-15"
+    def test_datetime_filter_covers_the_whole_day(self):
+        assert (
+            self.g.datetime_filter("2023-01-15")
+            == "2023-01-15T00:00:00Z/2023-01-15T23:59:59.999999Z"
+        )
 
     def test_to_datetime64(self):
         result = self.g.to_datetime64("2023-01-15")
@@ -74,12 +78,15 @@ class TestWeekGrouper:
 
     def test_datetime_filter_basic(self):
         # Week 2023-W02: Mon 2023-01-09 to Sun 2023-01-15
-        assert self.g.datetime_filter("2023-W02") == "2023-01-09/2023-01-15"
+        assert (
+            self.g.datetime_filter("2023-W02")
+            == "2023-01-09T00:00:00Z/2023-01-15T23:59:59.999999Z"
+        )
 
     def test_datetime_filter_year_boundary(self):
         # ISO week 2021-W52: Mon 2021-12-27 to Sun 2022-01-02
         result = self.g.datetime_filter("2021-W52")
-        assert result == "2021-12-27/2022-01-02"
+        assert result == "2021-12-27T00:00:00Z/2022-01-02T23:59:59.999999Z"
 
     def test_to_datetime64_returns_monday(self):
         result = self.g.to_datetime64("2023-W02")
@@ -115,16 +122,28 @@ class TestMonthGrouper:
         assert self.g.group_key("2023-01-15T10:30:00Z") == "2023-01"
 
     def test_datetime_filter_january(self):
-        assert self.g.datetime_filter("2023-01") == "2023-01-01/2023-01-31"
+        assert (
+            self.g.datetime_filter("2023-01")
+            == "2023-01-01T00:00:00Z/2023-01-31T23:59:59.999999Z"
+        )
 
     def test_datetime_filter_february_non_leap(self):
-        assert self.g.datetime_filter("2023-02") == "2023-02-01/2023-02-28"
+        assert (
+            self.g.datetime_filter("2023-02")
+            == "2023-02-01T00:00:00Z/2023-02-28T23:59:59.999999Z"
+        )
 
     def test_datetime_filter_february_leap(self):
-        assert self.g.datetime_filter("2024-02") == "2024-02-01/2024-02-29"
+        assert (
+            self.g.datetime_filter("2024-02")
+            == "2024-02-01T00:00:00Z/2024-02-29T23:59:59.999999Z"
+        )
 
     def test_datetime_filter_april(self):
-        assert self.g.datetime_filter("2023-04") == "2023-04-01/2023-04-30"
+        assert (
+            self.g.datetime_filter("2023-04")
+            == "2023-04-01T00:00:00Z/2023-04-30T23:59:59.999999Z"
+        )
 
     def test_to_datetime64(self):
         result = self.g.to_datetime64("2023-01")
@@ -153,7 +172,10 @@ class TestYearGrouper:
         assert self.g.group_key("2023-06-15T10:00:00Z") == "2023"
 
     def test_datetime_filter(self):
-        assert self.g.datetime_filter("2023") == "2023-01-01/2023-12-31"
+        assert (
+            self.g.datetime_filter("2023")
+            == "2023-01-01T00:00:00Z/2023-12-31T23:59:59.999999Z"
+        )
 
     def test_to_datetime64(self):
         result = self.g.to_datetime64("2023")
@@ -196,8 +218,8 @@ class TestFixedDayGrouper:
         key = g.group_key("2000-01-01T00:00Z")
         filt = g.datetime_filter(key)
         start, end = filt.split("/")
-        start_date = date.fromisoformat(start)
-        end_date = date.fromisoformat(end)
+        start_date = date.fromisoformat(start[:10])
+        end_date = date.fromisoformat(end[:10])
         assert (end_date - start_date).days == 15  # 16-day window (inclusive)
 
     def test_to_datetime64_returns_bucket_start(self):
@@ -278,17 +300,54 @@ class TestGrouperFromPeriod:
             grouper_from_period(period)
 
 
+@pytest.mark.parametrize(
+    "grouper",
+    [
+        _DayGrouper(),
+        _WeekGrouper(),
+        _MonthGrouper(),
+        _YearGrouper(),
+        _FixedDayGrouper(18),
+        _HourGrouper(1),
+    ],
+)
+def test_datetime_filter_finds_items_in_the_last_second(tmp_path, grouper):
+    """The period's filter finds an item in the period's last second."""
+    parquet = str(tmp_path / "items.parquet")
+    rustac.write_sync(
+        parquet,
+        [
+            {
+                "type": "Feature",
+                "stac_version": "1.0.0",
+                "id": "last-second",
+                "geometry": {"type": "Point", "coordinates": [0.0, 0.0]},
+                "bbox": [0.0, 0.0, 0.0, 0.0],
+                # The last second of a day, week, month, year, hour and 18-day window.
+                "properties": {"datetime": "2023-12-31T23:59:59.5Z"},
+                "links": [],
+                "assets": {},
+            },
+        ],
+    )
+    key = grouper.group_key("2023-12-31T23:59:59.5Z")
+
+    items = rustac.DuckdbClient().search(parquet, datetime=grouper.datetime_filter(key))
+
+    assert [item["id"] for item in items] == ["last-second"]
+
+
 # ---------------------------------------------------------------------------
 # _TimeStep contract, exact timestamps, and hour grouping
 # ---------------------------------------------------------------------------
 
 
 def test_day_grouper_time_step_preserves_existing_contract():
-    """Daily time steps carry today's coordinate and rustac date filter."""
+    """Daily time steps carry the day's coordinate and a rustac range over the day."""
     step = _DayGrouper().time_step("2023-01-15")
 
     assert step.label == "2023-01-15"
-    assert step.datetime_filter == "2023-01-15"
+    assert step.datetime_filter == "2023-01-15T00:00:00Z/2023-01-15T23:59:59.999999Z"
     assert step.coord == np.datetime64("2023-01-15", "D")
 
 
@@ -334,13 +393,13 @@ def test_subdaily_groupers_reject_bare_dates(grouper):
         grouper.group_key("2023-01-15")
 
 
-def test_hourly_grouping_uses_closed_second_precision_range():
-    """PT1H produces closed second-precision rustac datetime ranges."""
+def test_hourly_grouping_uses_closed_microsecond_precision_range():
+    """PT1H produces closed rustac ranges ending a microsecond before the next hour."""
     g = _HourGrouper(1)
     key = g.group_key("2025-01-01T00:59:59Z")
 
     assert key == "2025-01-01T00:00:00Z"
-    assert g.datetime_filter(key) == "2025-01-01T00:00:00Z/2025-01-01T00:59:59Z"
+    assert g.datetime_filter(key) == "2025-01-01T00:00:00Z/2025-01-01T00:59:59.999999Z"
     assert g.to_datetime64(key) == np.datetime64("2025-01-01T00:00:00", "s")
 
 
@@ -360,7 +419,7 @@ def test_multi_hour_grouping_aligns_to_epoch():
     assert g.group_key("2025-01-01T05:59:59Z") == "2025-01-01T00:00:00Z"
     assert g.group_key("2025-01-01T06:00:00Z") == "2025-01-01T06:00:00Z"
     assert g.datetime_filter("2025-01-01T00:00:00Z") == (
-        "2025-01-01T00:00:00Z/2025-01-01T05:59:59Z"
+        "2025-01-01T00:00:00Z/2025-01-01T05:59:59.999999Z"
     )
 
 

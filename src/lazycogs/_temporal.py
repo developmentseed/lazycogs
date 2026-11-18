@@ -95,6 +95,15 @@ def _format_utc_timestamp(value: datetime, *, timespec: str = "auto") -> str:
     return value.astimezone(UTC).isoformat(timespec=timespec).replace("+00:00", "Z")
 
 
+def _date_range(first: date, last: date) -> str:
+    """Return a closed range from *first*'s midnight to the last microsecond of *last*.
+
+    rustac ends a bare date at ``23:59:59``, which misses items in the day's
+    last second, such as ``23:59:59.5``.
+    """
+    return f"{first.isoformat()}T00:00:00Z/{last.isoformat()}T23:59:59.999999Z"
+
+
 class _ExactTimestampGrouper(_TemporalGrouper):
     """Group items by their unique normalized timestamp (``time_period=None``)."""
 
@@ -134,12 +143,12 @@ class _HourGrouper(_TemporalGrouper):
         return _format_utc_timestamp(start, timespec="seconds")
 
     def datetime_filter(self, group_key: str) -> str:
-        """Return a closed second-precision ``start/end`` range."""
+        """Return a closed range ending a microsecond before the next bucket."""
         start = self._bucket_start(group_key)
-        end = start + timedelta(hours=self._n, seconds=-1)
+        end = start + timedelta(hours=self._n, microseconds=-1)
         return (
             f"{_format_utc_timestamp(start, timespec='seconds')}/"
-            f"{_format_utc_timestamp(end, timespec='seconds')}"
+            f"{_format_utc_timestamp(end, timespec='microseconds')}"
         )
 
     def to_datetime64(self, group_key: str) -> np.datetime64:
@@ -155,8 +164,9 @@ class _DayGrouper(_TemporalGrouper):
         return datetime_str[:10]
 
     def datetime_filter(self, group_key: str) -> str:
-        """Return *group_key* unchanged; rustac accepts bare date strings."""
-        return group_key
+        """Return a range covering the whole day."""
+        day = date.fromisoformat(group_key)
+        return _date_range(day, day)
 
     def to_datetime64(self, group_key: str) -> np.datetime64:
         """Return ``numpy.datetime64(group_key, "D")``."""
@@ -173,10 +183,9 @@ class _WeekGrouper(_TemporalGrouper):
         return f"{iso.year}-W{iso.week:02d}"
 
     def datetime_filter(self, group_key: str) -> str:
-        """Return a ``Monday/Sunday`` RFC 3339 range for *group_key*."""
+        """Return a ``Monday/Sunday`` range for *group_key*."""
         monday = self._monday(group_key)
-        sunday = monday + timedelta(days=6)
-        return f"{monday.isoformat()}/{sunday.isoformat()}"
+        return _date_range(monday, monday + timedelta(days=6))
 
     def to_datetime64(self, group_key: str) -> np.datetime64:
         """Return the Monday of the ISO week as ``datetime64[D]``."""
@@ -200,10 +209,10 @@ class _MonthGrouper(_TemporalGrouper):
         return datetime_str[:7]
 
     def datetime_filter(self, group_key: str) -> str:
-        """Return a ``YYYY-MM-01/YYYY-MM-DD`` range covering the full month."""
+        """Return a range covering the full month."""
         year, month = int(group_key[:4]), int(group_key[5:7])
         last_day = calendar.monthrange(year, month)[1]
-        return f"{group_key}-01/{group_key}-{last_day:02d}"
+        return _date_range(date(year, month, 1), date(year, month, last_day))
 
     def to_datetime64(self, group_key: str) -> np.datetime64:
         """Return the first of the month as ``datetime64[D]``."""
@@ -218,8 +227,9 @@ class _YearGrouper(_TemporalGrouper):
         return datetime_str[:4]
 
     def datetime_filter(self, group_key: str) -> str:
-        """Return a ``YYYY-01-01/YYYY-12-31`` range covering the full year."""
-        return f"{group_key}-01-01/{group_key}-12-31"
+        """Return a range covering the full year."""
+        year = int(group_key)
+        return _date_range(date(year, 1, 1), date(year, 12, 31))
 
     def to_datetime64(self, group_key: str) -> np.datetime64:
         """Return January 1st of the year as ``datetime64[D]``."""
@@ -243,11 +253,10 @@ class _FixedDayGrouper(_TemporalGrouper):
         return f"{self._bucket(datetime_str):06d}"
 
     def datetime_filter(self, group_key: str) -> str:
-        """Return a ``start/end`` RFC 3339 range for the bucket."""
+        """Return a ``start/end`` range for the bucket."""
         bucket = int(group_key)
         start = _EPOCH + timedelta(days=bucket * self._n)
-        end = start + timedelta(days=self._n - 1)
-        return f"{start.isoformat()}/{end.isoformat()}"
+        return _date_range(start, start + timedelta(days=self._n - 1))
 
     def to_datetime64(self, group_key: str) -> np.datetime64:
         """Return the start date of the bucket as ``datetime64[D]``."""
