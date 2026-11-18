@@ -42,6 +42,8 @@ Once the data is in place:
 uv run pytest tests/benchmarks --benchmark-enable
 ```
 
+On pull requests, CI benchmarks the proposed merge and its first parent on the same runner, using the same local dataset. A test whose mean runtime increases by more than 20% fails the check. Look in the **Benchmarks** run summary for the comparison, including when the threshold is exceeded. Same-repository PRs also get a comment. Fork PRs run after any required maintainer approval and do not need write access.
+
 ## Building docs
 
 Install the docs dependencies and serve the site locally:
