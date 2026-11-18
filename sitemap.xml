@@ -25,6 +25,10 @@
          <lastmod>2026-11-18</lastmod>
     </url>
     <url>
+         <loc>https://developmentseed.org/lazycogs/api/single/</loc>
+         <lastmod>2026-11-18</lastmod>
+    </url>
+    <url>
          <loc>https://developmentseed.org/lazycogs/api/utils/</loc>
          <lastmod>2026-11-18</lastmod>
     </url>
@@ -94,6 +98,10 @@
     </url>
     <url>
          <loc>https://developmentseed.org/lazycogs/notebooks/rioxarray/</loc>
+         <lastmod>2026-11-18</lastmod>
+    </url>
+    <url>
+         <loc>https://developmentseed.org/lazycogs/notebooks/single-item/</loc>
          <lastmod>2026-11-18</lastmod>
     </url>
 </urlset>

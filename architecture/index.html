@@ -879,6 +879,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../notebooks/single-item/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Single STAC Item: and
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1057,6 +1085,34 @@
     
   
     open / open_async
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/single/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Single COG / item
   
 
     
@@ -1257,6 +1313,17 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#native-grid-single-reads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Native-grid single reads
+      
+    </span>
+  </a>
   
 </li>
       
@@ -1482,6 +1549,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#native-grid-single-reads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Native-grid single reads
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#grid-and-coordinate-convention" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1612,9 +1690,10 @@
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>  _grid.py           output affine transform and grid dimensions
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>  _reproject.py      warp-map computation and nearest-neighbor sampling
 <a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>  _storage_ext.py    STAC Storage Extension metadata parsing
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>  _store.py          HREF-to-store resolution and store_for()
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>  _temporal.py       temporal grouping strategies and _TimeStep predicates
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>  _mosaic_methods.py pixel-selection strategies
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>  _single.py         open_cog()/open_item(): native-resolution single-COG and single-item reads
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>  _store.py          HREF-to-store resolution and store_for()
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>  _temporal.py       temporal grouping strategies and _TimeStep predicates
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>  _mosaic_methods.py pixel-selection strategies
 </code></pre></div>
 <h2 id="stac-query-contract">STAC query contract<a class="headerlink" href="#stac-query-contract" title="Permanent link">&para;</a></h2>
 <p><code>open()</code> accepts a local geoparquet file or, when a custom <code>DuckdbClient</code> is supplied, a parquet directory such as a hive-partitioned archive. It does not query a remote STAC API directly. The intended workflow is to run <code>rustac.search_to("items.parquet", api_url, ...)</code> once, then pass that parquet source to lazycogs. This keeps dask chunk execution from turning into hundreds of concurrent STAC API calls.</p>
@@ -1644,6 +1723,18 @@
 <li>Return data in top-down raster order.</li>
 </ol>
 <p>The sync path submits this coroutine to the shared lazycogs event loop via <code>run_on_loop()</code>. The async path uses xarray's async indexing adapter and stays on the caller's loop.</p>
+<h2 id="native-grid-single-reads">Native-grid single reads<a class="headerlink" href="#native-grid-single-reads" title="Permanent link">&para;</a></h2>
+<p><code>open_cog</code> and <code>open_item</code> fetch metadata from each requested asset at open,
+without decoding pixels. Metadata read-ahead may fetch compressed tile bytes.
+Item assets must be single-band, share a grid, and admit a lossless common
+output dtype. The backend validates these requirements from metadata.</p>
+<p><code>sel</code> and <code>isel</code> issue no storage requests on the returned lazy array. Each
+backend read requests the bounding window at full resolution. The TIFF reader
+fetches intersecting tiles, so sparse or strided spatial indexing may read
+pixels between selected positions. For items, the backend reads only the
+selected assets; for a multiband COG it reads all bands before subsetting.
+Values remain raw; shared CF attributes describe nodata, scale and offset.
+The sync and async open entry points provide the same array behavior.</p>
 <h2 id="grid-and-coordinate-convention">Grid and coordinate convention<a class="headerlink" href="#grid-and-coordinate-convention" title="Permanent link">&para;</a></h2>
 <p><code>compute_output_grid()</code> creates a north-up raster grid with an affine transform whose origin is the top-left corner of the top-left pixel and whose y scale is negative. Pixel-centre x coordinates increase west-to-east; y coordinates decrease north-to-south. Label-based y slicing therefore uses <code>sel(y=slice(north, south))</code>.</p>
 <p>A <code>rasterix.RasterIndex</code> is attached to every returned array for CRS discovery and spatial alignment. The x/y coordinate variables are materialised as eager numpy arrays so chunked scalar spatial selections remain scalars after compute.</p>
