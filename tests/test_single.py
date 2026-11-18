@@ -136,6 +136,12 @@ def test_open_item_rejects_unknown_band(two_band_item):
 
 
 @pytest.fixture
+def anyio_backend():
+    """Run async tests on asyncio, the backend used by async-geotiff."""
+    return "asyncio"
+
+
+@pytest.fixture
 def pixel_reads(monkeypatch):
     """Record full-resolution reads while retaining real local COG I/O."""
     reads = []
@@ -149,16 +155,18 @@ def pixel_reads(monkeypatch):
     return reads
 
 
+@pytest.mark.anyio
 @pytest.mark.parametrize("asynchronous", [False, True], ids=["sync", "async"])
-def test_cog_selection_reads_only_native_window(
+async def test_cog_selection_reads_only_native_window(
     synthetic_cog_multiband,
     pixel_reads,
     asynchronous,
+    anyio_backend,
 ):
     """Opening and selecting are header-only; materialization reads a window."""
     href = synthetic_cog_multiband.as_uri()
     if asynchronous:
-        da = asyncio.run(lazycogs.open_cog_async(href, store=LocalStore()))
+        da = await lazycogs.open_cog_async(href, store=LocalStore())
     else:
         da = lazycogs.open_cog(href, store=LocalStore())
     assert pixel_reads == []
@@ -166,7 +174,7 @@ def test_cog_selection_reads_only_native_window(
     assert da.attrs["_FillValue"] == 0
     selected = da.isel(band=[1, 0], y=slice(17, 21), x=slice(23, 28))
     assert pixel_reads == []
-    loaded = selected.load()
+    loaded = await selected.load_async() if asynchronous else selected.load()
     assert pixel_reads == [Window(col_off=23, row_off=17, width=5, height=4)]
     rows = np.arange(17, 21)[:, None]
     cols = np.arange(23, 28)[None, :]
@@ -177,20 +185,20 @@ def test_cog_selection_reads_only_native_window(
     assert CRS.from_wkt(loaded.spatial_ref.attrs["crs_wkt"]).to_epsg() == 32632
 
 
+@pytest.mark.anyio
 @pytest.mark.parametrize("asynchronous", [False, True], ids=["sync", "async"])
-def test_item_selection_reads_only_selected_asset_window(
+async def test_item_selection_reads_only_selected_asset_window(
     two_band_item,
     pixel_reads,
     asynchronous,
+    anyio_backend,
 ):
     """One selected asset and spatial window produce one full-resolution read."""
     if asynchronous:
-        da = asyncio.run(
-            lazycogs.open_item_async(
-                two_band_item,
-                bands=["b08", "b04"],
-                store=LocalStore(),
-            ),
+        da = await lazycogs.open_item_async(
+            two_band_item,
+            bands=["b08", "b04"],
+            store=LocalStore(),
         )
     else:
         da = lazycogs.open_item(two_band_item, bands=["b08", "b04"], store=LocalStore())
@@ -198,7 +206,7 @@ def test_item_selection_reads_only_selected_asset_window(
     assert list(da.band.values) == ["b08", "b04"]
     selected = da.sel(band="b08").isel(y=slice(17, 21), x=slice(23, 28))
     assert pixel_reads == []
-    loaded = selected.load()
+    loaded = await selected.load_async() if asynchronous else selected.load()
     assert pixel_reads == [Window(col_off=23, row_off=17, width=5, height=4)]
     rows = np.arange(17, 21)[:, None]
     cols = np.arange(23, 28)[None, :]
@@ -241,7 +249,7 @@ def test_scalar_selection_reads_one_pixel(synthetic_cog, pixel_reads):
     da = lazycogs.open_cog(synthetic_cog.as_uri(), store=LocalStore())
     selected = da.isel(band=0, y=17, x=23)
     assert pixel_reads == []
-    assert selected.item() == (23 + 17 * 2048) % 65535 + 1
+    assert selected.load().item() == (23 + 17 * 2048) % 65535 + 1
     assert pixel_reads == [Window(col_off=23, row_off=17, width=1, height=1)]
     assert selected.dims == ()
     assert selected.x.item() == da.x.values[23]
@@ -267,20 +275,61 @@ def test_item_selected_band_order_and_values(two_band_item, pixel_reads):
     assert list(loaded.band.values) == ["b08", "b04"]
 
 
-def test_sync_async_selected_results_match(two_band_item):
+@pytest.mark.anyio
+@pytest.mark.parametrize("asynchronous", [False, True], ids=["sync", "async"])
+async def test_sparse_repeated_item_bands(
+    synthetic_cog,
+    synthetic_cog_b,
+    synthetic_cog_c,
+    pixel_reads,
+    asynchronous,
+    anyio_backend,
+):
+    """Sparse duplicate selection reads each selected asset once, in output order."""
+    item = _item(first=synthetic_cog, middle=synthetic_cog_b, last=synthetic_cog_c)
+    if asynchronous:
+        da = await lazycogs.open_item_async(
+            item,
+            bands=["first", "middle", "last"],
+            store=LocalStore(),
+        )
+    else:
+        da = lazycogs.open_item(
+            item,
+            bands=["first", "middle", "last"],
+            store=LocalStore(),
+        )
+    assert pixel_reads == []
+    selected = da.isel(band=[2, 0, 2], y=slice(17, 21), x=slice(23, 28))
+    assert pixel_reads == []
+    loaded = await selected.load_async() if asynchronous else selected.load()
+    assert len(pixel_reads) == 2
+    assert all(
+        window == Window(col_off=23, row_off=17, width=5, height=4)
+        for window in pixel_reads
+    )
+    rows = np.arange(17, 21)[:, None]
+    cols = np.arange(23, 28)[None, :]
+    expected = np.stack(
+        [(cols + rows * 2048 + seed) % 65535 + 1 for seed in [2000, 0, 2000]],
+    )
+    np.testing.assert_array_equal(loaded.to_numpy(), expected)
+    assert list(loaded.band.values) == ["last", "first", "last"]
+
+
+@pytest.mark.anyio
+async def test_sync_async_selected_results_match(two_band_item, anyio_backend):
     """Both entry points preserve values and coordinates after selection."""
     sync = lazycogs.open_item(two_band_item, bands=["b08", "b04"], store=LocalStore())
-    async_da = asyncio.run(
-        lazycogs.open_item_async(
-            two_band_item,
-            bands=["b08", "b04"],
-            store=LocalStore(),
-        ),
+    async_da = await lazycogs.open_item_async(
+        two_band_item,
+        bands=["b08", "b04"],
+        store=LocalStore(),
     )
     selection = {"band": [1, 0], "y": slice(7, 10), "x": slice(11, 15)}
     xr.testing.assert_identical(
         sync.isel(**selection).load(),
-        async_da.isel(**selection).load(),
+        await async_da.isel(**selection).load_async(),
     )
 
 

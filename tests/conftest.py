@@ -223,6 +223,15 @@ def synthetic_cog_b(tmp_path_factory) -> Path:
 
 
 @pytest.fixture(scope="session")
+def synthetic_cog_c(tmp_path_factory) -> Path:
+    """A third same-grid COG with distinct pixel values."""
+    return _write_synthetic_cog(
+        tmp_path_factory.mktemp("cog_c") / "synthetic_c.tif",
+        seed=2000,
+    )
+
+
+@pytest.fixture(scope="session")
 def synthetic_cog_offgrid(tmp_path_factory) -> Path:
     """A single-band COG on a different grid (20 m, shifted origin).
 
